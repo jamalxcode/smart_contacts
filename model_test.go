@@ -429,3 +429,34 @@ func TestSearchCacheFollowsEdits(t *testing.T) {
 		t.Error("Persian letters should match Arabic ones")
 	}
 }
+
+func TestPrivacy(t *testing.T) {
+	dir := t.TempDir()
+	if LoadConfig(dir).AllowCloudAI {
+		t.Error("cloud AI must be off by default")
+	}
+	_ = os.WriteFile(dir+"/contacts.json", []byte(`{"version":1,"contacts":[]}`), 0o644)
+	_ = os.Chmod(dir, 0o755)
+	if _, err := OpenStore(dir); err != nil {
+		t.Fatal(err)
+	}
+	for p, want := range map[string]os.FileMode{dir: 0o700, dir + "/photos": 0o700, dir + "/contacts.json": 0o600} {
+		if fi, err := os.Stat(p); err != nil || fi.Mode().Perm() != want {
+			t.Errorf("%s: %v, want %v", p, fi.Mode().Perm(), want)
+		}
+	}
+	if _, err := os.Stat(dir + "/.metadata_never_index"); err != nil {
+		t.Error("Spotlight marker missing")
+	}
+	for p, want := range map[string]bool{
+		"/Users/j/Library/Mobile Documents/com~apple~CloudDocs/c.vcf": true,
+		"/Users/j/Library/CloudStorage/GoogleDrive-x/c.csv":           true,
+		"/Users/j/Dropbox/c.vcf":                                      true,
+		"/Users/j/Documents/c.vcf":                                    false,
+		"/Users/j/Desktop/contacts.csv":                               false,
+	} {
+		if InCloudFolder(p) != want {
+			t.Errorf("InCloudFolder(%q) != %v", p, want)
+		}
+	}
+}

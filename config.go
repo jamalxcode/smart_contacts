@@ -16,8 +16,11 @@ type Config struct {
 	SortByLast    bool    `json:"sortByLast,omitempty"`
 	CountryCode   string  `json:"countryCode"`
 	OpenRouterKey string  `json:"openRouterKey,omitempty"`
-	AIModel       string  `json:"aiModel,omitempty"`
-	LastGroup     string  `json:"lastGroup,omitempty"`
+	// AllowCloudAI lets Smart Add send pasted text to OpenRouter. Off by default: with it off,
+	// nothing about any contact ever leaves this Mac.
+	AllowCloudAI bool   `json:"allowCloudAI,omitempty"`
+	AIModel      string `json:"aiModel,omitempty"`
+	LastGroup    string `json:"lastGroup,omitempty"`
 }
 
 const layoutVersion = 1

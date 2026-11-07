@@ -31,9 +31,10 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
   part of a phone number with or without spaces (`9999 8888`, `٩٩٩٩`), company, notes, groups.
   ↑ ↓ move through results, Return edits.
 - **Smart Add** (⌘⇧N) — paste an email signature, business-card text or a WhatsApp contact
-  message. With an OpenRouter key an AI model reads it; without one a built-in reader picks out
+  message. It's read privately on this Mac: a built-in reader picks out
   names, titles, companies, numbers (and whether they're mobile, work or fax), emails and links.
-  You always check the result before saving. It warns if the person is already in your contacts.
+  (Optional Cloud AI can do it instead.) You always check the result before saving, and it warns
+  if the person is already in your contacts.
 - **Quick actions** — Call (FaceTime / iPhone), Message, WhatsApp, Email, open the address in
   Maps, copy any value. The app remembers when you last contacted someone.
 - **Birthdays** — enter `1990-03-14`, `14/03/1990` or just `14/03`; the Birthdays list shows the
@@ -43,7 +44,7 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
   `.vcf` file (Apple, Google, Outlook, Android; vCard 2.1, 3.0 and 4.0, photos included).
   Contacts you already have are spotted and skipped.
 - **Export** — vCard or CSV (opens cleanly in Excel and Numbers, Arabic included), or send
-  contacts straight back to Mac Contacts.
+  copy contacts into Apple's Contacts app (with an iCloud warning).
 - **Find Duplicates** — cards sharing a phone, email or name, merged into the fullest card.
 - **Clean Up** — writes every number one way (`+965 9999 8888`), fixes ALL-CAPS names, lower-cases
   emails, adds `https://` to links. You tick which changes to apply.
@@ -62,15 +63,24 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 | `backups/` | `contacts-YYYY-MM-DD.json`, last 30 days |
 | `config.json` | settings, including the optional OpenRouter key (permission 600, not the Keychain) |
 
-Nothing is sent anywhere, except the text you paste into Smart Add when an OpenRouter key is set.
-**This repository holds only the code** — no contacts are ever committed here.
+### Privacy: everything stays on this Mac
+
+- The data folder is readable only by your Mac user (folders 700, files 600), is excluded from
+  Spotlight, and is not in iCloud Drive. FileVault encrypts it on disk.
+- The app makes **no network connections and has no accounts or sync**. Smart Add reads text
+  locally. Cloud AI (OpenRouter) is **off by default** and only works if you tick
+  *Allow Smart Add to send pasted text to OpenRouter* in Settings and add a key.
+- Call, Message, WhatsApp and Maps open the Mac's own apps (FaceTime, Messages, WhatsApp, Maps).
+- Copying contacts to Apple's Contacts app, or saving an export into iCloud Drive / Dropbox /
+  Google Drive, asks first, because those sync off the Mac. Temporary .vcf files are deleted.
+- **This repository holds only the code** — no contacts are ever committed here.
 
 ## Settings
 
 - **Country code** (default `965`, Kuwait) — used to understand local numbers like `9999 8888`.
 - **Sort by** first or last name.
-- **OpenRouter key and model** for Smart Add (default `anthropic/claude-haiku-4.5`; any OpenRouter
-  model id works, and *Test AI* checks it).
+- **Cloud AI** (off by default), with the **OpenRouter key and model** for Smart Add (default
+  `anthropic/claude-haiku-4.5`; *Test AI* checks it).
 
 ## Keyboard
 

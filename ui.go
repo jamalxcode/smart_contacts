@@ -616,7 +616,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		actions.Add(u.actionButton("Call", iconPhone, c, "tel:"+NormalizePhone(p.Value, cc)))
 		actions.Add(u.actionButton("Message", iconMessage, c, "sms:"+NormalizePhone(p.Value, cc)))
 		if CanWhatsApp(p.Value, cc) {
-			actions.Add(u.actionButton("WhatsApp", iconChat, c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)))
+			actions.Add(u.actionButton("WhatsApp", iconChat, c, "whatsapp://send?phone="+WhatsAppNumber(p.Value, cc)))
 		}
 	}
 	if len(c.Emails) > 0 {
@@ -648,7 +648,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		n := NormalizePhone(p.Value, cc)
 		btns := []fyne.CanvasObject{u.iconLink(iconPhone, "Call", c, "tel:"+n)}
 		if CanWhatsApp(p.Value, cc) {
-			btns = append(btns, u.iconLink(iconChat, "WhatsApp", c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)))
+			btns = append(btns, u.iconLink(iconChat, "WhatsApp", c, "whatsapp://send?phone="+WhatsAppNumber(p.Value, cc)))
 		}
 		btns = append(btns, u.copyButton(p.Value))
 		phones = append(phones, u.valueRow(p.Label, p.Value, btns...))
@@ -666,7 +666,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	for _, a := range c.Addresses {
 		one := a.OneLine()
 		addrs = append(addrs, u.valueRow(a.Label, strings.TrimSpace(strings.Join(nonEmpty([]string{a.Street, strings.Join(nonEmpty([]string{a.Postcode, a.City}), " "), a.Region, a.Country}), "\n")),
-			u.iconLink(iconPlace, "Map", nil, "https://maps.apple.com/?q="+url.QueryEscape(one)), u.copyButton(one)))
+			u.iconLink(iconPlace, "Map", nil, "maps://?q="+url.QueryEscape(one)), u.copyButton(one)))
 	}
 	section("ADDRESS", addrs...)
 
@@ -729,11 +729,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	body.Add(caption(strings.Join(meta, " · ")))
 	del := widget.NewButtonWithIcon("Delete Contact", theme.DeleteIcon(), func() { u.deleteContact(c) })
 	del.Importance = widget.DangerImportance
-	share := widget.NewButtonWithIcon("Send to Mac Contacts", theme.UploadIcon(), func() {
-		if err := OpenInMacContacts(u.store, []*Contact{c}); err != nil {
-			dialog.ShowError(err, u.win)
-		}
-	})
+	share := widget.NewButtonWithIcon("Copy to Apple Contacts", theme.UploadIcon(), func() { u.sendToMacContacts([]*Contact{c}) })
 	share.Importance = widget.LowImportance
 	exp := widget.NewButtonWithIcon("Save .vcf", theme.DocumentSaveIcon(), func() { u.exportVCF([]*Contact{c}, c.DisplayName()) })
 	exp.Importance = widget.LowImportance
@@ -782,6 +778,9 @@ func (u *ui) open(c *Contact, link string) {
 		return
 	}
 	if err := u.app.OpenURL(p); err != nil {
+		if p.Scheme == "whatsapp" {
+			err = fmt.Errorf("the WhatsApp app isn't installed on this Mac (get it from the App Store)")
+		}
 		dialog.ShowError(err, u.win)
 		return
 	}
@@ -812,7 +811,11 @@ func (u *ui) flash(msg string) {
 }
 
 func (u *ui) statusText() string {
-	return fmt.Sprintf("%d contacts   ·   saved on this Mac in %s", len(u.store.Contacts), u.store.Dir())
+	where := "private · stored only on this Mac"
+	if u.cloudAI() {
+		where = "stored only on this Mac · Cloud AI on for Smart Add"
+	}
+	return fmt.Sprintf("%d contacts   ·   %s", len(u.store.Contacts), where)
 }
 
 func (u *ui) deleteContact(c *Contact) {

@@ -47,17 +47,11 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Export Shown Contacts as vCard…", func() { u.exportVCF(u.filtered, u.groupTitle()) }),
 		fyne.NewMenuItem("Export Shown Contacts as CSV…", u.exportCSV),
-		fyne.NewMenuItem("Send Shown Contacts to Mac Contacts", func() {
+		fyne.NewMenuItem("Copy Shown Contacts to Apple Contacts…", func() {
 			if len(u.filtered) == 0 {
 				return
 			}
-			dialog.ShowConfirm("Send to Mac Contacts", fmt.Sprintf("Open %d contacts in the Contacts app? It will ask before adding them.", len(u.filtered)), func(ok bool) {
-				if ok {
-					if err := OpenInMacContacts(u.store, u.filtered); err != nil {
-						dialog.ShowError(err, u.win)
-					}
-				}
-			}, u.win)
+			u.sendToMacContacts(u.filtered)
 		}),
 	)
 	edit := fyne.NewMenu("Contact",
@@ -111,9 +105,9 @@ func (u *ui) smartAdd() {
 	if clip := strings.TrimSpace(u.app.Clipboard().Content()); clip != "" && len(clip) < 4000 && (reEmail.MatchString(clip) || rePhone.MatchString(clip)) {
 		in.SetText(clip) // looks like contact details: save a paste
 	}
-	mode := "Reads emails, numbers and links on this Mac."
-	if u.cfg.OpenRouterKey != "" {
-		mode = "Uses AI (" + u.cfg.AIModel + " via OpenRouter); falls back to reading it here if that fails."
+	mode := "Private: read on this Mac only. Nothing you paste leaves this computer."
+	if u.cloudAI() {
+		mode = "Cloud AI is ON: this text will be sent to " + u.cfg.AIModel + " via OpenRouter (turn it off in Settings to keep everything on this Mac)."
 	}
 	note := caption(mode)
 	note.Wrapping = fyne.TextWrapWord
@@ -135,8 +129,8 @@ func (u *ui) smartAdd() {
 
 func (u *ui) runSmartAdd(text string) {
 	cc := u.cfg.CountryCode
-	if u.cfg.OpenRouterKey == "" {
-		u.finishSmartAdd(ParseLocal(text, cc), true, "Read on this Mac — check the details, then Save. (Add an OpenRouter key in Settings for AI reading.)")
+	if !u.cloudAI() {
+		u.finishSmartAdd(ParseLocal(text, cc), true, "Read privately on this Mac — check the details, then Save.")
 		return
 	}
 	prog := dialog.NewCustomWithoutButtons("Reading…", container.NewVBox(widget.NewLabel("Asking "+u.cfg.AIModel+"…"), widget.NewProgressBarInfinite()), u.win)
@@ -156,6 +150,11 @@ func (u *ui) runSmartAdd(text string) {
 			u.finishSmartAdd(c, confident, msg)
 		})
 	}()
+}
+
+// cloudAI is true only when the user has explicitly allowed sending text off this Mac AND set a key.
+func (u *ui) cloudAI() bool {
+	return u.cfg.AllowCloudAI && strings.TrimSpace(u.cfg.OpenRouterKey) != ""
 }
 
 func (u *ui) finishSmartAdd(c *Contact, _ bool, banner string) {
@@ -259,6 +258,48 @@ func (u *ui) importCards(cards []Card, source string) {
 	d.Show()
 }
 
+// sendToMacContacts copies cards into Apple's Contacts app, after warning that Apple's app
+// may sync them to iCloud — the one way contacts could leave this Mac from here.
+func (u *ui) sendToMacContacts(cs []*Contact) {
+	if len(cs) == 0 {
+		return
+	}
+	what := fmt.Sprintf("these %d contacts", len(cs))
+	if len(cs) == 1 {
+		what = cs[0].DisplayName()
+	}
+	msg := widget.NewLabel("This copies " + what + " into Apple's Contacts app.\n\n" +
+		"If iCloud Contacts is turned on (System Settings → your name → iCloud → Contacts),\n" +
+		"Apple will sync the copy to iCloud and your other devices — it will no longer be only on this Mac.\n\n" +
+		"Smart Contacts itself keeps everything on this Mac either way.")
+	dialog.ShowCustomConfirm("Copy to Apple Contacts?", "Copy Anyway", "Cancel", msg, func(ok bool) {
+		if ok {
+			if err := OpenInMacContacts(u.store, cs); err != nil {
+				dialog.ShowError(err, u.win)
+			}
+		}
+	}, u.win)
+}
+
+// confirmExportPlace warns before writing contacts into a folder that syncs off this Mac.
+func (u *ui) confirmExportPlace(w fyne.URIWriteCloser, write func()) {
+	if !InCloudFolder(w.URI().Path()) {
+		write()
+		return
+	}
+	dialog.ShowCustomConfirm("This folder syncs to the cloud", "Save There Anyway", "Cancel",
+		widget.NewLabel("“"+w.URI().Name()+"” is going into a cloud-synced folder (iCloud Drive, Dropbox, Google Drive…),\n"+
+			"so the contacts would leave this Mac. Choose a folder like Documents or Desktop to keep them private."),
+		func(ok bool) {
+			if ok {
+				write()
+				return
+			}
+			w.Close()
+			_ = storage.Delete(w.URI()) // don't leave an empty file in the cloud folder
+		}, u.win)
+}
+
 // ---------- export ----------
 
 func safeName(s string) string {
@@ -282,14 +323,16 @@ func (u *ui) exportVCF(cs []*Contact, name string) {
 		if err != nil || w == nil {
 			return
 		}
-		defer w.Close()
-		for _, c := range cs {
-			if err := WriteVCard(w, c, u.store.Photo(c)); err != nil {
-				dialog.ShowError(err, u.win)
-				return
+		u.confirmExportPlace(w, func() {
+			defer w.Close()
+			for _, c := range cs {
+				if err := WriteVCard(w, c, u.store.Photo(c)); err != nil {
+					dialog.ShowError(err, u.win)
+					return
+				}
 			}
-		}
-		u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
+			u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
+		})
 	}, u.win)
 	d.SetFileName(safeName(name) + ".vcf")
 	d.Resize(fyne.NewSize(760, 520))
@@ -305,12 +348,14 @@ func (u *ui) exportCSV() {
 		if err != nil || w == nil {
 			return
 		}
-		defer w.Close()
-		if err := WriteCSV(w, cs); err != nil {
-			dialog.ShowError(err, u.win)
-			return
-		}
-		u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
+		u.confirmExportPlace(w, func() {
+			defer w.Close()
+			if err := WriteCSV(w, cs); err != nil {
+				dialog.ShowError(err, u.win)
+				return
+			}
+			u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
+		})
 	}, u.win)
 	d.SetFileName(safeName(u.groupTitle()) + ".csv")
 	d.Resize(fyne.NewSize(760, 520))
@@ -590,7 +635,20 @@ func (u *ui) settings() {
 	key.SetPlaceHolder("sk-or-… (optional)")
 	model := widget.NewSelectEntry([]string{DefaultAIModel, "anthropic/claude-sonnet-4.5", "openai/gpt-5-mini", "google/gemini-2.5-flash"})
 	model.SetText(u.cfg.AIModel)
+	allow := widget.NewCheck("Allow Smart Add to send pasted text to OpenRouter (it leaves this Mac)", nil)
+	allow.SetChecked(u.cfg.AllowCloudAI)
 	test := widget.NewButton("Test AI", nil)
+	syncAI := func(on bool) {
+		for _, w := range []fyne.Disableable{key, model, test} {
+			if on {
+				w.Enable()
+			} else {
+				w.Disable()
+			}
+		}
+	}
+	allow.OnChanged = syncAI
+	syncAI(u.cfg.AllowCloudAI)
 	result := caption("")
 	result.Wrapping = fyne.TextWrapWord
 	test.OnTapped = func() {
@@ -610,16 +668,18 @@ func (u *ui) settings() {
 			})
 		}()
 	}
-	keyNote := caption("Stored in config.json in the data folder (not the Keychain), readable only by your user. Get a key at openrouter.ai/keys.")
+	keyNote := caption("Off (default): Smart Add reads text on this Mac only and the app never uses the network. " +
+		"The key is stored in config.json in the data folder (not the Keychain), readable only by your user.")
 	keyNote.Wrapping = fyne.TextWrapWord
 	folder := widget.NewButtonWithIcon("Show Data Folder", theme.FolderOpenIcon(), func() { RevealInFinder(u.store.Dir() + "/contacts.json") })
 	form := []*widget.FormItem{
 		widget.NewFormItem("Your country code", cc),
 		widget.NewFormItem("Sort by", sortBy),
+		widget.NewFormItem("Cloud AI", allow),
 		widget.NewFormItem("OpenRouter key", key),
 		widget.NewFormItem("AI model", model),
 		widget.NewFormItem("", container.NewVBox(keyNote, container.NewHBox(test), result)),
-		widget.NewFormItem("Data", container.NewVBox(caption("Contacts, photos and 30 daily backups live in:\n"+u.store.Dir()), container.NewHBox(folder))),
+		widget.NewFormItem("Privacy", container.NewVBox(caption(privacyText(u.store.Dir())), container.NewHBox(folder))),
 	}
 	cc.Validator = func(s string) error {
 		if d := digitsOnly(s); d == "" || len(d) > 4 || d != strings.TrimPrefix(strings.TrimSpace(s), "+") {
@@ -634,6 +694,7 @@ func (u *ui) settings() {
 		u.cfg.CountryCode = digitsOnly(cc.Text)
 		u.cfg.SortByLast = sortBy.Selected == "Last name"
 		u.cfg.OpenRouterKey = strings.TrimSpace(key.Text)
+		u.cfg.AllowCloudAI = allow.Checked
 		u.cfg.AIModel = strings.TrimSpace(model.Text)
 		if u.cfg.AIModel == "" {
 			u.cfg.AIModel = DefaultAIModel
@@ -650,7 +711,7 @@ func (u *ui) settings() {
 func (u *ui) help() {
 	text := `**Finding people.** Type in the search box: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears.
 
-**Smart Add** (⌘⇧N). Paste an email signature, a business card's text or a WhatsApp contact message. With an OpenRouter key (Settings) an AI model reads it; without one, the app picks out the names, numbers, emails and links itself. You always check the result before it's saved.
+**Smart Add** (⌘⇧N). Paste an email signature, a business card's text or a WhatsApp contact message. By default it is read privately on this Mac. Only if you switch on Cloud AI in Settings (and add an OpenRouter key) is the pasted text sent to an AI model. You always check the result before it's saved.
 
 **Quick actions.** Call opens FaceTime/iPhone calling, Message opens Messages, WhatsApp opens the chat, Email opens Mail. The app remembers when you last contacted someone.
 
@@ -662,6 +723,8 @@ func (u *ui) help() {
 
 **Tidying.** Tools → Find Duplicates merges cards that share a phone, email or name. Tools → Clean Up writes every number the same way (+965 9999 8888).
 
+**Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app never uses the network unless you switch on Cloud AI. Copying to Apple's Contacts app or saving into iCloud Drive/Dropbox warns you first, because those sync off the Mac.
+
 **Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder.
 
 **Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘O import · ⌘, settings`
@@ -670,4 +733,12 @@ func (u *ui) help() {
 	d := dialog.NewCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)
 	d.Resize(fyne.NewSize(640, 560))
 	d.Show()
+}
+
+// privacyText describes where the data is and what can leave the Mac.
+func privacyText(dir string) string {
+	return "Contacts, photos and 30 daily backups are stored only on this Mac, in\n" + dir +
+		"\n(only your user can open it; kept out of Spotlight; not in iCloud Drive).\n" +
+		"The app uses no network and no accounts unless Cloud AI is on.\n" +
+		"FileVault (System Settings → Privacy & Security) encrypts it on disk."
 }

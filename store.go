@@ -64,6 +64,7 @@ func OpenStore(dir string) (*Store, error) {
 	if err := os.MkdirAll(filepath.Join(dir, "photos"), 0o700); err != nil {
 		return nil, err
 	}
+	lockDown(dir)
 	b, err := os.ReadFile(s.file())
 	if errors.Is(err, os.ErrNotExist) {
 		return s, nil
@@ -81,6 +82,35 @@ func OpenStore(dir string) (*Store, error) {
 }
 
 func (s *Store) file() string { return filepath.Join(s.dir, "contacts.json") }
+
+// lockDown makes the data folder private to this Mac user: folders 0700, files 0600, and a
+// .metadata_never_index marker so Spotlight doesn't copy contact details into its index.
+func lockDown(dir string) {
+	_ = os.WriteFile(filepath.Join(dir, ".metadata_never_index"), nil, 0o600)
+	_ = filepath.Walk(dir, func(p string, fi os.FileInfo, err error) error {
+		if err != nil {
+			return nil
+		}
+		if fi.IsDir() {
+			_ = os.Chmod(p, 0o700)
+		} else if fi.Mode().Perm()&0o077 != 0 {
+			_ = os.Chmod(p, 0o600)
+		}
+		return nil
+	})
+}
+
+// InCloudFolder reports whether a path is inside a folder that syncs off this Mac
+// (iCloud Drive, Dropbox, Google Drive, OneDrive, Box…).
+func InCloudFolder(path string) bool {
+	p := strings.ToLower(filepath.ToSlash(path))
+	for _, m := range []string{"/library/mobile documents/", "/library/cloudstorage/", "/dropbox", "/google drive", "/googledrive", "/onedrive", "/box/", "/icloud drive"} {
+		if strings.Contains(p, m) {
+			return true
+		}
+	}
+	return false
+}
 
 // Dir is where the data lives.
 func (s *Store) Dir() string { return s.dir }

@@ -60,9 +60,15 @@ func OpenInMacContacts(s *Store, cs []*Contact) error {
 		return err
 	}
 	if runtime.GOOS != "darwin" {
-		return errors.New("this only works on a Mac; the file is at " + path)
+		os.Remove(path)
+		return errors.New("this only works on a Mac")
 	}
-	return exec.Command("open", "-a", "Contacts", path).Run()
+	err := exec.Command("open", "-a", "Contacts", path).Run()
+	go func() { // don't leave a copy of the cards lying in the temp folder
+		time.Sleep(2 * time.Minute)
+		os.Remove(path)
+	}()
+	return err
 }
 
 // RevealInFinder shows a folder or file in Finder.
