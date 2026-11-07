@@ -101,6 +101,18 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 | ⌘O | import a .vcf |
 | ⌘, | settings |
 
+## Roadmap
+
+Planned: organisation / "how I know them" / "met at" fields linked into connections, a menu-bar
+quick search, birthday notifications, editing several contacts at once, and an encrypted private
+backup.
+
+Not planned, by design: online lookup or enrichment of contacts (searching Google, X or LinkedIn
+for people, reverse lookup by phone or email), cloud sync, or accounts.
+
+Known limits: the app is ad-hoc signed, so install it with the curl line (a browser-downloaded
+zip is held by macOS); iPhone HEIC photos need exporting as JPEG first.
+
 ## Building it yourself
 
 Needs Go and the Xcode command-line tools (`xcode-select --install`):

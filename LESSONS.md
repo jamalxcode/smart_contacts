@@ -96,9 +96,28 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - The OpenRouter key sits in `config.json` (0600), never the Keychain — by request, because the
   Keychain keeps asking for the Mac password.
 
-## 5. Ideas not done yet
+## 5. Privacy and connections (decided 2026-11-07)
 
-- Two-way sync with Mac Contacts (today: import, and "Send to Mac Contacts" which opens a .vcf).
+- **Everything stays on this Mac.** No accounts, no sync, no network unless the user ticks Cloud AI
+  (off by default). Data folder 700/600 with `.metadata_never_index`. Anything that could copy
+  contacts off the Mac (Apple Contacts → iCloud, exports into iCloud Drive/Dropbox) asks first.
+  Native `whatsapp://` and `maps://` links instead of web pages.
+- **No online enrichment, by decision.** Automatic LinkedIn/social lookup by name, number or email
+  was declined by the user ("keep it fully offline"); Google/X OSINT profiling of contacts is out
+  of scope (it builds dossiers on private people). Profile links are added by hand.
+- **Connections** (`graph.go`): symmetric user-recorded links plus implicit same-company links
+  (company cards excluded, legal suffixes like K.S.C.P/W.L.L ignored). BFS for the shortest chain,
+  capped at six steps; recorded links are listed before company links so they win ties. Links
+  survive the Trash, follow merges (`RepointLinks`) and are dropped when the Trash is emptied.
+- An Arabic name and a +965 number in one label get reordered by the bidi algorithm; put them in
+  separate labels.
+
+## 6. Ideas not done yet
+
+- Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.
-- Private backup of `contacts.json` to a separate *private* GitHub repo (never this public one).
-- Notarised signing if it is ever shared beyond one Mac.
+- Birthday reminders as Mac notifications.
+- Editing several contacts at once (add a group to many people).
+- Encrypted private backup of `contacts.json` (never to this public repo).
+- Two-way sync with Mac Contacts (today: import, and "Copy to Apple Contacts" with a warning).
+- Notarised signing (Apple Developer ID) so a downloaded zip opens with a double-click.
