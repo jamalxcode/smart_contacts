@@ -479,7 +479,7 @@ func (e *editor) choosePhoto() {
 			return
 		}
 		e.photo, e.photoSet = small, true
-		e.av.set(e.c, fyne.NewStaticResource("new-photo", small))
+		e.av.set(e.c, fyne.NewStaticResource("new-photo.png", CirclePhoto(small, 256)))
 	}, e.u.win)
 	d.SetFilter(storage.NewExtensionFileFilter([]string{".jpg", ".jpeg", ".png", ".JPG", ".JPEG", ".PNG"}))
 	d.Resize(fyne.NewSize(760, 520))

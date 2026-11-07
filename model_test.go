@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"image"
+	"image/png"
 	"os"
 	"strings"
 	"testing"
@@ -289,5 +291,29 @@ func TestCSV(t *testing.T) {
 	}
 	if !strings.HasPrefix(b.String(), "\uFEFFFirst Name") || !strings.Contains(b.String(), "x; y") {
 		t.Error(b.String())
+	}
+}
+
+func TestCirclePhoto(t *testing.T) {
+	cards, _ := ParseVCards(strings.NewReader(appleCard))
+	// the sample photo is a truncated JPEG; a real one must come back as a round PNG
+	img := image.NewRGBA(image.Rect(0, 0, 40, 20))
+	for i := range img.Pix {
+		img.Pix[i] = 200
+	}
+	var b bytes.Buffer
+	_ = png.Encode(&b, img)
+	out, err := png.Decode(bytes.NewReader(CirclePhoto(b.Bytes(), 32)))
+	if err != nil || out.Bounds().Dx() != 32 {
+		t.Fatalf("not a 32px png: %v", err)
+	}
+	if _, _, _, a := out.At(0, 0).RGBA(); a != 0 {
+		t.Error("corner should be transparent")
+	}
+	if _, _, _, a := out.At(16, 16).RGBA(); a == 0 {
+		t.Error("centre should be opaque")
+	}
+	if got := CirclePhoto(cards[0].Photo, 32); !bytes.Equal(got, cards[0].Photo) {
+		t.Error("undecodable photo should come back unchanged")
 	}
 }

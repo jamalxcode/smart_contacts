@@ -508,7 +508,7 @@ func (u *ui) photo(c *Contact) fyne.Resource {
 	b := u.store.Photo(c)
 	var r fyne.Resource
 	if len(b) > 0 {
-		r = fyne.NewStaticResource(c.ID, b)
+		r = fyne.NewStaticResource(c.ID+".png", CirclePhoto(b, 256))
 	}
 	u.photoCache[c.ID] = r
 	return r
@@ -827,7 +827,7 @@ func newAvatar(size float32) *avatar {
 	a.text.TextStyle.Bold = true
 	a.text.TextSize = size * 0.38
 	a.text.Alignment = fyne.TextAlignCenter
-	a.img = &canvas.Image{FillMode: canvas.ImageFillCover, CornerRadius: size / 2}
+	a.img = &canvas.Image{FillMode: canvas.ImageFillContain} // photos arrive already cut to a circle
 	a.img.Hide()
 	a.ExtendBaseWidget(a)
 	return a

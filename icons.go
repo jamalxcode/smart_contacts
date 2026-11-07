@@ -6,7 +6,8 @@ import (
 	"image"
 	"image/color"
 	"image/jpeg"
-	_ "image/png"
+	"image/png"
+	"math"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/theme"
@@ -72,3 +73,45 @@ func ShrinkPhoto(b []byte, max int) []byte {
 	}
 	return out.Bytes()
 }
+
+// CirclePhoto centre-crops a photo to a square, scales it to size px and makes everything
+// outside the circle transparent, so the avatar is round on any toolkit version.
+// Undecodable images come back unchanged.
+func CirclePhoto(b []byte, size int) []byte {
+	img, _, err := image.Decode(bytes.NewReader(b))
+	if err != nil {
+		return b
+	}
+	r := img.Bounds()
+	side := r.Dx()
+	if r.Dy() < side {
+		side = r.Dy()
+	}
+	sq := image.Rect(r.Min.X+(r.Dx()-side)/2, r.Min.Y+(r.Dy()-side)/2, 0, 0)
+	sq.Max = sq.Min.Add(image.Pt(side, side))
+	scaled := image.NewRGBA(image.Rect(0, 0, size, size))
+	draw.CatmullRom.Scale(scaled, scaled.Bounds(), img, sq, draw.Src, nil)
+	out := image.NewNRGBA(scaled.Bounds())
+	c := float64(size) / 2
+	for y := 0; y < size; y++ {
+		for x := 0; x < size; x++ {
+			dx, dy := float64(x)+0.5-c, float64(y)+0.5-c
+			d := c - sqrt(dx*dx+dy*dy) // distance inside the edge, for a soft 1px edge
+			if d <= 0 {
+				continue
+			}
+			p := color.NRGBAModel.Convert(scaled.At(x, y)).(color.NRGBA)
+			if d < 1 {
+				p.A = uint8(float64(p.A) * d)
+			}
+			out.SetNRGBA(x, y, p)
+		}
+	}
+	var buf bytes.Buffer
+	if err := png.Encode(&buf, out); err != nil {
+		return b
+	}
+	return buf.Bytes()
+}
+
+func sqrt(v float64) float64 { return math.Sqrt(v) }
