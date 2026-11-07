@@ -55,6 +55,32 @@ jobs:
           "Smart Contacts.app/Contents/MacOS/smartcontacts" --import "$RUNNER_TEMP/t.vcf" || "Smart Contacts.app/Contents/MacOS/"* --import "$RUNNER_TEMP/t.vcf"
           grep -q Smoke "$SMART_CONTACTS_DIR/contacts.json"
 
+      - name: Launch test (window must open and stay up)
+        run: |
+          export SMART_CONTACTS_DIR="$RUNNER_TEMP/sc-gui"
+          BIN="$(ls "Smart Contacts.app/Contents/MacOS/"* | head -1)"
+          "$BIN" > "$RUNNER_TEMP/gui.log" 2>&1 &
+          PID=$!
+          sleep 15
+          screencapture -x dist/launch.png || true
+          if kill -0 $PID 2>/dev/null; then echo "ALIVE after 15s"; ALIVE=1; else echo "EXITED"; ALIVE=0; fi
+          echo "----- app output -----"; cat "$RUNNER_TEMP/gui.log"
+          echo "----- crash reports -----"; ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | head -5
+          f=$(ls -t ~/Library/Logs/DiagnosticReports/*smartcontacts* 2>/dev/null | head -1); [ -n "$f" ] && head -80 "$f"
+          echo "----- windows -----"
+          osascript -e 'tell application "System Events" to get name of every window of (every process whose unix id is '"$PID"')' 2>&1 || true
+          kill $PID 2>/dev/null || true
+          cp "$RUNNER_TEMP/gui.log" dist/gui.log
+          [ "$ALIVE" = 1 ]
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: launch-test
+          path: |
+            dist/launch.png
+            dist/gui.log
+
       - uses: actions/upload-artifact@v4
         with:
           name: Smart-Contacts-mac
