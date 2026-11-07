@@ -127,4 +127,5 @@ Code map: `model.go` (contacts, search, phones, birthdays) · `store.go` (file, 
 photos) · `vcard.go` · `tools.go` (CSV, duplicates, clean-up) · `smart.go` (Smart Add) ·
 `graph.go` (connections, six-degrees paths) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
 
-See [LESSONS.md](LESSONS.md) for notes from building it.
+See [LIMITATIONS.md](LIMITATIONS.md) for what the app deliberately won't do and what's next, and
+[LESSONS.md](LESSONS.md) for notes from building it.
