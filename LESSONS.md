@@ -27,6 +27,14 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - `golang.org/x/tools/go/vcs` lives at tag `go/vcs/v0.1.0-deprecated` in the tools repo, and
   `fyne.io/systray` is pinned to a pseudo-version commit — check the dependency's go.mod.
 
+- **"Bounces in the Dock, never opens" was macOS quarantine, not the code.** Activity Monitor →
+  select the process → View → Sample Process showed it frozen at `_dyld_start` (1 thread, 112 KB)
+  and running from `/Volumes/VOLUME/…` (App Translocation of a browser/chat download). An ad-hoc
+  signed, quarantined app can hang there on macOS 26 with no Gatekeeper dialog at all. Every later
+  launch only re-activated that frozen copy, so each "new build" looked broken too. Fix: install
+  with `install.sh` (curl doesn't quarantine) or `xattr -dr com.apple.quarantine`; the lasting fix
+  is a Developer ID signature + notarisation. Sample the process *before* changing code.
+
 ## 2. Fyne 2.8
 
 - **Arabic works**: Fyne falls back to system fonts per character and shapes Arabic correctly,
