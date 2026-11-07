@@ -40,6 +40,9 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 - **Birthdays** — enter `1990-03-14`, `14/03/1990` or just `14/03`; the Birthdays list shows the
   next 30 days with the age they turn. 29 February is handled.
 - **Groups** — tick groups on the Edit page; renaming or deleting a group never deletes people.
+- **Connections (six degrees)** — link people as friend, family, colleague… (⌘K); people at the
+  same company count as connected. *How Are They Connected?* (⌘⇧K) finds the shortest chain
+  between any two people, up to six steps, and each card shows who is 1, 2 and 3 steps away.
 - **Import** — from the Mac's own Contacts app (one click, macOS asks permission once) or any
   `.vcf` file (Apple, Google, Outlook, Android; vCard 2.1, 3.0 and 4.0, photos included).
   Contacts you already have are spotted and skipped.
@@ -93,6 +96,8 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 | ⌘S | save |
 | ⌘⌫ | delete (to Trash) |
 | ⌘⇧F | favourite |
+| ⌘K | connect to someone |
+| ⌘⇧K | how are they connected? |
 | ⌘O | import a .vcf |
 | ⌘, | settings |
 
@@ -108,6 +113,6 @@ cd smart_contacts
 
 Code map: `model.go` (contacts, search, phones, birthdays) · `store.go` (file, backups, trash,
 photos) · `vcard.go` · `tools.go` (CSV, duplicates, clean-up) · `smart.go` (Smart Add) ·
-`mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
+`graph.go` (connections, six-degrees paths) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
 
 See [LESSONS.md](LESSONS.md) for notes from building it.

@@ -714,6 +714,8 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		section("GROUPS", container.NewHScroll(chips))
 	}
 
+	section("CONNECTIONS", u.connectionsSection(c)...)
+
 	if strings.TrimSpace(c.Notes) != "" {
 		n := widget.NewLabel(c.Notes)
 		n.Wrapping = fyne.TextWrapWord

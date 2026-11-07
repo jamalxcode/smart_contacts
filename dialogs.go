@@ -68,6 +68,14 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 				u.save()
 			}
 		}),
+		fyne.NewMenuItemSeparator(),
+		item("Connect to Someone…", cmd(fyne.KeyK), func() {
+			if c := current(); c != nil && u.ed == nil {
+				u.connectDialog(c)
+			}
+		}),
+		item("How Are They Connected?…", cmdShift(fyne.KeyK), func() { u.pathDialog(current(), nil) }),
+		fyne.NewMenuItemSeparator(),
 		item("Delete Contact", cmd(fyne.KeyBackspace), func() {
 			// The menu catches ⌘⌫ before any text field does. In the search box it means
 			// "clear what I typed", and while editing it must never delete the contact.
@@ -414,6 +422,9 @@ func (u *ui) duplicates() {
 			}
 		}
 		Merge(keep, others, u.cfg.CountryCode)
+		for _, o := range others {
+			u.store.RepointLinks(o.ID, keep.ID)
+		}
 		u.store.Put(keep)
 		ids := []string{}
 		for _, o := range others {
@@ -717,6 +728,8 @@ func (u *ui) help() {
 
 **Groups.** Tick groups on a contact's Edit page, or make one with + Group. A new contact made while a group is open joins that group.
 
+**Connections (six degrees).** On a contact's card choose Connect to… (⌘K) to link two people as friends, family, colleagues and so on. People at the same company count as connected automatically. Contact → How Are They Connected? (⌘⇧K) finds the shortest chain between any two people, up to six steps, and each card shows how many people are 1, 2 and 3 steps away. All of it stays on this Mac.
+
 **Birthdays.** Type a birthday as 1990-03-14, 14/03/1990, or 14/03 when you don't know the year. The Birthdays list shows the next 30 days and the age they turn.
 
 **Bringing contacts in.** File → Import from Mac Contacts reads the built-in Contacts app (macOS asks permission once). Import vCard reads .vcf files from Google, Outlook or a phone. Contacts that already exist are spotted and skipped.
@@ -727,7 +740,7 @@ func (u *ui) help() {
 
 **Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder.
 
-**Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘O import · ⌘, settings`
+**Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘K connect · ⌘⇧K how connected · ⌘O import · ⌘, settings`
 	r := widget.NewRichTextFromMarkdown(text)
 	r.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)

@@ -25,6 +25,8 @@ type Store struct {
 	Trash    []TrashItem
 	// ExtraGroups are groups the user created that have no members yet.
 	ExtraGroups []string
+	// Links are the relationships the user recorded between two contacts.
+	Links []Link
 }
 
 // TrashItem is a deleted contact, kept for 30 days.
@@ -39,6 +41,7 @@ type storeFile struct {
 	Contacts []*Contact  `json:"contacts"`
 	Trash    []TrashItem `json:"trash,omitempty"`
 	Groups   []string    `json:"groups,omitempty"`
+	Links    []Link      `json:"links,omitempty"`
 }
 
 const (
@@ -76,7 +79,7 @@ func OpenStore(dir string) (*Store, error) {
 	if err := json.Unmarshal(b, &f); err != nil {
 		return nil, fmt.Errorf("contacts.json is damaged (%v); the daily backups are in %s", err, filepath.Join(dir, "backups"))
 	}
-	s.Contacts, s.Trash, s.ExtraGroups = f.Contacts, f.Trash, f.Groups
+	s.Contacts, s.Trash, s.ExtraGroups, s.Links = f.Contacts, f.Trash, f.Groups, f.Links
 	s.purgeTrash(time.Now())
 	return s, nil
 }
@@ -120,7 +123,7 @@ func (s *Store) Save() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.backupLocked(time.Now())
-	f := storeFile{Version: 1, Saved: time.Now(), Contacts: s.Contacts, Trash: s.Trash, Groups: s.ExtraGroups}
+	f := storeFile{Version: 1, Saved: time.Now(), Contacts: s.Contacts, Trash: s.Trash, Groups: s.ExtraGroups, Links: s.Links}
 	b, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err
@@ -227,6 +230,7 @@ func (s *Store) Restore(id string) bool {
 
 // EmptyTrash deletes trashed contacts and their photos for good.
 func (s *Store) EmptyTrash() {
+	defer s.dropDeadLinks()
 	for _, t := range s.Trash {
 		os.Remove(s.PhotoPath(t.Contact.ID))
 	}
@@ -234,6 +238,7 @@ func (s *Store) EmptyTrash() {
 }
 
 func (s *Store) purgeTrash(now time.Time) {
+	defer s.dropDeadLinks()
 	keep := s.Trash[:0]
 	for _, t := range s.Trash {
 		if now.Sub(t.Deleted) > trashDays*24*time.Hour {
