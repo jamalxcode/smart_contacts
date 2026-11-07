@@ -41,7 +41,7 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
   `center` *first* in `.Objects`, then the edges. List item updaters index into that.
 - Setting `list.OnSelected = nil` around `list.Select(i)` lets you highlight without re-running
   the selection logic (same idea as the `loading` guard in office_lights).
-- A literal U+FEFF in Go source is a compile error ("illegal byte order mark"); write `"﻿"`.
+- A literal U+FEFF in Go source is a compile error ("illegal byte order mark"); write `"\uFEFF"`.
   The file-writing tool turned the escape into the character, so grep for `\xef\xbb\xbf` after.
 
 ## 3. Contacts data
