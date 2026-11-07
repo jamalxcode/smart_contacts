@@ -54,10 +54,16 @@ that haven't been built yet.
 - Contact data has no encryption of its own; it relies on FileVault.
 - Connections between people are not included in vCard exports.
 - Search needs the exact spelling (no typo tolerance) — Arabic letter forms and accents are matched.
-- Google Contacts come in only through a .vcf export, not a direct import.
+- Google, Outlook and LinkedIn come in through files you export (vCard / CSV), not a live link.
+- Facebook, Instagram and X exports list only names or usernames, with no numbers or emails, so
+  they can't be matched to contacts; profile links are added by hand.
+- Name matching across languages uses consonants, so a few names share a key (Mohammed / Mahmoud,
+  Hassan / Hussain); a name alone never merges two cards without you.
+- Spelling suggestions for the other language cover common Arabic names and Gulf family names;
+  others are typed by hand.
+- Clean Up knows the numbering rules of about 25 countries; numbers from others are kept as written.
 - Contact photos: iPhone HEIC needs converting to JPEG; photos are shrunk to 512 px.
 - Undoing an edit to a contact isn't possible; only deleted contacts can be restored (Trash, 30 days).
-- One name per contact: no separate Arabic and English version of the same name.
 - No prefix, suffix, middle name or phonetic spelling fields.
 - Birthday is the only date: no anniversaries or other dates.
 - No custom fields beyond the built-in ones (labels can be renamed).
@@ -65,7 +71,6 @@ that haven't been built yet.
 - No interaction history or timeline of calls and meetings, only notes.
 - Connections have no direction (no manager → report or parent → child).
 - Groups are flat; no nesting.
-- CSV works for export only, not import.
 - CSV exports keep up to 3 phones, 2 emails and 1 address per contact.
 - Some Apple fields don't survive import or export: phonetic names, related names, other dates,
   messaging handles.
@@ -82,6 +87,12 @@ that haven't been built yet.
 - Editing several contacts at once (adding a group to many people, for example)
 
 ## Done
+
+- **Import from every source:** Mac/iPhone, other phones, Gmail, Outlook, Yahoo, iCloud, LinkedIn,
+  spreadsheets (.csv/.xlsx) and notes, with matching and merging into existing cards.
+- **Phone and email clean-up:** 00/+, country codes from clues on the card, typos, duplicates and
+  wrong numbers.
+- **Names in Arabic and English** on one card, matched and searched in both.
 
 - **Six degrees of separation:** link people as friend, family, colleague… (⌘K); *How Are They
   Connected?* (⌘⇧K) finds the shortest chain between two people, up to six steps. Built offline,

@@ -58,6 +58,8 @@ type Contact struct {
 	Birthday      string    `json:"birthday,omitempty"` // YYYY-MM-DD, or --MM-DD when the year is unknown
 	Notes         string    `json:"notes,omitempty"`
 	Groups        []string  `json:"groups,omitempty"`
+	AltName       string    `json:"altName,omitempty"` // the name in the other language (Arabic ↔ English)
+	Sources       []string  `json:"sources,omitempty"` // where the details came from: "Mac Contacts", "LinkedIn"…
 	Favorite      bool      `json:"favorite,omitempty"`
 	HasPhoto      bool      `json:"hasPhoto,omitempty"`
 	Created       time.Time `json:"created"`
@@ -98,6 +100,7 @@ func (c *Contact) Clone() *Contact {
 	n.URLs = append([]Field(nil), c.URLs...)
 	n.Addresses = append([]Address(nil), c.Addresses...)
 	n.Groups = append([]string(nil), c.Groups...)
+	n.Sources = append([]string(nil), c.Sources...)
 	return &n
 }
 
@@ -198,6 +201,11 @@ func (c *Contact) Tidy() {
 	c.First = strings.TrimSpace(c.First)
 	c.Last = strings.TrimSpace(c.Last)
 	c.Nickname = strings.TrimSpace(c.Nickname)
+	c.AltName = strings.TrimSpace(c.AltName)
+	if fold(c.AltName) == fold(c.FullName()) {
+		c.AltName = ""
+	}
+	c.Sources = uniqueFold(c.Sources)
 	c.Company = strings.TrimSpace(c.Company)
 	c.Title = strings.TrimSpace(c.Title)
 	c.Birthday = strings.TrimSpace(c.Birthday)
@@ -312,7 +320,7 @@ func (c *Contact) SearchText() string {
 }
 
 func (c *Contact) searchText() string {
-	parts := []string{c.First, c.Last, c.Nickname, c.Company, c.Title, c.Notes, strings.Join(c.Groups, " ")}
+	parts := []string{c.First, c.Last, c.AltName, c.Nickname, c.Company, c.Title, c.Notes, strings.Join(c.Groups, " ")}
 	for _, f := range c.Emails {
 		parts = append(parts, f.Value)
 	}
@@ -341,11 +349,53 @@ func (c *Contact) Matches(query string) bool {
 		if d := digitsOnly(w); d != "" && len(d) == len(strings.Trim(w, "+-()")) {
 			w = d
 		}
-		if !strings.Contains(hay, w) {
+		if !strings.Contains(hay, w) && !c.matchesNameSkeleton(w) {
 			return false
 		}
 	}
 	return true
+}
+
+// uniqueFold drops empty and repeated (case-insensitive) strings, keeping the first spelling.
+func uniqueFold(ss []string) []string {
+	var out []string
+	seen := map[string]bool{}
+	for _, s := range ss {
+		s = strings.TrimSpace(s)
+		k := fold(s)
+		if s == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		out = append(out, s)
+	}
+	return out
+}
+
+// HasSource reports whether a contact came (partly) from a source.
+func (c *Contact) HasSource(src string) bool {
+	for _, s := range c.Sources {
+		if strings.EqualFold(s, src) {
+			return true
+		}
+	}
+	return false
+}
+
+// matchesNameSkeleton lets a word in one script find a name written in the other.
+func (c *Contact) matchesNameSkeleton(w string) bool {
+	q := wordSkeleton(w)
+	if len([]rune(w)) < 4 || len([]rune(q)) < 2 || digitsOnly(w) != "" {
+		return false
+	}
+	for _, n := range []string{c.First, c.Last, c.AltName} {
+		for _, part := range strings.Fields(strings.ReplaceAll(n, "-", " ")) {
+			if strings.HasPrefix(wordSkeleton(part), q) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // SortKey orders contacts by first or last name; companies sort by company name.
@@ -397,24 +447,19 @@ func (c *Contact) IndexLetter(byLast bool) string {
 // NormalizePhone turns a number into +<country><number> when it can tell the country,
 // using defCC (e.g. "965") for local numbers. It returns digits with a leading + when known.
 func NormalizePhone(s, defCC string) string {
-	s = strings.TrimSpace(fold(s))
-	plus := strings.HasPrefix(s, "+")
-	d := digitsOnly(s)
-	if d == "" {
-		return ""
+	r := analyzePhone(s, defCC, nil)
+	switch r.Status {
+	case phOK, phSuspicious:
+		return r.Norm
+	case phService:
+		if strings.HasPrefix(strings.TrimSpace(s), "+") {
+			return "+" + digitsOnly(fold(s))
+		}
+		return digitsOnly(fold(s))
 	}
-	if len(d) < localDigits(defCC) && !plus { // service and short codes (171, 112, 1802555) stay as dialled
-		return d
-	}
-	switch {
-	case plus:
+	d := digitsOnly(fold(s))
+	if strings.HasPrefix(strings.TrimSpace(s), "+") && d != "" {
 		return "+" + d
-	case strings.HasPrefix(d, "00") && len(d) > 8:
-		return "+" + d[2:]
-	case defCC != "" && strings.HasPrefix(d, defCC) && len(d) > len(defCC)+6:
-		return "+" + d
-	case defCC != "":
-		return "+" + defCC + strings.TrimLeft(d, "0")
 	}
 	return d
 }

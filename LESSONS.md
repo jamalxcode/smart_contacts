@@ -112,7 +112,29 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - An Arabic name and a +965 number in one label get reordered by the bidi algorithm; put them in
   separate labels.
 
-## 6. Ideas not done yet
+## 6. One source of truth (import, clean-up, names)
+
+- **Import is a merge, not an append.** `PlanImport` sorts each incoming card into new / update an
+  existing card / up to date / ask / repeated-in-file, shown as a preview; `ApplyImport` merges.
+  Strong matches: shared phone, email or social profile link (a LinkedIn URL is an identity) with
+  names that fit. Name-only matches merge only when exactly one person has that name and nothing
+  contradicts it; otherwise the user picks. Re-importing the same file changes nothing (tested).
+- **LinkedIn's Connections.csv starts with note lines**; find the header row instead of assuming
+  row 1. Outlook's "Title" column is Mr./Dr. when "Job Title" exists. Google pairs "Phone 1 - Type"
+  with "Phone 1 - Value" and packs several values as " ::: ". Excel stores typed phone numbers as
+  numbers (9.6599998888E10). A small zip+XML reader handles .xlsx without a dependency.
+- **Phone numbers need the country's rules**, not just digits: trunk zeros (UK 0, Saudi 0 after
+  +966), Kuwait has no trunk 0 but people add one, 8-digit Kuwaiti numbers start with 2/4/5/6/9,
+  services are 3–4 digits or 7 starting with 1. A local number with no country takes it from clues
+  on the same card (address, other numbers, email TLD); otherwise ask, never guess.
+- **Cross-script names:** a consonant skeleton (Mohammed = Muhammad = محمد = "mhmd"), dropping the
+  article (Al-/El-/ال), "Abdul" joins (عبدالرحمن = Abdul Rahman), Gulf ض = dh, silent final ة/h.
+  It is deliberately loose, so it only ever *proposes* name-only matches.
+- Clean-up changes are applied by value/key, not by index: removing one field shifts the others.
+- Test with the data folder you mean: one screenshot run without `SMART_CONTACTS_DIR` opened an
+  empty default folder and looked like data loss. `--preview <file>` opens straight into an import.
+
+## 7. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

@@ -1,11 +1,10 @@
 package main
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -42,8 +41,10 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 			}
 		}),
 		fyne.NewMenuItemSeparator(),
+		item("Import Contacts…", cmd(fyne.KeyI), u.importHub),
 		fyne.NewMenuItem("Import from Mac Contacts…", u.importMac),
-		item("Import vCard File…", cmd(fyne.KeyO), u.importVCF),
+		item("Import a File…", cmd(fyne.KeyO), u.importFile),
+		fyne.NewMenuItem("Paste People from Text…", u.pasteImport),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Export Shown Contacts as vCard…", func() { u.exportVCF(u.filtered, u.groupTitle()) }),
 		fyne.NewMenuItem("Export Shown Contacts as CSV…", u.exportCSV),
@@ -175,29 +176,6 @@ func (u *ui) finishSmartAdd(c *Contact, _ bool, banner string) {
 
 // ---------- import ----------
 
-func (u *ui) importVCF() {
-	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
-		if err != nil || r == nil {
-			return
-		}
-		defer r.Close()
-		b, err := io.ReadAll(io.LimitReader(r, 512<<20))
-		if err != nil {
-			dialog.ShowError(err, u.win)
-			return
-		}
-		cards, err := ParseVCards(bytes.NewReader(b))
-		if err != nil {
-			dialog.ShowError(err, u.win)
-			return
-		}
-		u.importCards(cards, r.URI().Name())
-	}, u.win)
-	d.SetFilter(storage.NewExtensionFileFilter([]string{".vcf", ".vcard", ".VCF"}))
-	d.Resize(fyne.NewSize(760, 520))
-	d.Show()
-}
-
 func (u *ui) importMac() {
 	prog := dialog.NewCustomWithoutButtons("Reading Mac Contacts…", container.NewVBox(
 		widget.NewLabel("If macOS asks, allow Smart Contacts to use Contacts."), widget.NewProgressBarInfinite()), u.win)
@@ -210,60 +188,9 @@ func (u *ui) importMac() {
 				dialog.ShowError(err, u.win)
 				return
 			}
-			u.importCards(cards, "Mac Contacts")
+			u.previewImport(&Batch{Source: "Mac Contacts", Format: "Mac Contacts app", Cards: cards})
 		})
 	}()
-}
-
-// importCards shows what will happen, then adds the new cards. Cards that match an existing
-// contact (same phone, email or name) are skipped unless the user asks for all of them.
-func (u *ui) importCards(cards []Card, source string) {
-	if len(cards) == 0 {
-		dialog.ShowInformation("Nothing found", "No contacts were found in "+source+".", u.win)
-		return
-	}
-	idx := NewDupIndex(u.store.Contacts, u.cfg.CountryCode)
-	var fresh, known []Card
-	for _, card := range cards {
-		if idx.Find(card.Contact) != nil {
-			known = append(known, card)
-		} else {
-			fresh = append(fresh, card)
-		}
-	}
-	add := func(cs []Card) {
-		for _, card := range cs {
-			c := card.Contact
-			if len(card.Photo) > 0 && CanDecodeImage(card.Photo) {
-				_ = u.store.SetPhoto(c, ShrinkPhoto(card.Photo, 512))
-			}
-			u.store.Put(c)
-		}
-		u.save()
-		u.flash(fmt.Sprintf("Imported %d contacts from %s", len(cs), source))
-	}
-	if len(known) == 0 {
-		dialog.ShowConfirm("Import", fmt.Sprintf("Add %d contacts from %s?", len(fresh), source), func(ok bool) {
-			if ok {
-				add(fresh)
-			}
-		}, u.win)
-		return
-	}
-	msg := widget.NewLabel(fmt.Sprintf("%s has %d contacts.\n\n%d are new.\n%d look like contacts you already have (same phone, email or name).",
-		source, len(cards), len(fresh), len(known)))
-	newOnly := widget.NewButton(fmt.Sprintf("Add the %d new ones", len(fresh)), nil)
-	newOnly.Importance = widget.HighImportance
-	all := widget.NewButton("Add all (merge later with Find Duplicates)", nil)
-	cancel := widget.NewButton("Cancel", nil)
-	d := dialog.NewCustomWithoutButtons("Import", container.NewVBox(msg, newOnly, all, cancel), u.win)
-	newOnly.OnTapped = func() { d.Hide(); add(fresh) }
-	all.OnTapped = func() { d.Hide(); add(append(fresh, known...)) }
-	cancel.OnTapped = d.Hide
-	if len(fresh) == 0 {
-		newOnly.Disable()
-	}
-	d.Show()
 }
 
 // sendToMacContacts copies cards into Apple's Contacts app, after warning that Apple's app
@@ -497,38 +424,129 @@ func (u *ui) duplicates() {
 
 // ---------- clean up ----------
 
-func (u *ui) cleanup() {
-	changes := PlanCleanup(u.store.Contacts, u.cfg.CountryCode)
+func (u *ui) cleanup() { u.cleanupFor(u.store.Contacts, "") }
+
+// cleanupFor shows Clean Up for some contacts (all of them, or the ones just imported).
+// Suggestions are grouped: confident fixes and duplicates are ticked; wrong-looking numbers are
+// ticked only when clearly junk; numbers whose country is unclear get a country picker.
+func (u *ui) cleanupFor(cs []*Contact, intro string) {
+	changes := PlanCleanup(cs, u.cfg.CountryCode)
 	if len(changes) == 0 {
-		dialog.ShowInformation("All tidy", "Numbers, names, emails and links already look consistent.", u.win)
+		if intro == "" {
+			dialog.ShowInformation("All tidy", "Numbers, emails, names and links already look right.", u.win)
+		}
 		return
 	}
-	box := container.NewVBox()
-	checks := make([]*widget.Check, len(changes))
-	for i, ch := range changes {
-		checks[i] = widget.NewCheck(ch.Contact.DisplayName()+":   "+ch.What, nil)
-		checks[i].SetChecked(true)
-		box.Add(checks[i])
+	type row struct {
+		check  *widget.Check
+		choose *widget.Select
 	}
-	note := caption(fmt.Sprintf("Phones are written as +%s… for local numbers (change the country in Settings). Names are only re-capitalised when typed ALL CAPS or all lower case.", u.cfg.CountryCode))
+	rows := make([]row, len(changes))
+	sections := []struct {
+		kind  int
+		title string
+		help  string
+	}{
+		{ckFix, "Fixes", "00 → +, country codes, extra zeros, email typos, values in the wrong field"},
+		{ckDuplicate, "Duplicates on the same card", "the same number or email listed twice"},
+		{ckWrong, "Looks wrong — remove?", "clear junk is ticked; numbers that might be real are not"},
+		{ckUnsure, "Which country?", "pick the country for each number, or leave it as it is"},
+	}
+	box := container.NewVBox()
+	for _, sec := range sections {
+		var idx []int
+		for i, ch := range changes {
+			if ch.Kind == sec.kind {
+				idx = append(idx, i)
+			}
+		}
+		if len(idx) == 0 {
+			continue
+		}
+		head := widget.NewLabelWithStyle(fmt.Sprintf("%s (%d)", sec.title, len(idx)), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		var all *widget.Button
+		if sec.kind != ckUnsure {
+			idx := idx
+			all = widget.NewButton("Tick all", nil)
+			all.Importance = widget.LowImportance
+			all.OnTapped = func() {
+				tick := false
+				for _, i := range idx {
+					tick = tick || !rows[i].check.Checked
+				}
+				for _, i := range idx {
+					rows[i].check.SetChecked(tick)
+				}
+			}
+			box.Add(container.NewBorder(nil, nil, nil, all, head))
+		} else {
+			box.Add(head)
+		}
+		box.Add(caption(sec.help))
+		for _, i := range idx {
+			ch := changes[i]
+			who := widget.NewLabel(ch.Contact.DisplayName())
+			who.TextStyle.Bold = true
+			who.Truncation = fyne.TextTruncateEllipsis
+			why := caption(ch.Reason)
+			if sec.kind == ckUnsure {
+				opts := []string{"Leave as is"}
+				for _, o := range ch.Options {
+					opts = append(opts, countryName(o)+":  "+FormatPhone(o, u.cfg.CountryCode))
+				}
+				sel := widget.NewSelect(opts, nil)
+				sel.SetSelectedIndex(0)
+				rows[i].choose = sel
+				box.Add(container.NewBorder(nil, nil, container.NewGridWrap(fyne.NewSize(200, 36), who), nil,
+					container.NewVBox(container.NewBorder(nil, nil, widget.NewLabel(ch.Old), nil, sel), why)))
+				continue
+			}
+			chk := widget.NewCheck(ch.What(), nil)
+			chk.SetChecked(ch.Default)
+			rows[i].check = chk
+			box.Add(container.NewBorder(nil, nil, container.NewGridWrap(fyne.NewSize(200, 36), who), nil, container.NewVBox(chk, why)))
+		}
+		box.Add(widget.NewSeparator())
+	}
+	top := fmt.Sprintf("Local numbers are taken as +%s (your country in Settings) unless the card points elsewhere — its address, other numbers or email domain. A full backup is saved before anything changes.", u.cfg.CountryCode)
+	if intro != "" {
+		top = intro + "\n" + top
+	}
+	note := caption(top)
 	note.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(fmt.Sprintf("Clean up — %d suggestions", len(changes)), "Apply Ticked", "Cancel",
+	d := dialog.NewCustomConfirm(fmt.Sprintf("Clean up — %d suggestions", len(changes)), "Apply", "Skip",
 		container.NewBorder(note, nil, nil, nil, container.NewVScroll(box)), func(ok bool) {
 			if !ok {
 				return
 			}
+			backup, err := u.store.SnapshotBackup("before-cleanup")
+			if err != nil {
+				dialog.ShowError(fmt.Errorf("couldn't save a backup first, so nothing was changed: %w", err), u.win)
+				return
+			}
 			n := 0
+			touched := map[*Contact]bool{}
 			for i, ch := range changes {
-				if checks[i].Checked {
-					ch.Apply()
-					ch.Contact.Updated = time.Now()
+				switch {
+				case rows[i].choose != nil:
+					if k := rows[i].choose.SelectedIndex(); k > 0 {
+						ch.Apply(ch.Options[k-1])
+						touched[ch.Contact] = true
+						n++
+					}
+				case rows[i].check != nil && rows[i].check.Checked:
+					ch.Apply("")
+					touched[ch.Contact] = true
 					n++
 				}
 			}
+			for c := range touched {
+				u.store.Put(c)
+			}
 			u.save()
-			u.flash(fmt.Sprintf("Applied %d changes", n))
+			u.flash(fmt.Sprintf("Applied %d changes · backup: %s", n, filepath.Base(backup)))
 		}, u.win)
-	d.Resize(fyne.NewSize(680, 520))
+	d.Resize(fyne.NewSize(860, 620))
 	d.Show()
 }
 
@@ -732,7 +750,9 @@ func (u *ui) help() {
 
 **Birthdays.** Type a birthday as 1990-03-14, 14/03/1990, or 14/03 when you don't know the year. The Birthdays list shows the next 30 days and the age they turn.
 
-**Bringing contacts in.** File → Import from Mac Contacts reads the built-in Contacts app (macOS asks permission once). Import vCard reads .vcf files from Google, Outlook or a phone. Contacts that already exist are spotted and skipped.
+**Bringing contacts in (⌘I).** Smart Contacts is meant to be the one place all your contacts come together. File → Import Contacts brings them in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf), Gmail, Outlook, Yahoo or iCloud (vCard or CSV), LinkedIn (Connections.csv), any spreadsheet (.csv or .xlsx — columns are matched automatically, in English or Arabic) and notes or pasted text with several people in it. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name — in Arabic or English — and their cards are updated instead of duplicated; you decide on anyone uncertain. Each card shows where its details came from, and the sidebar lists your sources.
+
+**Names in two languages.** Each contact can hold a second name in the other language (محمد المطيري / Mohammed Al-Mutairi). Edit → "Name in other language" has a Suggest button for common names. Search finds people in either language.
 
 **Tidying.** Tools → Find Duplicates merges cards that share a phone, email or name. Tools → Clean Up writes every number the same way (+965 9999 8888).
 

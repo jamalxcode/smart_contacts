@@ -207,7 +207,7 @@ func TestCleanup(t *testing.T) {
 		t.Fatalf("expected 5 changes, got %d: %+v", len(ch), ch)
 	}
 	for _, x := range ch {
-		x.Apply()
+		x.Apply("")
 	}
 	if c.First != "Mohammed" || c.Last != "Al-Rashid" || c.Phones[0].Value != "+965 9999 8888" || c.Emails[0].Value != "bob@example.com" || c.URLs[0].Value != "https://sala.company" {
 		t.Errorf("after cleanup: %+v", c)
@@ -385,7 +385,7 @@ func TestShortNumbers(t *testing.T) {
 			t.Errorf("NormalizePhone(%q) = %q, want %q", in, got, want)
 		}
 	}
-	if NormalizePhone("1234567", "44") != "+441234567" {
+	if NormalizePhone("3829174", "41") != "+413829174" { // a home country outside the built-in table
 		t.Error("7-digit numbers are ordinary outside the Gulf")
 	}
 	if CanWhatsApp("171", "965") || !CanWhatsApp("99998888", "965") {

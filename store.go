@@ -172,6 +172,33 @@ func (s *Store) backupLocked(now time.Time) {
 	}
 }
 
+// SnapshotBackup writes the current contacts to backups/<tag>-<time>.json before a big change.
+func (s *Store) SnapshotBackup(tag string) (string, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	bdir := filepath.Join(s.dir, "backups")
+	if err := os.MkdirAll(bdir, 0o700); err != nil {
+		return "", err
+	}
+	f := storeFile{Version: 1, Saved: time.Now(), Contacts: s.Contacts, Trash: s.Trash, Groups: s.ExtraGroups, Links: s.Links}
+	b, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return "", err
+	}
+	name := filepath.Join(bdir, tag+"-"+time.Now().Format("2006-01-02-150405")+".json")
+	if err := writeFileAtomic(name, b, 0o600); err != nil {
+		return "", err
+	}
+	// keep the 10 newest snapshots of each kind
+	old, _ := filepath.Glob(filepath.Join(bdir, tag+"-*.json"))
+	sort.Strings(old)
+	for len(old) > 10 {
+		os.Remove(old[0])
+		old = old[1:]
+	}
+	return name, nil
+}
+
 // Get finds a contact by ID.
 func (s *Store) Get(id string) *Contact {
 	for _, c := range s.Contacts {

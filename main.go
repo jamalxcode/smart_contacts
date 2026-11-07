@@ -43,5 +43,11 @@ func main() {
 		return
 	}
 	u := newUI(a, store, cfg)
+	if len(os.Args) > 2 && os.Args[1] == "--preview" { // open straight into an import preview
+		if data, err := os.ReadFile(os.Args[2]); err == nil {
+			name := os.Args[2]
+			go func() { fyne.Do(func() { u.importData(name, data) }) }()
+		}
+	}
 	u.win.ShowAndRun()
 }

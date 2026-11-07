@@ -89,6 +89,7 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 		w, h = 1120, 720
 	}
 	u.win.Resize(fyne.NewSize(w, h))
+	u.win.SetOnDropped(u.importDropped) // drag .vcf / .csv / .xlsx / .txt files onto the window
 	// ⌘Q from the app menu quits without going through the window's close button.
 	a.Lifecycle().SetOnStopped(u.saveWindow)
 	u.win.SetCloseIntercept(func() {
@@ -339,6 +340,18 @@ func (u *ui) refreshSidebar() {
 		}
 		items = append(items, sideItem{"g:" + g, g, iconLabel, n})
 	}
+	if srcs := u.store.SourceNames(); len(srcs) > 0 {
+		items = append(items, sideItem{key: grpHeader, title: "SOURCES"})
+		for _, src := range srcs {
+			n := 0
+			for _, c := range u.store.Contacts {
+				if c.HasSource(src) {
+					n++
+				}
+			}
+			items = append(items, sideItem{"s:" + src, src, theme.DownloadIcon(), n})
+		}
+	}
 	u.sideItems = items
 	u.side.Refresh()
 	if !u.groupExists(u.group) {
@@ -392,6 +405,8 @@ func (u *ui) inGroup(c *Contact, now time.Time) bool {
 		return len(c.Phones) == 0 && len(c.Emails) == 0
 	case strings.HasPrefix(u.group, "g:"):
 		return c.HasGroup(u.group[2:])
+	case strings.HasPrefix(u.group, "s:"):
+		return c.HasSource(u.group[2:])
 	}
 	return true
 }
@@ -557,7 +572,8 @@ func (u *ui) emptyState() fyne.CanvasObject {
 	msg.Alignment = fyne.TextAlignCenter
 	imp := widget.NewButtonWithIcon("Import from Mac Contacts", theme.DownloadIcon(), u.importMac)
 	imp.Importance = widget.HighImportance
-	vcf := widget.NewButtonWithIcon("Import a .vcf file…", theme.FolderOpenIcon(), u.importVCF)
+	hub := widget.NewButtonWithIcon("Import from Gmail, LinkedIn, phones, spreadsheets…", theme.FolderOpenIcon(), u.importHub)
+	vcf := hub
 	smart := widget.NewButtonWithIcon("Smart Add from text…", iconSparkle, u.smartAdd)
 	add := widget.NewButtonWithIcon("New contact", theme.ContentAddIcon(), func() { u.editContact(nil) })
 	return container.NewCenter(container.NewVBox(container.NewCenter(title), msg, imp, vcf, smart, add))
@@ -584,6 +600,9 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	av.set(c, u.photo(c))
 
 	nameBox := container.NewVBox(headline(c.DisplayName(), 24, true))
+	if c.AltName != "" {
+		nameBox.Add(headline(c.AltName, 17, false))
+	}
 	if c.Nickname != "" && c.FullName() != "" {
 		nameBox.Add(caption("“" + c.Nickname + "”"))
 	}
@@ -724,6 +743,9 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	}
 
 	meta := []string{"Added " + c.Created.Format("2 Jan 2006")}
+	if len(c.Sources) > 0 {
+		meta = append(meta, "from "+strings.Join(c.Sources, ", "))
+	}
 	if !c.LastContacted.IsZero() {
 		meta = append(meta, "last contacted "+Ago(c.LastContacted, time.Now()))
 	}

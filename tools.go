@@ -19,7 +19,7 @@ func WriteCSV(w io.Writer, cs []*Contact) error {
 	cw := csv.NewWriter(w)
 	head := []string{"First Name", "Last Name", "Nickname", "Company", "Job Title",
 		"Phone 1 Label", "Phone 1", "Phone 2 Label", "Phone 2", "Phone 3 Label", "Phone 3",
-		"Email 1", "Email 2", "Website", "Address", "Birthday", "Groups", "Favorite", "Notes"}
+		"Email 1", "Email 2", "Website", "Address", "Birthday", "Groups", "Favorite", "Notes", "Name (other language)", "Sources"}
 	if err := cw.Write(head); err != nil {
 		return err
 	}
@@ -46,7 +46,7 @@ func WriteCSV(w io.Writer, cs []*Contact) error {
 		if c.Favorite {
 			fav = "yes"
 		}
-		row = append(row, e1, e2, u, addr, c.Birthday, strings.Join(c.Groups, "; "), fav, c.Notes)
+		row = append(row, e1, e2, u, addr, c.Birthday, strings.Join(c.Groups, "; "), fav, c.Notes, c.AltName, strings.Join(c.Sources, "; "))
 		if err := cw.Write(row); err != nil {
 			return err
 		}
@@ -82,13 +82,33 @@ func dupKeys(c *Contact, defCC string) []dupKey {
 			ks = append(ks, dupKey{"e:" + v, "same email", false})
 		}
 	}
-	if n := fold(c.FullName()); len([]rune(n)) >= 3 {
-		ks = append(ks, dupKey{"n:" + n, "same name", true})
+	for _, u := range c.URLs { // a LinkedIn / Instagram / X profile identifies the person
+		if k := profileKey(u.Value); k != "" {
+			ks = append(ks, dupKey{"u:" + k, "same profile link", false})
+		}
+	}
+	for _, s := range c.nameSkeletons() { // "Mohammed Al-Mutairi" = "محمد المطيري"
+		ks = append(ks, dupKey{"n:" + s, "same name", true})
 	}
 	return ks
 }
 
 func reachable(c *Contact) bool { return len(c.Phones)+len(c.Emails) > 0 }
+
+// profileKey turns a social profile link into a stable key: "linkedin.com/in/khalidm".
+func profileKey(u string) string {
+	l := strings.ToLower(strings.TrimSpace(u))
+	for _, p := range []string{"https://", "http://", "www.", "m.", "mobile."} {
+		l = strings.TrimPrefix(l, p)
+	}
+	l = strings.TrimRight(strings.SplitN(strings.SplitN(l, "?", 2)[0], "#", 2)[0], "/")
+	for _, site := range []string{"linkedin.com/in/", "instagram.com/", "x.com/", "twitter.com/", "facebook.com/", "github.com/"} {
+		if strings.HasPrefix(l, site) && len(l) > len(site) {
+			return l
+		}
+	}
+	return ""
+}
 
 // namesCompatible reports whether two cards could be the same person: either has no name,
 // one name contains the other ("Khalid" / "Khalid Al-Mutairi"), or the first names match.
@@ -108,7 +128,7 @@ func namesCompatible(a, b *Contact) bool {
 		}
 		return fold(bare.Company) == "" // a nickname-only card ("Abu Ali") may well be them
 	}
-	if na == nb || strings.Contains(na, nb) || strings.Contains(nb, na) {
+	if na == nb || strings.Contains(na, nb) || strings.Contains(nb, na) || sameNameAcrossScripts(a, b) {
 		return true
 	}
 	return strings.Fields(na)[0] == strings.Fields(nb)[0]
@@ -228,6 +248,16 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 		fill(&keep.Company, o.Company)
 		fill(&keep.Title, o.Title)
 		fill(&keep.Birthday, o.Birthday)
+		// a name in the other language becomes the second name instead of being lost
+		for _, n := range []string{o.FullName(), o.AltName} {
+			if n == "" || fold(n) == fold(keep.FullName()) || fold(n) == fold(keep.AltName) {
+				continue
+			}
+			if keep.AltName == "" && hasArabic(n) != hasArabic(keep.FullName()) {
+				keep.AltName = n
+			}
+		}
+		keep.Sources = append(keep.Sources, o.Sources...)
 		keep.Phones = mergeFields(keep.Phones, o.Phones, func(s string) string { return NormalizePhone(s, defCC) })
 		keep.Emails = mergeFields(keep.Emails, o.Emails, strings.ToLower)
 		keep.URLs = mergeFields(keep.URLs, o.URLs, strings.ToLower)
@@ -274,55 +304,6 @@ func mergeFields(a, b []Field, key func(string) string) []Field {
 	}
 	return a
 }
-
-// ---------- clean up ----------
-
-// CleanupReport lists what Clean Up would change, so the user can see it before applying.
-type CleanupChange struct {
-	Contact *Contact
-	What    string
-	apply   func()
-}
-
-// PlanCleanup proposes: phones in one international format, names with sensible capitals
-// (only when typed all upper or all lower case), emails in lower case, links with https.
-func PlanCleanup(cs []*Contact, defCC string) []CleanupChange {
-	var out []CleanupChange
-	for _, c := range cs {
-		c := c
-		for i, p := range c.Phones {
-			i := i
-			f := FormatPhone(p.Value, defCC)
-			if f != p.Value && len(digitsOnly(p.Value)) >= 7 {
-				out = append(out, CleanupChange{c, p.Value + "  →  " + f, func() { c.Phones[i].Value = f }})
-			}
-		}
-		for _, fld := range []*string{&c.First, &c.Last} {
-			fld := fld
-			if n := fixCase(*fld); n != *fld {
-				out = append(out, CleanupChange{c, *fld + "  →  " + n, func() { *fld = n }})
-			}
-		}
-		for i, e := range c.Emails {
-			i := i
-			if l := strings.ToLower(strings.TrimSpace(e.Value)); l != e.Value {
-				out = append(out, CleanupChange{c, e.Value + "  →  " + l, func() { c.Emails[i].Value = l }})
-			}
-		}
-		for i, u := range c.URLs {
-			i := i
-			v := strings.TrimSpace(u.Value)
-			if v != "" && !strings.Contains(v, "://") {
-				n := "https://" + v
-				out = append(out, CleanupChange{c, v + "  →  " + n, func() { c.URLs[i].Value = n }})
-			}
-		}
-	}
-	return out
-}
-
-// Apply makes the change.
-func (ch CleanupChange) Apply() { ch.apply() }
 
 // fixCase capitalises names typed ALL CAPS or all lower case; mixed case is left alone
 // (McDonald, al-Sabah, van der Berg are the person's own choice).

@@ -26,6 +26,7 @@ type editor struct {
 	photoSet bool     // photo was changed (set or removed)
 
 	first, last, nick, company, title, birthday *widget.Entry
+	alt                                         *widget.Entry
 	notes                                       *widget.Entry
 	phones, emails, urls                        *fieldRows
 	addrs                                       *addrRows
@@ -204,6 +205,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	}
 	e.first, e.last = ent(c.First, "First name"), ent(c.Last, "Last name")
 	e.nick = ent(c.Nickname, "Nickname")
+	e.alt = ent(c.AltName, "Name in other language (Arabic ↔ English)")
 	e.company, e.title = ent(c.Company, "Company"), ent(c.Title, "Job title")
 	e.birthday = ent(c.Birthday, "e.g. 1990-03-14, 14/03/1990 or 14/03")
 	e.bdayHint = caption("")
@@ -290,8 +292,19 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	})
 	remove.Importance = widget.LowImportance
 
+	suggest := widget.NewButtonWithIcon("Suggest", iconSparkle, nil)
+	suggest.Importance = widget.LowImportance
+	suggest.OnTapped = func() {
+		full := strings.TrimSpace(e.first.Text + " " + e.last.Text)
+		if s := SuggestOtherName(full); s != "" {
+			e.alt.SetText(s)
+			return
+		}
+		e.u.flash("No suggestion for “" + full + "” — type the other spelling yourself")
+	}
 	names := container.NewVBox(
 		container.NewGridWithColumns(2, e.first, e.last),
+		container.NewBorder(nil, nil, nil, suggest, e.alt),
 		container.NewGridWithColumns(2, e.company, e.title),
 		e.nick,
 	)
@@ -358,7 +371,7 @@ func contains(ss []string, s string) bool {
 // collect copies the form into e.c.
 func (e *editor) collect() {
 	c := e.c
-	c.First, c.Last, c.Nickname = e.first.Text, e.last.Text, e.nick.Text
+	c.First, c.Last, c.Nickname, c.AltName = e.first.Text, e.last.Text, e.nick.Text, e.alt.Text
 	c.Company, c.Title = e.company.Text, e.title.Text
 	c.Phones, c.Emails, c.URLs = e.phones.fields(), e.emails.fields(), e.urls.fields()
 	c.Addresses = e.addrs.addresses()

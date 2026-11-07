@@ -287,6 +287,8 @@ func buildCard(lines []vline) *Card {
 			}
 		case "FN":
 			fn = unescape(l.value)
+		case "X-ALT-NAME":
+			c.AltName = unescape(l.value)
 		case "NICKNAME":
 			c.Nickname = unescape(l.value)
 		case "ORG":
@@ -451,6 +453,9 @@ func WriteVCard(w io.Writer, c *Contact, photo []byte) error {
 	add("FN:" + escape(fn))
 	if c.Nickname != "" {
 		add("NICKNAME:" + escape(c.Nickname))
+	}
+	if c.AltName != "" {
+		add("X-ALT-NAME:" + escape(c.AltName))
 	}
 	if c.Company != "" {
 		add("ORG:" + escape(c.Company) + ";")
