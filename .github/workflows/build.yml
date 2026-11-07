@@ -66,7 +66,7 @@ jobs:
           if kill -0 $PID 2>/dev/null; then echo "ALIVE after 15s"; ALIVE=1; else echo "EXITED"; ALIVE=0; fi
           echo "----- app output -----"; cat "$RUNNER_TEMP/gui.log"
           echo "----- crash reports -----"; ls -t ~/Library/Logs/DiagnosticReports/ 2>/dev/null | head -5
-          f=$(ls -t ~/Library/Logs/DiagnosticReports/*smartcontacts* 2>/dev/null | head -1); [ -n "$f" ] && head -80 "$f"
+          f=$(ls -t ~/Library/Logs/DiagnosticReports/*smartcontacts* 2>/dev/null | head -1); if [ -n "$f" ]; then head -80 "$f"; fi
           echo "----- windows -----"
           osascript -e 'tell application "System Events" to get name of every window of (every process whose unix id is '"$PID"')' 2>&1 || true
           kill $PID 2>/dev/null || true
