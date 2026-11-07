@@ -1,0 +1,5 @@
+*.app
+dist/
+/smartcontacts
+/smart_contacts
+.DS_Store
