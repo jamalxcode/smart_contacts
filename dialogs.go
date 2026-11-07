@@ -75,6 +75,15 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 			}
 		}),
 		item("Delete Contact", cmd(fyne.KeyBackspace), func() {
+			// The menu catches ⌘⌫ before any text field does. In the search box it means
+			// "clear what I typed", and while editing it must never delete the contact.
+			if u.win.Canvas().Focused() == u.search {
+				u.search.SetText("")
+				return
+			}
+			if _, typing := u.win.Canvas().Focused().(*widget.Entry); typing {
+				return
+			}
 			if c := current(); c != nil && u.ed == nil {
 				u.deleteContact(c)
 			}
@@ -151,14 +160,8 @@ func (u *ui) runSmartAdd(text string) {
 
 func (u *ui) finishSmartAdd(c *Contact, _ bool, banner string) {
 	c.Tidy()
-	if d := u.lookalikes(c); len(d) == 0 { // check against the store, not including itself
-		for _, x := range u.store.Contacts {
-			tmp := []*Contact{x, c}
-			if len(FindDuplicates(tmp, u.cfg.CountryCode)) > 0 {
-				banner += "\nHeads-up: " + x.DisplayName() + " already has some of these details."
-				break
-			}
-		}
+	if x := NewDupIndex(u.store.Contacts, u.cfg.CountryCode).Find(c); x != nil {
+		banner += "\nHeads-up: this looks like " + x.DisplayName() + ", who is already in your contacts."
 	}
 	u.leaveEditor(func() { u.openEditor(nil, c, banner) }, nil)
 }
@@ -212,17 +215,10 @@ func (u *ui) importCards(cards []Card, source string) {
 		dialog.ShowInformation("Nothing found", "No contacts were found in "+source+".", u.win)
 		return
 	}
-	cc := u.cfg.CountryCode
+	idx := NewDupIndex(u.store.Contacts, u.cfg.CountryCode)
 	var fresh, known []Card
 	for _, card := range cards {
-		dup := false
-		for _, x := range u.store.Contacts {
-			if len(FindDuplicates([]*Contact{x, card.Contact}, cc)) > 0 {
-				dup = true
-				break
-			}
-		}
-		if dup {
+		if idx.Find(card.Contact) != nil {
 			known = append(known, card)
 		} else {
 			fresh = append(fresh, card)
@@ -231,7 +227,7 @@ func (u *ui) importCards(cards []Card, source string) {
 	add := func(cs []Card) {
 		for _, card := range cs {
 			c := card.Contact
-			if len(card.Photo) > 0 {
+			if len(card.Photo) > 0 && CanDecodeImage(card.Photo) {
 				_ = u.store.SetPhoto(c, ShrinkPhoto(card.Photo, 512))
 			}
 			u.store.Put(c)
@@ -345,8 +341,16 @@ func (u *ui) duplicates() {
 	}
 	box := container.NewVBox()
 	var d *dialog.CustomDialog
-	merge := func(g DupeGroup) {
-		cs := append([]*Contact(nil), g.Contacts...)
+	merge := func(g DupeGroup) bool {
+		var cs []*Contact // only cards still in the address book (not merged away already)
+		for _, c := range g.Contacts {
+			if u.store.Get(c.ID) != nil {
+				cs = append(cs, c)
+			}
+		}
+		if len(cs) < 2 {
+			return false
+		}
 		best := 0
 		for i, c := range cs {
 			if richness(c) > richness(cs[best]) {
@@ -371,6 +375,7 @@ func (u *ui) duplicates() {
 			ids = append(ids, o.ID)
 		}
 		u.store.Delete(ids...) // into the Trash, so a wrong merge can be undone by hand
+		return true
 	}
 	for _, g := range groups {
 		g := g
@@ -389,9 +394,12 @@ func (u *ui) duplicates() {
 		var row *fyne.Container
 		btn := widget.NewButtonWithIcon("Merge", iconMerge, nil)
 		btn.OnTapped = func() {
-			merge(g)
-			u.save()
-			btn.SetText("Merged")
+			if merge(g) {
+				u.save()
+				btn.SetText("Merged")
+			} else {
+				btn.SetText("Already merged")
+			}
 			btn.Disable()
 		}
 		row = container.NewBorder(nil, nil, nil, container.NewVBox(btn), container.NewVBox(lbl, why))
@@ -404,18 +412,19 @@ func (u *ui) duplicates() {
 	}
 	mergeAll.Importance = widget.HighImportance
 	mergeAll.OnTapped = func() {
-		dialog.ShowConfirm("Merge all?", fmt.Sprintf("Merge %d groups? Each keeps the fullest card and adds the others' details; the extra cards go to the Trash.", len(groups)), func(ok bool) {
+		dialog.ShowConfirm("Merge all?", fmt.Sprintf("Merge %d sets? Each keeps the fullest card and adds the others' details; the extra cards go to the Trash.", len(groups)), func(ok bool) {
 			if !ok {
 				return
 			}
+			n := 0
 			for _, g := range groups {
-				if u.store.Get(g.Contacts[0].ID) != nil || len(g.Contacts) > 1 {
-					merge(g)
+				if merge(g) {
+					n++
 				}
 			}
 			u.save()
 			d.Hide()
-			u.flash(fmt.Sprintf("Merged %d groups of duplicates", len(groups)))
+			u.flash(fmt.Sprintf("Merged %d sets of duplicates", n))
 		}, u.win)
 	}
 	note := caption("Merging keeps the card with the most details and copies in the rest. The extra cards go to the Trash.")
@@ -524,6 +533,11 @@ func (u *ui) newGroupDialog() {
 			return
 		}
 		u.store.AddGroup(name)
+		for _, g := range u.store.Groups() { // "work" when "Work" exists means Work
+			if strings.EqualFold(g, name) {
+				name = g
+			}
+		}
 		u.group = "g:" + name
 		u.save()
 		u.flash("Created " + name + " — add people to it from their Edit page")

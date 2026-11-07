@@ -53,6 +53,7 @@ type ui struct {
 	status    *widget.Label
 
 	ed         *editor // non-nil while a contact is being edited
+	flashGen   int
 	photoCache map[string]fyne.Resource
 	sideBusy   bool
 }
@@ -88,6 +89,8 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 		w, h = 1120, 720
 	}
 	u.win.Resize(fyne.NewSize(w, h))
+	// ⌘Q from the app menu quits without going through the window's close button.
+	a.Lifecycle().SetOnStopped(u.saveWindow)
 	u.win.SetCloseIntercept(func() {
 		if u.ed != nil && u.ed.dirty() {
 			dialog.ShowConfirm("Unsaved changes", "Quit without saving the contact you're editing?", func(ok bool) {
@@ -103,10 +106,15 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 }
 
 func (u *ui) quit() {
-	sz := u.win.Canvas().Size()
-	u.cfg.WindowW, u.cfg.WindowH = sz.Width, sz.Height
-	_ = u.cfg.Save(u.store.Dir())
+	u.saveWindow()
 	u.app.Quit()
+}
+
+func (u *ui) saveWindow() {
+	if sz := u.win.Canvas().Size(); sz.Width > 0 && sz.Height > 0 {
+		u.cfg.WindowW, u.cfg.WindowH = sz.Width, sz.Height
+	}
+	_ = u.cfg.Save(u.store.Dir())
 }
 
 func (u *ui) build() {
@@ -337,8 +345,7 @@ func (u *ui) refreshSidebar() {
 		u.group = grpAll
 	}
 	u.selectSideKey(u.group)
-	total := len(u.store.Contacts)
-	u.status.SetText(fmt.Sprintf("%d contacts   ·   saved on this Mac in %s", total, u.store.Dir()))
+	u.status.SetText(u.statusText())
 }
 
 func (u *ui) groupExists(key string) bool {
@@ -608,7 +615,9 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		p := *phone
 		actions.Add(u.actionButton("Call", iconPhone, c, "tel:"+NormalizePhone(p.Value, cc)))
 		actions.Add(u.actionButton("Message", iconMessage, c, "sms:"+NormalizePhone(p.Value, cc)))
-		actions.Add(u.actionButton("WhatsApp", iconChat, c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)))
+		if CanWhatsApp(p.Value, cc) {
+			actions.Add(u.actionButton("WhatsApp", iconChat, c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)))
+		}
 	}
 	if len(c.Emails) > 0 {
 		actions.Add(u.actionButton("Email", theme.MailComposeIcon(), c, "mailto:"+c.Emails[0].Value))
@@ -637,10 +646,12 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	for _, p := range c.Phones {
 		p := p
 		n := NormalizePhone(p.Value, cc)
-		phones = append(phones, u.valueRow(p.Label, p.Value,
-			u.iconLink(iconPhone, "Call", c, "tel:"+n),
-			u.iconLink(iconChat, "WhatsApp", c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)),
-			u.copyButton(p.Value)))
+		btns := []fyne.CanvasObject{u.iconLink(iconPhone, "Call", c, "tel:"+n)}
+		if CanWhatsApp(p.Value, cc) {
+			btns = append(btns, u.iconLink(iconChat, "WhatsApp", c, "https://wa.me/"+WhatsAppNumber(p.Value, cc)))
+		}
+		btns = append(btns, u.copyButton(p.Value))
+		phones = append(phones, u.valueRow(p.Label, p.Value, btns...))
 	}
 	section("PHONE", phones...)
 
@@ -691,9 +702,10 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		for _, g := range c.Groups {
 			g := g
 			b := widget.NewButtonWithIcon(g, iconLabel, func() {
-				u.search.SetText("")
 				u.group = "g:" + g
+				u.cfg.LastGroup = u.group
 				u.selectSideKey(u.group)
+				u.search.SetText("") // refreshes the list
 				u.refreshList()
 			})
 			b.Importance = widget.LowImportance
@@ -733,6 +745,7 @@ func (u *ui) valueRow(label, value string, buttons ...fyne.CanvasObject) fyne.Ca
 	l := widget.NewLabel(label)
 	l.Importance = widget.LowImportance
 	l.SizeName = theme.SizeNameCaptionText
+	l.Truncation = fyne.TextTruncateEllipsis
 	v := widget.NewLabel(value)
 	v.Selectable = true
 	v.Wrapping = fyne.TextWrapWord
@@ -774,18 +787,32 @@ func (u *ui) open(c *Contact, link string) {
 	}
 	if c != nil {
 		c.LastContacted = time.Now()
-		_ = u.store.Save()
+		if err := u.store.Save(); err != nil {
+			dialog.ShowError(err, u.win)
+		}
+		if u.selectedID == c.ID && u.ed == nil {
+			u.showDetail()
+		}
 	}
 }
 
 // flash shows a short message in the status line, then restores it.
 func (u *ui) flash(msg string) {
-	old := fmt.Sprintf("%d contacts   ·   saved on this Mac in %s", len(u.store.Contacts), u.store.Dir())
+	u.flashGen++
+	gen := u.flashGen
 	u.status.SetText(msg)
 	go func() {
-		time.Sleep(2500 * time.Millisecond)
-		fyne.Do(func() { u.status.SetText(old) })
+		time.Sleep(3 * time.Second)
+		fyne.Do(func() {
+			if gen == u.flashGen { // a newer message is showing; let it finish
+				u.status.SetText(u.statusText())
+			}
+		})
 	}()
+}
+
+func (u *ui) statusText() string {
+	return fmt.Sprintf("%d contacts   ·   saved on this Mac in %s", len(u.store.Contacts), u.store.Dir())
 }
 
 func (u *ui) deleteContact(c *Contact) {

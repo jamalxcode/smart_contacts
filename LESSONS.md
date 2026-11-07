@@ -56,8 +56,28 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Phone normalisation needs a home country code; 8-digit Kuwaiti numbers with no prefix are the
   common case. Keep what the user typed; offer Clean Up to rewrite it, with a tick per change.
 - Imported cards should keep their own date (`REV`), or a first import floods "Recently Added".
-- Duplicates = union-find over shared normalised phone / lower-cased email / folded full name.
-  Merge into the card with the most details; send the rest to the Trash, never delete.
+- Duplicates = union-find over shared normalised phone / lower-cased email / folded full name,
+  **but a shared key alone is not proof**. The first version would have merged two different
+  "Mohammed Ali"s, a whole family sharing a home landline, and an employee into the company's
+  card (same main line), and import silently skipped those people. Rule now (`sameEnough`): a
+  shared phone/email needs compatible names (same first name, one name inside the other, or one
+  card nameless and not a company); a shared name alone only counts when one card has no number
+  or email. Merge into the fullest card; the rest go to the Trash, never deleted.
+- Check "is it already there?" with an index (`DupIndex`), not pairwise; pairwise was
+  4 million comparisons for a 2,000-contact re-import.
+- Short and service numbers (171, 112, Kuwait's 7-digit 180xxxx lines) must not get the country
+  code: 8-digit countries (KW, BH, QA, OM) treat anything shorter as a service number.
+- A native Mac menu shortcut fires before any text field sees the key: ⌘⌫ bound to "Delete
+  Contact" would fire while typing in search. Check `Canvas().Focused()` in the handler.
+- ⌘Q from the app menu skips `SetCloseIntercept`; save settings in `Lifecycle().SetOnStopped`.
+- Cache folded search text per contact, invalidated by `Updated`; any code that edits a contact
+  outside `Store.Put` (group rename/remove, clean-up) must bump `Updated`.
+- AppleScript's default Apple Event timeout is 2 minutes; wrap big Contacts reads in
+  `with timeout of 900 seconds`.
+- GitHub's macOS runners have no OpenGL, so no Fyne window can open there ("NSGL: Failed to find
+  a suitable pixel format") — the launch test is informational. Don't mistake it for the app's bug
+  (I briefly did and downgraded Fyne 2.8.2 → 2.6.3; 2.6.3 is also what office_lights runs, so it
+  stayed). Fyne 2.6 has no rounded images, so photos are cut to a circle PNG when loaded.
 
 ## 4. Smart Add
 

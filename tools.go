@@ -63,7 +63,69 @@ type DupeGroup struct {
 	Reason   string
 }
 
-// FindDuplicates groups contacts sharing a phone number, an email address or the exact same name.
+type dupKey struct {
+	key, why string
+	nameOnly bool
+}
+
+// dupKeys lists what can tie a contact to another card: each phone (7+ digits, normalised),
+// each email, and the full name.
+func dupKeys(c *Contact, defCC string) []dupKey {
+	var ks []dupKey
+	for _, p := range c.Phones {
+		if n := NormalizePhone(p.Value, defCC); len(digitsOnly(n)) >= 7 {
+			ks = append(ks, dupKey{"p:" + n, "same phone number", false})
+		}
+	}
+	for _, e := range c.Emails {
+		if v := strings.ToLower(strings.TrimSpace(e.Value)); v != "" {
+			ks = append(ks, dupKey{"e:" + v, "same email", false})
+		}
+	}
+	if n := fold(c.FullName()); len([]rune(n)) >= 3 {
+		ks = append(ks, dupKey{"n:" + n, "same name", true})
+	}
+	return ks
+}
+
+func reachable(c *Contact) bool { return len(c.Phones)+len(c.Emails) > 0 }
+
+// namesCompatible reports whether two cards could be the same person: either has no name,
+// one name contains the other ("Khalid" / "Khalid Al-Mutairi"), or the first names match.
+// "Ali Hassan" and "Noor Hassan" sharing the family's home phone are not the same person.
+func namesCompatible(a, b *Contact) bool {
+	na, nb := fold(a.FullName()), fold(b.FullName())
+	ca, cb := fold(a.Company), fold(b.Company)
+	switch {
+	case na == "" && nb == "": // two company cards (or two bare numbers)
+		return ca == "" || cb == "" || ca == cb
+	case na == "" || nb == "":
+		// A bare card (just a number or email) can be anyone; a company card is not a person,
+		// even when an employee lists the company's main line.
+		bare := a
+		if nb == "" {
+			bare = b
+		}
+		return fold(bare.Company) == "" // a nickname-only card ("Abu Ali") may well be them
+	}
+	if na == nb || strings.Contains(na, nb) || strings.Contains(nb, na) {
+		return true
+	}
+	return strings.Fields(na)[0] == strings.Fields(nb)[0]
+}
+
+// sameEnough decides whether a shared key really ties two cards together.
+// A shared phone or email needs compatible names. A shared name alone only counts when
+// one card has no phone and no email; two "Mohammed Ali"s with different numbers are
+// two people.
+func sameEnough(a, b *Contact, k dupKey) bool {
+	if k.nameOnly {
+		return !(reachable(a) && reachable(b))
+	}
+	return namesCompatible(a, b)
+}
+
+// FindDuplicates groups contacts that look like the same person (see sameEnough).
 func FindDuplicates(cs []*Contact, defCC string) []DupeGroup {
 	parent := make([]int, len(cs))
 	reason := make([]string, len(cs))
@@ -87,29 +149,16 @@ func FindDuplicates(cs []*Contact, defCC string) []DupeGroup {
 			}
 		}
 	}
-	first := map[string]int{}
-	link := func(key string, i int, why string) {
-		if key == "" {
-			return
-		}
-		if j, ok := first[key]; ok {
-			union(j, i, why)
-		} else {
-			first[key] = i
-		}
-	}
+	owners := map[string][]int{}
 	for i, c := range cs {
-		for _, p := range c.Phones {
-			n := NormalizePhone(p.Value, defCC)
-			if len(digitsOnly(n)) >= 7 {
-				link("p:"+n, i, "same phone number")
+		for _, k := range dupKeys(c, defCC) {
+			for _, j := range owners[k.key] {
+				if sameEnough(cs[j], c, k) {
+					union(j, i, k.why)
+					break
+				}
 			}
-		}
-		for _, e := range c.Emails {
-			link("e:"+strings.ToLower(strings.TrimSpace(e.Value)), i, "same email")
-		}
-		if n := fold(c.FullName()); len([]rune(n)) >= 3 {
-			link("n:"+n, i, "same name")
+			owners[k.key] = append(owners[k.key], i)
 		}
 	}
 	groups := map[int][]*Contact{}
@@ -127,6 +176,41 @@ func FindDuplicates(cs []*Contact, defCC string) []DupeGroup {
 		return fold(out[i].Contacts[0].DisplayName()) < fold(out[j].Contacts[0].DisplayName())
 	})
 	return out
+}
+
+// DupIndex answers "is this card already in the address book?" in one lookup per key,
+// so importing 2,000 cards into 2,000 contacts doesn't compare every pair.
+type DupIndex struct {
+	defCC string
+	by    map[string][]*Contact
+}
+
+// NewDupIndex indexes cs.
+func NewDupIndex(cs []*Contact, defCC string) *DupIndex {
+	x := &DupIndex{defCC: defCC, by: map[string][]*Contact{}}
+	for _, c := range cs {
+		x.Add(c)
+	}
+	return x
+}
+
+// Add puts c in the index.
+func (x *DupIndex) Add(c *Contact) {
+	for _, k := range dupKeys(c, x.defCC) {
+		x.by[k.key] = append(x.by[k.key], c)
+	}
+}
+
+// Find returns an indexed contact that is the same person as c, or nil.
+func (x *DupIndex) Find(c *Contact) *Contact {
+	for _, k := range dupKeys(c, x.defCC) {
+		for _, o := range x.by[k.key] {
+			if o.ID != c.ID && sameEnough(o, c, k) {
+				return o
+			}
+		}
+	}
+	return nil
 }
 
 // Merge folds the others into keep: blanks are filled, lists combined without repeats,

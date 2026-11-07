@@ -74,6 +74,12 @@ func ShrinkPhoto(b []byte, max int) []byte {
 	return out.Bytes()
 }
 
+// CanDecodeImage reports whether b is a JPEG or PNG this app can show.
+func CanDecodeImage(b []byte) bool {
+	_, _, err := image.DecodeConfig(bytes.NewReader(b))
+	return err == nil
+}
+
 // CirclePhoto centre-crops a photo to a square, scales it to size px and makes everything
 // outside the circle transparent, so the avatar is round on any toolkit version.
 // Undecodable images come back unchanged.

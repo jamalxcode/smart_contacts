@@ -189,7 +189,7 @@ func (u *ui) openEditor(c *Contact, prefill *Contact, banner string) {
 	u.right.Refresh()
 	e.start = e.snapshot()
 	u.win.Canvas().Focus(e.first)
-	if c == nil && prefill == nil {
+	if c == nil { // a new contact isn't any of the ones in the list
 		u.list.UnselectAll()
 	}
 }
@@ -473,11 +473,11 @@ func (e *editor) choosePhoto() {
 			dialog.ShowError(err, e.u.win)
 			return
 		}
-		small := ShrinkPhoto(b, 512)
-		if len(small) == len(b) && len(b) > 2<<20 {
-			dialog.ShowError(errors.New("that picture couldn't be read — use a JPEG or PNG"), e.u.win)
+		if !CanDecodeImage(b) {
+			dialog.ShowError(errors.New("that picture couldn't be read — use a JPEG or PNG (iPhone HEIC photos: open in Preview and export as JPEG)"), e.u.win)
 			return
 		}
+		small := ShrinkPhoto(b, 512)
 		e.photo, e.photoSet = small, true
 		e.av.set(e.c, fyne.NewStaticResource("new-photo.png", CirclePhoto(small, 256)))
 	}, e.u.win)
@@ -488,21 +488,10 @@ func (e *editor) choosePhoto() {
 
 // lookalikes finds other contacts that share a phone, email or exact name with c.
 func (u *ui) lookalikes(c *Contact) []*Contact {
-	var out []*Contact
-	for _, g := range FindDuplicates(u.store.Contacts, u.cfg.CountryCode) {
-		in := false
-		for _, x := range g.Contacts {
-			in = in || x.ID == c.ID
-		}
-		if in {
-			for _, x := range g.Contacts {
-				if x.ID != c.ID {
-					out = append(out, x)
-				}
-			}
-		}
+	if x := NewDupIndex(u.store.Contacts, u.cfg.CountryCode).Find(c); x != nil {
+		return []*Contact{x}
 	}
-	return out
+	return nil
 }
 
 var _ = layout.NewSpacer

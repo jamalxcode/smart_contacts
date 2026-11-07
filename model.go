@@ -63,6 +63,11 @@ type Contact struct {
 	Created       time.Time `json:"created"`
 	Updated       time.Time `json:"updated"`
 	LastContacted time.Time `json:"lastContacted,omitempty"`
+
+	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
+	// edits a contact goes through Store.Put or sets Updated, which invalidates these.
+	cacheStamp                         time.Time
+	cacheSearch, cacheFirst, cacheLast string
 }
 
 // PhoneLabels, EmailLabels and URLLabels are the choices offered in the editor.
@@ -255,6 +260,8 @@ func (c *Contact) Tidy() {
 
 var arabicFold = strings.NewReplacer(
 	"أ", "ا", "إ", "ا", "آ", "ا", "ٱ", "ا", "ة", "ه", "ى", "ي", "ؤ", "و", "ئ", "ي", "ـ", "",
+	"ی", "ي", "ک", "ك", // Persian keyboard forms
+
 )
 
 // fold lower-cases, strips accents and Arabic diacritics, unifies Arabic letter forms
@@ -288,8 +295,23 @@ func digitsOnly(s string) string {
 	return b.String()
 }
 
-// SearchText is everything a search can hit, folded once.
+func (c *Contact) fillCache() {
+	if c.cacheSearch != "" && c.cacheStamp.Equal(c.Updated) {
+		return
+	}
+	c.cacheSearch = c.searchText() + " " // never empty once filled
+	c.cacheFirst = c.sortKey(false)
+	c.cacheLast = c.sortKey(true)
+	c.cacheStamp = c.Updated
+}
+
+// SearchText is everything a search can hit, folded.
 func (c *Contact) SearchText() string {
+	c.fillCache()
+	return c.cacheSearch
+}
+
+func (c *Contact) searchText() string {
 	parts := []string{c.First, c.Last, c.Nickname, c.Company, c.Title, c.Notes, strings.Join(c.Groups, " ")}
 	for _, f := range c.Emails {
 		parts = append(parts, f.Value)
@@ -328,6 +350,14 @@ func (c *Contact) Matches(query string) bool {
 
 // SortKey orders contacts by first or last name; companies sort by company name.
 func (c *Contact) SortKey(byLast bool) string {
+	c.fillCache()
+	if byLast {
+		return c.cacheLast
+	}
+	return c.cacheFirst
+}
+
+func (c *Contact) sortKey(byLast bool) string {
 	var k string
 	switch {
 	case c.IsCompany():
@@ -372,6 +402,9 @@ func NormalizePhone(s, defCC string) string {
 	d := digitsOnly(s)
 	if d == "" {
 		return ""
+	}
+	if len(d) < localDigits(defCC) && !plus { // service and short codes (171, 112, 1802555) stay as dialled
+		return d
 	}
 	switch {
 	case plus:
@@ -421,6 +454,16 @@ func FormatPhone(s, defCC string) string {
 	return "+" + cc + " " + strings.Join(groups, " ")
 }
 
+// localDigits is the shortest ordinary local number in a country. Kuwait, Bahrain, Qatar
+// and Oman use 8 digits, so a 7-digit number there (1802555) is a service line.
+func localDigits(defCC string) int {
+	switch defCC {
+	case "965", "973", "974", "968":
+		return 8
+	}
+	return 7
+}
+
 // Longest first so "971" wins over "97".
 var knownCountryCodes = []string{
 	"965", "966", "971", "973", "974", "968", "962", "961", "963", "964", "967", "970", "972",
@@ -435,6 +478,9 @@ var knownCountryCodes = []string{
 func WhatsAppNumber(s, defCC string) string {
 	return strings.TrimPrefix(NormalizePhone(s, defCC), "+")
 }
+
+// CanWhatsApp is false for short codes and service numbers, which have no WhatsApp.
+func CanWhatsApp(s, defCC string) bool { return strings.HasPrefix(NormalizePhone(s, defCC), "+") }
 
 // ---------- birthdays ----------
 

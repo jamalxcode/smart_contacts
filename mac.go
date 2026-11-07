@@ -18,9 +18,12 @@ func ReadMacContacts() ([]Card, error) {
 	if runtime.GOOS != "darwin" {
 		return nil, errors.New("this only works on a Mac")
 	}
-	script := `tell application "Contacts"
-	set cards to vcard of every person
-end tell
+	// AppleScript gives up on a slow app after 2 minutes; big address books with photos need longer.
+	script := `with timeout of 900 seconds
+	tell application "Contacts"
+		set cards to vcard of every person
+	end tell
+end timeout
 set AppleScript's text item delimiters to linefeed
 return cards as text`
 	cmd := exec.Command("osascript", "-e", script)
@@ -28,6 +31,9 @@ return cards as text`
 	cmd.Stdout, cmd.Stderr = &out, &errb
 	if err := cmd.Run(); err != nil {
 		msg := strings.TrimSpace(errb.String())
+		if strings.Contains(msg, "-1712") {
+			return nil, errors.New("the Contacts app took too long to answer; try again, or export a .vcf from Contacts (File → Export) and import that")
+		}
 		if strings.Contains(msg, "-1743") || strings.Contains(strings.ToLower(msg), "not authorized") {
 			return nil, errors.New("macOS blocked access to Contacts. Open System Settings → Privacy & Security → Automation, " +
 				"turn on Contacts under Smart Contacts, then try again")

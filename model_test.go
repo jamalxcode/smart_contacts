@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"image"
 	"image/png"
 	"os"
@@ -187,10 +188,12 @@ func TestDuplicatesAndMerge(t *testing.T) {
 	c := &Contact{ID: "c", First: "Noor", Emails: []Field{{"Home", "ALI@x.com"}}}
 	d := &Contact{ID: "d", First: "Someone", Last: "Else"}
 	g := FindDuplicates([]*Contact{a, b, c, d}, "965")
-	if len(g) != 1 || len(g[0].Contacts) != 3 {
+	// Ali and Ali Hassan share a mobile; Noor only shares an email with Ali Hassan and has a
+	// different first name, so she stays separate.
+	if len(g) != 1 || len(g[0].Contacts) != 2 {
 		t.Fatalf("groups: %+v", g)
 	}
-	Merge(a, []*Contact{b, c}, "965")
+	Merge(a, []*Contact{b}, "965")
 	if a.Last != "Hassan" || len(a.Phones) != 1 || len(a.Emails) != 1 || !a.HasGroup("work") {
 		t.Errorf("merge: %+v", a)
 	}
@@ -315,5 +318,114 @@ func TestCirclePhoto(t *testing.T) {
 	}
 	if got := CirclePhoto(cards[0].Photo, 32); !bytes.Equal(got, cards[0].Photo) {
 		t.Error("undecodable photo should come back unchanged")
+	}
+}
+
+func TestDuplicatesDontMergeDifferentPeople(t *testing.T) {
+	ph := func(v string) []Field { return []Field{{"Mobile", v}} }
+	cases := []struct {
+		name string
+		a, b *Contact
+		same bool
+	}{
+		{"two Mohammed Alis, different numbers", &Contact{ID: "1", First: "Mohammed", Last: "Ali", Phones: ph("99990001")},
+			&Contact{ID: "2", First: "Mohammed", Last: "Ali", Phones: ph("99990002")}, false},
+		{"family sharing the home phone", &Contact{ID: "1", First: "Ali", Last: "Hassan", Phones: ph("22223333")},
+			&Contact{ID: "2", First: "Noor", Last: "Hassan", Phones: ph("22223333")}, false},
+		{"company main line vs employee", &Contact{ID: "1", Company: "Gulf Bank", Phones: ph("22223333")},
+			&Contact{ID: "2", First: "Fatima", Company: "Gulf Bank", Phones: ph("22223333")}, false},
+		{"same name, one card has no number", &Contact{ID: "1", First: "Mohammed", Last: "Ali"},
+			&Contact{ID: "2", First: "Mohammed", Last: "Ali", Phones: ph("99990002")}, true},
+		{"short name vs full name, same mobile", &Contact{ID: "1", First: "Khalid", Phones: ph("60001234")},
+			&Contact{ID: "2", First: "Khalid", Last: "Al-Mutairi", Phones: ph("+965 6000 1234")}, true},
+		{"bare number vs named", &Contact{ID: "1", Phones: ph("60001234")},
+			&Contact{ID: "2", First: "Khalid", Phones: ph("60001234")}, true},
+		{"nickname card vs named", &Contact{ID: "1", Nickname: "Abu Ali", Phones: ph("60001234")},
+			&Contact{ID: "2", First: "Khalid", Phones: ph("60001234")}, true},
+		{"service number shared", &Contact{ID: "1", First: "Airline", Phones: ph("171")},
+			&Contact{ID: "2", First: "Other", Phones: ph("171")}, false},
+	}
+	for _, tc := range cases {
+		got := len(FindDuplicates([]*Contact{tc.a, tc.b}, "965")) == 1
+		if got != tc.same {
+			t.Errorf("%s: duplicate=%v, want %v", tc.name, got, tc.same)
+		}
+		idx := NewDupIndex([]*Contact{tc.a}, "965")
+		if (idx.Find(tc.b) != nil) != tc.same {
+			t.Errorf("%s: index disagrees", tc.name)
+		}
+	}
+}
+
+func TestDupIndexIsFast(t *testing.T) {
+	var existing, incoming []*Contact
+	for i := 0; i < 3000; i++ {
+		existing = append(existing, &Contact{ID: fmt.Sprint("e", i), First: fmt.Sprint("Person", i), Phones: []Field{{"Mobile", fmt.Sprintf("9%07d", i)}}})
+		incoming = append(incoming, &Contact{ID: fmt.Sprint("n", i), First: fmt.Sprint("Person", i), Phones: []Field{{"Mobile", fmt.Sprintf("+965 9%07d", i)}}})
+	}
+	start := time.Now()
+	idx := NewDupIndex(existing, "965")
+	found := 0
+	for _, c := range incoming {
+		if idx.Find(c) != nil {
+			found++
+		}
+	}
+	if found != 3000 {
+		t.Errorf("found %d of 3000", found)
+	}
+	if d := time.Since(start); d > 2*time.Second {
+		t.Errorf("3000x3000 import check took %v", d)
+	}
+}
+
+func TestShortNumbers(t *testing.T) {
+	for in, want := range map[string]string{"171": "171", "112": "112", "1802555": "1802555", "+965 171": "+965171", "99998888": "+96599998888"} {
+		if got := NormalizePhone(in, "965"); got != want {
+			t.Errorf("NormalizePhone(%q) = %q, want %q", in, got, want)
+		}
+	}
+	if NormalizePhone("1234567", "44") != "+441234567" {
+		t.Error("7-digit numbers are ordinary outside the Gulf")
+	}
+	if CanWhatsApp("171", "965") || !CanWhatsApp("99998888", "965") {
+		t.Error("WhatsApp only for real numbers")
+	}
+	c := &Contact{First: "Kuwait Airways", Phones: []Field{{"Main", "171"}}}
+	if ch := PlanCleanup([]*Contact{c}, "965"); len(ch) != 0 {
+		t.Errorf("clean-up must leave 171 alone: %+v", ch)
+	}
+}
+
+func TestSearchCacheFollowsEdits(t *testing.T) {
+	s, _ := OpenStore(t.TempDir())
+	c := NewContact()
+	c.First = "Sara"
+	s.Put(c)
+	if !c.Matches("sara") || c.Matches("noor") {
+		t.Fatal("initial search")
+	}
+	e := c.Clone()
+	e.First = "Noor"
+	time.Sleep(time.Millisecond)
+	s.Put(e)
+	if !e.Matches("noor") || e.Matches("sara") {
+		t.Error("search text stale after edit")
+	}
+	e.Groups = []string{"Family"}
+	s.Put(e)
+	time.Sleep(time.Millisecond)
+	s.RenameGroup("Family", "Relatives")
+	if !e.Matches("relatives") {
+		t.Error("search text stale after group rename")
+	}
+	time.Sleep(time.Millisecond)
+	s.RemoveGroup("Relatives")
+	if e.Matches("relatives") {
+		t.Error("search text stale after group removal")
+	}
+	p := &Contact{First: "یاسر کریمی"}
+	if !p.Matches("ياسر كريمي") {
+		t.Error("Persian letters should match Arabic ones")
 	}
 }

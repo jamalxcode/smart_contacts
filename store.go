@@ -261,6 +261,7 @@ func (s *Store) RenameGroup(old, name string) {
 		for i, g := range c.Groups {
 			if strings.EqualFold(g, old) {
 				c.Groups[i] = name
+				c.Updated = time.Now()
 			}
 		}
 		c.Tidy()
@@ -280,6 +281,9 @@ func (s *Store) RemoveGroup(name string) {
 			if !strings.EqualFold(g, name) {
 				keep = append(keep, g)
 			}
+		}
+		if len(keep) != len(c.Groups) {
+			c.Updated = time.Now()
 		}
 		c.Groups = keep
 	}
