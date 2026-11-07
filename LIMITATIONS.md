@@ -25,6 +25,12 @@ that haven't been built yet.
 - **Asking AI about the whole address book:** questions like "who do I know in banking?" would
   send every contact to a cloud model.
 - **Cloud backup or sync of contacts:** iCloud, Google or any server.
+- **Uploading the address book to find people:** "find your friends" or Truecaller-style
+  caller-ID matching.
+- **Creating contacts from your inbox or calendar:** scanning email senders and meeting guests.
+- **Looking up company details online:** website, size or industry for each company.
+- **Watching Apple Contacts in the background:** importing is a one-time copy you start yourself;
+  later changes there don't flow in automatically.
 
 ## Possible, but risky to automate
 
@@ -36,6 +42,11 @@ that haven't been built yet.
 - **Messaging contacts on your behalf:** automatic birthday wishes or bulk WhatsApp sent without
   you reviewing each one.
 - **Sharing your network map:** exporting who-knows-whom gives away other people's relationships.
+- **Merging duplicates automatically:** every merge is reviewed by you first.
+- **Deleting stale contacts:** for example, people you haven't contacted in two years.
+- **Overwriting names with automatic transliteration** (Arabic ↔ English).
+- **Assigning groups automatically** from company or notes.
+- **Exporting contacts to marketing tools:** bulk-email lists or CRMs.
 
 ## Current limits on contact data (could be lifted)
 
@@ -46,6 +57,21 @@ that haven't been built yet.
 - Google Contacts come in only through a .vcf export, not a direct import.
 - Contact photos: iPhone HEIC needs converting to JPEG; photos are shrunk to 512 px.
 - Undoing an edit to a contact isn't possible; only deleted contacts can be restored (Trash, 30 days).
+- One name per contact: no separate Arabic and English version of the same name.
+- No prefix, suffix, middle name or phonetic spelling fields.
+- Birthday is the only date: no anniversaries or other dates.
+- No custom fields beyond the built-in ones (labels can be renamed).
+- One photo per contact and no attachments or documents.
+- No interaction history or timeline of calls and meetings, only notes.
+- Connections have no direction (no manager → report or parent → child).
+- Groups are flat; no nesting.
+- CSV works for export only, not import.
+- CSV exports keep up to 3 phones, 2 emails and 1 address per contact.
+- Some Apple fields don't survive import or export: phonetic names, related names, other dates,
+  messaging handles.
+- Arabic and English names sort as one list, so the A–Z letter headings mix.
+- Every save rewrites the whole file; very large books (around 50,000 contacts) are untested.
+- Trash items and daily backups are kept for 30 days, then deleted.
 
 ## Not built yet (could be)
 
