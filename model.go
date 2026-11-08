@@ -74,6 +74,10 @@ type Contact struct {
 	KeepInTouch int `json:"keepInTouch,omitempty"`
 	// HowWeMet is the user's own words: "Met at GITEX 2025 through Ali".
 	HowWeMet string `json:"howWeMet,omitempty"`
+	// FollowUps are things to do for this person on a date ("send the proposal, Tuesday").
+	FollowUps []FollowUp `json:"followUps,omitempty"`
+	// Custom are the user's own labelled lines: Spouse, Children, Diwaniya, Office…
+	Custom []Field `json:"custom,omitempty"`
 
 	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
 	// edits a contact goes through Store.Put or sets Updated, which invalidates these.
@@ -113,6 +117,8 @@ func (c *Contact) Clone() *Contact {
 	n.CardImages = append([]CardImage(nil), c.CardImages...)
 	n.SourceIDs = append([]string(nil), c.SourceIDs...)
 	n.Timeline = append([]TimelineEntry(nil), c.Timeline...)
+	n.FollowUps = append([]FollowUp(nil), c.FollowUps...)
+	n.Custom = append([]Field(nil), c.Custom...)
 	if c.Origins != nil {
 		n.Origins = make(map[string]Origin, len(c.Origins))
 		for k, v := range c.Origins {
@@ -253,6 +259,18 @@ func (c *Contact) Tidy() {
 	c.Phones = clean(c.Phones, "Mobile")
 	c.Emails = clean(c.Emails, "Home")
 	c.URLs = clean(c.URLs, "Website")
+	var custom []Field // your own lines: the same value may well sit under two labels
+	for _, f := range c.Custom {
+		f.Label, f.Value = strings.TrimSpace(f.Label), strings.TrimSpace(f.Value)
+		if f.Value == "" {
+			continue
+		}
+		if f.Label == "" {
+			f.Label = "Note"
+		}
+		custom = append(custom, f)
+	}
+	c.Custom = custom
 	addrs := []Address{}
 	for _, a := range c.Addresses {
 		if !a.IsEmpty() {
@@ -339,7 +357,15 @@ func (c *Contact) SearchText() string {
 }
 
 func (c *Contact) searchText() string {
-	parts := []string{c.First, c.Last, c.AltName, c.Nickname, c.Company, c.Title, c.Notes, strings.Join(c.Groups, " ")}
+	parts := []string{c.First, c.Last, c.AltName, c.Nickname, c.Company, c.Title, c.Notes, c.HowWeMet, strings.Join(c.Groups, " ")}
+	for _, f := range c.Custom { // your own lines are searchable, label and value
+		parts = append(parts, f.Label, f.Value)
+	}
+	for _, f := range c.FollowUps {
+		if f.Done.IsZero() {
+			parts = append(parts, f.Text)
+		}
+	}
 	for _, f := range c.Emails {
 		parts = append(parts, f.Value)
 	}

@@ -245,6 +245,7 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 		fyne.NewMenuItem("Tidy Up…", u.cmdTidy),
 		fyne.NewMenuItem("Find Duplicates…", u.cmdDuplicates),
 		share,
+		fyne.NewMenuItem("Send Greetings…", u.cmdGreetings),
 		fyne.NewMenuItemSeparator(),
 		clip,
 		fyne.NewMenuItemSeparator(),

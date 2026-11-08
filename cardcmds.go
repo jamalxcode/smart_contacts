@@ -98,6 +98,7 @@ func (u *ui) keepItems() []*fyne.MenuItem {
 		Days  int
 		Label string
 	}{0, "No Reminder"})
+	items = append(items, fyne.NewMenuItem("Follow Up on a Date…", u.cmdFollowUp), fyne.NewMenuItemSeparator())
 	for i, k := range choices {
 		k := k
 		if i == len(choices)-1 {
@@ -307,7 +308,8 @@ func (u *ui) cmdTidy() {
 	opts, def := u.scopeChoices(1)
 	scope := radioOf(opts, def)
 	const fix, notes = "Numbers, names, emails and links", "Jumbled notes — rewrite them with AI"
-	what := widget.NewRadioGroup([]string{fix, notes}, nil)
+	session := fmt.Sprintf("Go through the cards that need it, one at a time (%d)", len(u.tidyQueue()))
+	what := widget.NewRadioGroup([]string{fix, notes, session}, nil)
 	what.Required = true
 	what.SetSelected(fix)
 	var aiNote fyne.CanvasObject = layoutSpacer()
@@ -323,6 +325,10 @@ func (u *ui) cmdTidy() {
 			return
 		}
 		cs := chosen(opts, scope)
+		if what.Selected == session {
+			u.tidySession()
+			return
+		}
 		if what.Selected == notes {
 			u.tidyNotesAI(cs, len(cs) == 1)
 			return

@@ -382,7 +382,20 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - Move to Trash, Show Trash (with Put Back and Put Back All) and Empty Trash are in the Card menu, a grey Trash tab after Check Messages, and the right-click menu. A trash button sits on the card after message.
 - The Card menu shows the count ("Empty Trash (3)…") without rebuilding the menu. On a Mac, `setMenuTitle` changes just the NSMenuItem's title in place. Fyne's model keeps the plain title, so `refreshMenu`'s layout check still matches.
 
-## 30. Ideas not done yet
+## 30. More useful every day
+
+- **Follow-ups** (`followups.go`): a dated to-do on a card. They live inside Keep in Touch rather than adding a tab, appear on Today when due (Later / Done), and have a Follow-ups list. The editor keeps the store's follow-ups on save, like the timeline.
+- **Coming up** on Today: matched calendar events in the next 72 hours.
+- **Greetings** (`greetings.go`): who, occasion, message with {name}. Then one window per person opens WhatsApp or Messages with the message ready. The timeline note "<occasion> greeting sent (<year>)" warns against sending twice. (`AddEvent` drops exact repeats, which is why the year is in it.)
+- **Company pages** (`company.go`): the job line gets a › when others share the company.
+- **Tidy one by one** (`tidysession.go`): a queue of cards needing work, skips remembered for the session.
+- **Own lines**: `Contact.Custom`, a growable label/value list, searchable.
+- **Questions** (`ask.go`): regex rules turn a question into the existing filter syntax. Cloud AI, on Return, sees only the question. `TestQuestionToQuery` covers the patterns.
+- **Today is worked out once** per data change (and every five minutes for the clock), not three times per refresh. The tidy check invalidates it when it finishes.
+- **Drawn textures** take about 0.15 s, so they aren't cached to disk.
+- **No real window on GitHub's Mac**: it has no OpenGL. `TestEveryWindowOpens` drives every flow and window with Fyne's test driver on every build instead. It catches Go-side crashes, not macOS menu bugs.
+
+## 31. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

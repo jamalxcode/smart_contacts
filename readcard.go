@@ -267,7 +267,13 @@ func (u *ui) cardFront(c *Contact) fyne.CanvasObject {
 	}
 	job := strings.Join(nonEmpty([]string{c.Title, c.Company}), " · ")
 	if job != "" {
-		who = append(who, u.printed(job, 15, false, true, soft))
+		jt := u.printed(job, 15, false, true, soft)
+		if co := c.Company; co != "" && len(u.peopleAt(co)) > 1 { // others work there too: a company page
+			jt.Text = job + "  ›"
+			who = append(who, newCompanyLink(jt, func() { u.companyDialog(co) }))
+		} else {
+			who = append(who, jt)
+		}
 	}
 	if c.Nickname != "" {
 		who = append(who, u.printed("“"+c.Nickname+"”", 14, false, true, soft))
@@ -388,6 +394,12 @@ func (u *ui) cardFront(c *Contact) fyne.CanvasObject {
 			u.lineMenu(at, u.copyItem(BirthdayText(c.Birthday)), u.writeItem(func(e *editor) fyne.Focusable { return e.birthday }))
 		}, func() { u.writeCard(func(e *editor) fyne.Focusable { return e.birthday }) }))
 	}
+	for i, f := range c.Custom { // your own lines
+		i, f := i, f
+		box.Add(newInkLine(strings.ToLower(f.Label), []string{f.Value}, nil, func(at fyne.Position) {
+			u.lineMenu(at, u.copyItem(f.Value), u.writeItem(func(e *editor) fyne.Focusable { return e.customEntry(i) }))
+		}, func() { u.writeCard(func(e *editor) fyne.Focusable { return e.customEntry(i) }) }))
+	}
 	if len(c.Groups) > 0 {
 		box.Add(newInkLine("groups", []string{strings.Join(c.Groups, ", ")}, nil, nil,
 			func() { u.writeCard(func(e *editor) fyne.Focusable { return e.newGroup }) }))
@@ -438,6 +450,16 @@ func (u *ui) cardBack(c *Contact) fyne.CanvasObject {
 	heading := func(s string) fyne.CanvasObject {
 		return u.printed(s, 15, true, false, color.NRGBA{0x8A, 0x32, 0x1E, 0xFF})
 	}
+	box.Add(heading("Follow-ups"))
+	if rows := u.followUpRows(c); len(rows) > 0 {
+		for _, r := range rows {
+			box.Add(r)
+		}
+	}
+	addFU := newInkLine("", []string{"+ follow up on a date…"}, nil, nil, func() { u.followUpDialog([]*Contact{c}) })
+	addFU.faint = true
+	addFU.onTap = func(fyne.Position) { u.followUpDialog([]*Contact{c}) }
+	box.Add(addFU)
 	box.Add(heading("Notes"))
 	writeNotes := func() { u.writeCard(func(e *editor) fyne.Focusable { return e.notes }) }
 	if strings.TrimSpace(c.Notes) != "" {
@@ -555,6 +577,31 @@ func (e *editor) urlEntry(i int) fyne.Focusable {
 	}
 	return e.urls.add(Field{}).value
 }
+func (e *editor) customEntry(i int) fyne.Focusable {
+	if i < len(e.custom.rows) {
+		return e.custom.rows[i].value
+	}
+	return e.custom.add(Field{}).value
+}
+
+// customLabels are the labels offered for your own lines: the usual ones, then any you've used.
+func (u *ui) customLabels() []string {
+	out := []string{"Spouse", "Children", "Diwaniya", "Office", "Assistant", "Prefers", "Note"}
+	seen := map[string]bool{}
+	for _, l := range out {
+		seen[strings.ToLower(l)] = true
+	}
+	for _, c := range u.store.Contacts {
+		for _, f := range c.Custom {
+			if k := strings.ToLower(f.Label); !seen[k] && f.Label != "" {
+				seen[k] = true
+				out = append(out, f.Label)
+			}
+		}
+	}
+	return out
+}
+
 func (e *editor) addrEntry(i int) fyne.Focusable {
 	if i < len(e.addrs.rows) {
 		return e.addrs.rows[i].street

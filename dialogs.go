@@ -179,6 +179,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		list("Birthdays", cmd(fyne.Key3), grpBirthdays),
 		list("Recently Added", cmd(fyne.Key4), grpRecent),
 		list("Reach Out", cmd(fyne.Key5), grpReachOut),
+		list("Follow-ups", cmd(fyne.Key8), grpFollowUps),
 		sep(),
 		header("To Tidy"),
 		list("Needs Attention", cmd(fyne.Key6), grpAttention),
@@ -242,6 +243,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Tidy Up…", nil, u.cmdTidy),
 		dupes,
 		share,
+		item("Send Greetings…", nil, u.cmdGreetings), // Eid, Ramadan, birthdays: one by one on WhatsApp
 		sep(),
 		clipToggle,
 		sep(),
@@ -1257,6 +1259,20 @@ func (u *ui) help() {
 **The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. A card shows only what's written on it. Click a line for what it's for (call, message, email, open, copy). Double-click a line, or press Write, to write on the card: every field opens, and the one you clicked is ready to type in. Done or Esc puts the pen down and saves. Turn Over shows the back of the card: notes, how you met, keeping in touch and the history. On a card with several numbers, the star marks the main one; × crosses a line out. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
 **Today.** The first tab, Today (⌘0, also first in the Card menu and the toolbar), is the day's page: birthdays this week (call, message or WhatsApp them), people due a call from Keep in Touch (with Done to mark you've been in touch), people you met in the last two weeks from the calendar log (with Note), and cards waiting to be tidied (with Review). Click anyone to open their card. Typing a search shows the list again. Settings → Open at the first page now opens on Today.
+
+**Follow-ups.** Keep in Touch → Follow Up on a Date… (Card menu, the Keep in Touch tab, right-click, or the back of a card) notes what to do for someone and when: "send the proposal", next Tuesday. On the day it's on the Today page with Later and Done; the Follow-ups tab lists everyone with one open, soonest first.
+
+**Coming up.** The Today page shows meetings in the next three days with people you know, from the calendar log; click one to read their card before you go.
+
+**Greetings.** Send Greetings… (Card menu, the Greetings tab, right-click) picks who (the clipped cards, Favorites, a group or everyone with a number), the occasion (Eid, Ramadan, National Day, New Year, a birthday, or your own words, in English or Arabic) and the message — {name} becomes each first name. Then it opens WhatsApp (or Messages) for each person in turn with the message ready; you press send there. Each card notes the greeting, and warns if they've had it this year.
+
+**Company pages.** When others you know work at the same company, the job line on a card has a ›: click it to see everyone there, their roles and when you last talked.
+
+**Tidy one by one.** Tidy Up → "Go through the cards that need it, one at a time" (or Tidy One by One on the Today page) shows each card that needs fixing with what's wrong, and Fix, Move to Trash, Skip or Stop, with a counter.
+
+**Your own lines.** Write on a card and use "add a line of your own" under More About Them: Spouse, Children, Diwaniya, Office, or any label you type. They show on the card and are found by search.
+
+**Questions.** Type a question in the search field — "who do I know at Gulf Bank in marketing?", "people I haven't talked to in a year", "favorites in Kuwait without an email". It's turned into search filters on this Mac, shown under the field. With Cloud AI on, Return lets the AI read the question; only the question is sent, never a contact.
 
 **Trash.** Move to Trash (Card menu, the Trash tab above the book, right-click, or the trash button on a card next to message) puts the open card, or the clipped cards, in the Trash straight away; the banner's Undo brings it back. Cards stay in the Trash until you empty it. Show Trash lists them with Put Back (or Put Back All); Empty Trash deletes them for good, after asking. The Card menu and the Trash tab show how many cards are in it.
 

@@ -233,6 +233,7 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	tidy := newToolButton(iconBroom, "Tidy Up", func(*toolButton) { u.cmdTidy() })
 	dupes := newToolButton(theme.ContentCopyIcon(), "Find Duplicates", func(*toolButton) { u.cmdDuplicates() })
 	t.share = newToolButton(theme.UploadIcon(), "Share", func(b *toolButton) { popup(b, u.shareItems()) })
+	greet := newToolButton(iconGift, "Greetings", func(*toolButton) { u.cmdGreetings() })
 	t.clipBtn = newToolButton(clipOn, "Clip Cards", func(*toolButton) { u.toggleSelectMode() })
 	check := newToolButton(iconMessage, "Check Messages", func(*toolButton) { u.cmdCheckMessages() })
 	// the wastebasket: move what's chosen into it, look inside to put cards back, or empty it
@@ -252,7 +253,8 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	for i, b := range []*toolButton{t.note, t.fav, t.keep, t.groups, t.conn, tidy, dupes, t.share, t.clipBtn, check} {
 		b.col = tabCards[i%len(tabCards)]
 	}
-	divider := func() fyne.CanvasObject { // a gap between the groups of tabs
+	greet.col = color.NRGBA{0xF0, 0xC8, 0x9C, 0xFF} // gift-wrap gold
+	divider := func() fyne.CanvasObject {           // a gap between the groups of tabs
 		g := canvas.NewRectangle(color.Transparent)
 		g.SetMinSize(fyne.NewSize(14, 1))
 		return g
@@ -263,7 +265,7 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	t.who = canvas.NewText("", deskInk)
 	t.who.TextSize = 14
 	t.who.TextStyle = serif("", true, false)
-	whoBox := container.New(&fixedWidth{200}, container.NewVBox(layout.NewSpacer(), actingOn, t.who, layout.NewSpacer()))
+	whoBox := container.New(&fixedWidth{160}, container.NewVBox(layout.NewSpacer(), actingOn, t.who, layout.NewSpacer()))
 
 	row := container.NewHBox(
 		whoBox,
@@ -272,7 +274,7 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 		divider(),
 		t.note, t.fav, t.keep, t.groups, t.conn,
 		divider(),
-		tidy, dupes, t.share,
+		tidy, dupes, t.share, greet,
 		divider(),
 		t.clipBtn,
 		divider(),

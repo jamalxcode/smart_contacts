@@ -39,6 +39,7 @@ type editor struct {
 	alt                                     *cardEntry
 	notes                                   *cardEntry
 	phones, emails, urls                    *fieldRows
+	custom                                  *fieldRows // your own lines: Spouse, Children, Diwaniya…
 	addrs                                   *addrRows
 	groups                                  *widget.CheckGroup
 	newGroup                                *cardEntry
@@ -333,6 +334,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.phones = newFieldRowsCC(c.Phones, PhoneLabels, "+965 9999 8888", e.u.cfg.CountryCode)
 	e.emails = newFieldRows(c.Emails, EmailLabels, "name@example.com")
 	e.urls = newFieldRows(c.URLs, URLLabels, "https://…")
+	e.custom = newFieldRows(c.Custom, e.u.customLabels(), "Write it here")
 	if len(c.Phones) == 0 {
 		e.phones.add(Field{})
 	}
@@ -440,6 +442,8 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	body.Add(e.urls.section("add link", e.u.win))
 	body.Add(label("BIRTHDAY"))
 	body.Add(container.NewBorder(nil, nil, nil, e.bdayHint, e.birthday))
+	body.Add(label("MORE ABOUT THEM"))
+	body.Add(e.custom.section("add a line of your own", e.u.win))
 	body.Add(label("GROUPS"))
 	if len(allGroups) > 0 {
 		body.Add(e.groups)
@@ -481,6 +485,7 @@ func (e *editor) collect() {
 	c.Company, c.Title, c.HowWeMet = e.company.Text, e.title.Text, strings.TrimSpace(e.met.Text)
 	c.Phones, c.Emails, c.URLs = e.phones.fields(), e.emails.fields(), e.urls.fields()
 	c.Addresses = e.addrs.addresses()
+	c.Custom = e.custom.fields()
 	c.Birthday = strings.TrimSpace(e.birthday.Text)
 	if b, ok := CanonicalBirthday(c.Birthday); ok {
 		c.Birthday = b
@@ -546,6 +551,7 @@ func (e *editor) save() {
 	if !isNew { // things changed from the card while editing (notes, reminders, last talked) stay
 		if cur := e.u.store.Get(c.ID); cur != nil {
 			c.Timeline, c.KeepInTouch, c.LastContacted = cur.Timeline, cur.KeepInTouch, cur.LastContacted
+			c.FollowUps = cur.FollowUps // follow-ups are kept on the card's back, not in the editor
 			c.CardImages, c.Sources, c.SourceIDs = cur.CardImages, cur.Sources, cur.SourceIDs
 			if !e.photoSet {
 				c.HasPhoto = cur.HasPhoto

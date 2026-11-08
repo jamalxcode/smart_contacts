@@ -71,7 +71,15 @@ type ui struct {
 	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
 	todayBox      *fyne.Container    // the Today page (today.go)
 	todayScroll   *container.Scroll
-	todaySet      map[string]bool // who is on today's page
+	todaySet      map[string]bool
+	askHint       *widget.Label // what a question in the search field was understood as
+	askFor        string        // the question the AI turned into…
+	askQuery      string        // …this search
+	todayMemo     *todayData    // today's page, worked out once until the data changes
+	todayDay      string
+	todayAt       time.Time
+	tidySkipped   map[string]bool // cards skipped in this session's tidy-one-by-one
+	tidyTotal     int             // who is on today's page
 	statusPlate   *statusLabel    // the status line's paper label (organiser look)
 	modalLayer    *fyne.Container // where the clipboard and stamp windows go (paperdialog.go)
 	tools         *toolbarParts   // the organiser toolbar (nil in the plain look)
@@ -393,17 +401,24 @@ func (u *ui) build() {
 	u.saveSearch.Hide()
 	// In the organiser the pen writes a new card and the pocket takes business cards, so the list
 	// has no buttons of its own for those; the plain look keeps them.
+	u.askHint = widget.NewLabel("")
+	u.askHint.Importance = widget.LowImportance
+	u.askHint.SizeName = theme.SizeNameCaptionText
+	u.askHint.Wrapping = fyne.TextWrapWord
+	u.askHint.Hide()
 	var listTop *fyne.Container
 	if u.cfg.ClassicLook {
 		listTop = container.NewVBox(
 			container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
 			u.buildFilter(),
 			u.search,
+			u.askHint,
 			u.saveSearch,
 		)
 	} else { // the page's printed heading names the list; the clip sits beside the search
 		listTop = container.NewVBox(
 			container.NewBorder(nil, nil, nil, selBtn, u.search),
+			u.askHint,
 			u.buildFilter(),
 			u.saveSearch,
 		)
@@ -522,6 +537,15 @@ func (t *tightVBox) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 }
 
 func (u *ui) subtitleFor(c *Contact) string {
+	if u.group == grpFollowUps {
+		if fs := c.OpenFollowUps(); len(fs) > 0 {
+			s := strings.ToUpper(whenText(fs[0].Due, time.Now())[:1]) + whenText(fs[0].Due, time.Now())[1:] + " · " + fs[0].Text
+			if len(fs) > 1 {
+				s += fmt.Sprintf(" (+%d more)", len(fs)-1)
+			}
+			return s
+		}
+	}
 	if u.group == grpReachOut {
 		lt, how := u.lastTalked(c)
 		s := "Never in touch here"
@@ -553,6 +577,7 @@ func (u *ui) subtitleFor(c *Contact) string {
 func (u *ui) invalidate() {
 	u.graph = nil
 	u.calCache = nil
+	u.todayMemo = nil
 }
 
 // graphNow returns the connections graph, built once until the data changes.
@@ -616,6 +641,18 @@ func (u *ui) refreshSidebar() {
 	}
 	if keeping > 0 {
 		items = append(items, sideItem{grpReachOut, "Reach Out", theme.MailReplyIcon(), due})
+	}
+	open, dueFU := 0, 0
+	for _, c := range u.store.Contacts {
+		if len(c.OpenFollowUps()) > 0 {
+			open++
+			if len(c.DueFollowUps(now)) > 0 {
+				dueFU++
+			}
+		}
+	}
+	if open > 0 { // the count is how many are due now
+		items = append(items, sideItem{grpFollowUps, "Follow-ups", iconFlag, dueFU})
 	}
 	// lists of cards to tidy are jobs, not people: they sit together under their own heading,
 	// with a red flag for how many need you
@@ -704,6 +741,8 @@ func (u *ui) inGroup(c *Contact, now time.Time) bool {
 		return true
 	case u.group == grpToday:
 		return u.todaySet[c.ID]
+	case u.group == grpFollowUps:
+		return len(c.OpenFollowUps()) > 0
 	case u.group == grpFavorites:
 		return c.Favorite
 	case u.group == grpBirthdays:
@@ -739,7 +778,7 @@ func (u *ui) dueNow(c *Contact) bool            { return u.dueToReachOut(c, time
 
 func (u *ui) refreshList() {
 	now := time.Now()
-	q := u.search.Text
+	q := u.searchQuery() // a question becomes its search filters
 	sq := parseQuery(q)
 	u.showFilterForm()
 	out := make([]*Contact, 0, len(u.store.Contacts))
@@ -769,6 +808,8 @@ func (u *ui) refreshList() {
 		}
 	}
 	switch u.group {
+	case grpFollowUps: // soonest first
+		sort.SliceStable(out, func(i, j int) bool { return out[i].OpenFollowUps()[0].Due.Before(out[j].OpenFollowUps()[0].Due) })
 	case grpReachOut: // longest without contact first
 		sort.SliceStable(out, func(i, j int) bool { return u.lastTalkedAt(out[i]).Before(u.lastTalkedAt(out[j])) })
 	case grpBirthdays:
@@ -892,6 +933,10 @@ func (u *ui) searchKey(k *fyne.KeyEvent) bool {
 	case fyne.KeyUp:
 		move(-1)
 	case fyne.KeyReturn, fyne.KeyEnter:
+		if q := u.search.Text; looksLikeQuestion(q) && u.cloudAI() && u.askFor != q {
+			u.askAI(q) // a question: let the AI read it (only the question is sent)
+			return true
+		}
 		if u.ed != nil && u.ed.live { // Return starts typing in the card
 			u.win.Canvas().Focus(u.ed.first)
 		}

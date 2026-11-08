@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"sort"
+	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -35,20 +36,44 @@ type metItem struct {
 	title string
 }
 
+type fuItem struct {
+	c *Contact
+	f FollowUp
+}
+
 type todayData struct {
-	bdays []*Contact
-	due   []*Contact
-	met   []metItem
-	tidy  []*Contact
+	follow []fuItem  // follow-ups due today or late
+	coming []metItem // meetings in the next three days with people you know
+	bdays  []*Contact
+	due    []*Contact
+	met    []metItem
+	tidy   []*Contact
 }
 
 // count is what the Today tab shows: the people on today's page (as its heading does).
 func (t todayData) count() int { return len(t.set()) }
 
-// today works out what's on today's page.
+// today works out what's on today's page — once, until the data or the day changes.
 func (u *ui) today(now time.Time) todayData {
+	if day := now.Format("2006-01-02"); u.todayMemo != nil && u.todayDay == day && now.Sub(u.todayAt) < 5*time.Minute {
+		return *u.todayMemo
+	}
+	t := u.workOutToday(now)
+	u.todayMemo, u.todayDay, u.todayAt = &t, now.Format("2006-01-02"), now
+	return t
+}
+
+func (u *ui) workOutToday(now time.Time) todayData {
 	var t todayData
 	for _, c := range u.store.Contacts {
+		for _, f := range c.DueFollowUps(now) {
+			t.follow = append(t.follow, fuItem{c, f})
+		}
+		for _, m := range u.eventsFor(c) {
+			if m.Event.Start.After(now) && m.Event.Start.Before(now.Add(72*time.Hour)) {
+				t.coming = append(t.coming, metItem{c, m.Event.Start, m.Event.Title})
+			}
+		}
 		if d, _, ok := c.NextBirthday(now); ok && d <= 7 {
 			t.bdays = append(t.bdays, c)
 		}
@@ -77,12 +102,20 @@ func (u *ui) today(now time.Time) todayData {
 	})
 	sort.SliceStable(t.due, func(i, j int) bool { return u.lastTalkedAt(t.due[i]).Before(u.lastTalkedAt(t.due[j])) })
 	sort.SliceStable(t.met, func(i, j int) bool { return t.met[i].when.After(t.met[j].when) })
+	sort.SliceStable(t.follow, func(i, j int) bool { return t.follow[i].f.Due.Before(t.follow[j].f.Due) })
+	sort.SliceStable(t.coming, func(i, j int) bool { return t.coming[i].when.Before(t.coming[j].when) })
 	return t
 }
 
 // todaySet is everyone on today's page (for the list's keyboard walking and selection).
 func (t todayData) set() map[string]bool {
 	m := map[string]bool{}
+	for _, x := range t.follow {
+		m[x.c.ID] = true
+	}
+	for _, x := range t.coming {
+		m[x.c.ID] = true
+	}
 	for _, c := range t.bdays {
 		m[c.ID] = true
 	}
@@ -146,6 +179,36 @@ func (u *ui) buildToday() {
 		return out
 	}
 
+	heading("Follow-ups due", len(t.follow))
+	if len(t.follow) == 0 {
+		none("Nothing due — Keep in Touch → Follow Up on a Date adds one")
+	}
+	for _, x := range t.follow {
+		c, f := x.c, x.f
+		s := strings.ToUpper(whenText(f.Due, now)[:1]) + whenText(f.Due, now)[1:] + " · " + f.Text
+		done := widget.NewButtonWithIcon("Done", theme.ConfirmIcon(), func() { u.finishFollowUp(c, f.ID) })
+		done.Importance = widget.LowImportance
+		var later *widget.Button
+		later = widget.NewButton("Later", func() {
+			u.snoozeMenu(c, f.ID, fyne.CurrentApp().Driver().AbsolutePositionForObject(later).Add(fyne.NewPos(0, later.Size().Height)))
+		})
+		later.Importance = widget.LowImportance
+		box.Add(u.todayRow(c, s, dayOf(f.Due).Before(dayOf(now)), later, done)) // call and message are on the card
+	}
+
+	heading("Coming up", len(t.coming))
+	if len(t.coming) == 0 {
+		none("No meetings with people you know in the next three days")
+	}
+	for _, m := range t.coming {
+		when := whenText(m.when, now)
+		s := strings.ToUpper(when[:1]) + when[1:] + " " + m.when.Format("15:04")
+		if m.title != "" {
+			s += " · " + m.title
+		}
+		box.Add(u.todayRow(m.c, s, false))
+	}
+
 	heading("Birthdays this week", len(t.bdays))
 	if len(t.bdays) == 0 {
 		none("No birthdays in the next seven days")
@@ -202,6 +265,10 @@ func (u *ui) buildToday() {
 	heading("Cards to tidy", len(t.tidy))
 	if len(t.tidy) == 0 {
 		none("Every card is in order")
+	} else {
+		start := widget.NewButtonWithIcon("Tidy One by One…", iconBroom, u.tidySession)
+		start.Importance = widget.LowImportance
+		box.Add(container.NewHBox(start))
 	}
 	for i, c := range t.tidy {
 		if i == 5 {

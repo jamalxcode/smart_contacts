@@ -475,6 +475,7 @@ func (u *ui) checkAttention() {
 			}
 			u.attention = n
 			if changed {
+				u.todayMemo = nil // the Today page's "Cards to tidy" changes too
 				u.refreshSidebar()
 				if u.group == grpAttention {
 					u.refreshList()
