@@ -153,6 +153,8 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	}
 	byFirst.Action, byLast.Action = func() { setSort(false) }, func() { setSort(true) }
 	byFirst.Checked, byLast.Checked = !u.cfg.SortByLast, u.cfg.SortByLast
+	filofaxItem := fyne.NewMenuItem("Filofax Look", u.toggleLook)
+	filofaxItem.Checked = !u.cfg.ClassicLook
 	view := fyne.NewMenu("View",
 		item("All Contacts", cmd(fyne.Key1), func() { u.showGroup(grpAll) }),
 		item("Favorites", cmd(fyne.Key2), func() { u.showGroup(grpFavorites) }),
@@ -162,6 +164,8 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Save Search as Smart Group…", u.saveSmartGroup),
 		sep(),
 		byFirst, byLast,
+		sep(),
+		filofaxItem,
 		sep(),
 		item("Select Cards", cmdShift(fyne.KeyS), u.toggleSelectMode),
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
@@ -1081,7 +1085,9 @@ func (u *ui) settings() {
 }
 
 func (u *ui) help() {
-	text := `**Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
+	text := `**The organiser.** The coloured tabs on the left are your lists and groups; the A–Z tabs next to them show only the people filed under that letter (All shows everyone, ع holds Arabic names, # the rest). View → Filofax Look switches to the plain Mac look and back.
+
+**Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
 
 **Reaching people.** The round buttons under the name follow what the card holds: message, call, WhatsApp, mail, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle. *More* has number-based options. The app remembers when you last contacted someone.
 

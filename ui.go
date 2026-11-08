@@ -70,7 +70,10 @@ type ui struct {
 	attention   map[string]int // clean-up suggestions per contact (worked out in the background)
 	qf          *quickFind     // the menu bar's Quick Find window
 	trayMenuSig string
-	selAnchor   string // where a Shift-click range starts
+	selAnchor   string          // where a Shift-click range starts
+	tabBox      *fyne.Container // Filofax look: the coloured index tabs
+	letterBox   *fyne.Container // Filofax look: the A–Z tabs
+	letter      string          // chosen A–Z tab ("" = All)
 	attnGen     int
 }
 
@@ -321,8 +324,15 @@ func (u *ui) build() {
 	inner.Offset = 0.40
 	outer := container.NewHSplit(sidebar, inner)
 	outer.Offset = 0.19
-	panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
-	u.win.SetContent(container.NewBorder(nil, u.status, nil, nil, panes))
+	if u.cfg.ClassicLook {
+		u.tabBox, u.letterBox, u.letter = nil, nil, ""
+		u.app.Settings().SetTheme(newAppTheme())
+		panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
+		u.win.SetContent(container.NewBorder(nil, u.status, nil, nil, panes))
+	} else {
+		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
+		u.win.SetContent(u.filofaxLayout(listPane))
+	}
 	u.win.SetMainMenu(u.mainMenu())
 	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) { dialogKey(k) })
 
@@ -501,6 +511,7 @@ func (u *ui) refreshSidebar() {
 	}
 	u.sideItems = items
 	u.side.Refresh()
+	u.refreshTabs()
 	u.refreshMenuBar()
 	if !u.groupExists(u.group) {
 		u.group = grpAll
@@ -524,6 +535,7 @@ func (u *ui) selectSideKey(key string) {
 			u.sideBusy = true
 			u.side.Select(i)
 			u.sideBusy = false
+			u.refreshTabs()
 			return
 		}
 	}
@@ -578,11 +590,20 @@ func (u *ui) refreshList() {
 	q := u.search.Text
 	sq := parseQuery(q)
 	out := make([]*Contact, 0, len(u.store.Contacts))
+	used := map[string]bool{}
 	for _, c := range u.store.Contacts {
 		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) {
+			if u.letterBox != nil { // Filofax: only the chosen A–Z tab
+				l := letterOf(c, u.cfg.SortByLast)
+				used[l] = true
+				if u.letter != "" && l != u.letter {
+					continue
+				}
+			}
 			out = append(out, c)
 		}
 	}
+	u.refreshLetters(used)
 	if u.saveSearch != nil {
 		if strings.TrimSpace(q) != "" {
 			u.saveSearch.Show()
@@ -606,6 +627,9 @@ func (u *ui) refreshList() {
 	}
 	u.filtered = out
 	title := u.groupTitle()
+	if u.letter != "" && u.letterBox != nil {
+		title += " · " + u.letter
+	}
 	if q != "" {
 		title = fmt.Sprintf("%s — %d found", title, len(out))
 	} else {

@@ -30,7 +30,9 @@ type Config struct {
 	// Smart groups are saved searches shown in the sidebar.
 	SmartGroups []SmartGroup `json:"smartGroups,omitempty"`
 	// Reminders: birthdays and people to reach out to, once a day.
-	NoNotify     bool   `json:"noNotify,omitempty"`
+	NoNotify bool `json:"noNotify,omitempty"`
+	// ClassicLook turns off the Filofax organiser look (plain Mac panes instead).
+	ClassicLook  bool   `json:"classicLook,omitempty"`
 	LastNotified string `json:"lastNotified,omitempty"`
 }
 

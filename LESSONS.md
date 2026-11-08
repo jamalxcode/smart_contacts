@@ -222,7 +222,18 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Fyne's system tray is a menu only (no text field), and there's no global hotkey API; Quick Find
   is a small window opened from that menu.
 
-## 12. Ideas not done yet
+## 12. The Filofax look (2026-11-08)
+
+- **Photo-real without image files:** leather is value noise (pebbles + creases + dye variation +
+  vignette), paper is a cream rectangle with a stretched grain overlay, rules and the margin are
+  canvas lines laid out for the page's height, holes are circles showing the leather colour, rings
+  are a shaded ellipse with a specular band. Everything is generated once at start-up.
+- **A nested ThemeOverride must wrap the current theme,** not a fresh default one: the card's
+  override used the old theme and its text vanished on the paper.
+- Index tabs and A–Z tabs are small custom widgets; the selected tab sticks out further, like a
+  real divider pulled forward.
+
+## 13. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

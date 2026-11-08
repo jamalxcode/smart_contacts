@@ -166,6 +166,12 @@ calendar log, history) to a drive or folder you pick, encrypted with AES-256 if 
 password. File → Restore from Backup… brings one back (and can itself be undone). The OpenRouter
 key is never in a backup. Undo history now survives quitting the app.
 
+**A Filofax on screen.** The app looks like an open leather organiser: coloured card-stock index
+tabs on the left for your lists and groups, a strip of A–Z tabs (with All, ع for Arabic names and #),
+a ruled page of names, the binder rings, and the person's page facing it. A–Z files people the way a
+paper address book does ("Al-Mutairi" under M when sorting by last name). View → Filofax Look
+switches back to plain Mac panes.
+
 **A Mac app, by Apple's rules.** Light and dark mode with the system colours, a tinted sidebar,
 13-point text, Contacts-style cards (round message / call / video / mail buttons, grey labels
 beside each value, Share at the bottom), the standard File, Edit, View, Card and Help

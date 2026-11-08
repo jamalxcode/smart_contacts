@@ -23,7 +23,7 @@ type liveTheme struct{ fyne.Theme }
 func (t *liveTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	switch n {
 	case theme.ColorNameInputBackground:
-		return t.Theme.Color(theme.ColorNameBackground, v)
+		return color.Transparent // the page shows through
 	case theme.ColorNameInputBorder:
 		return t.Theme.Color(theme.ColorNameSeparator, v)
 	}
@@ -58,7 +58,7 @@ func (u *ui) liveCard(e *editor, body *fyne.Container) fyne.CanvasObject {
 	m := caption(strings.Join(meta, " · "))
 	m.Wrapping = fyne.TextWrapWord
 	all = append(all, m)
-	content := container.NewThemeOverride(container.NewVBox(all...), &liveTheme{newAppTheme()})
+	content := container.NewThemeOverride(container.NewVBox(all...), &liveTheme{fyne.CurrentApp().Settings().Theme()})
 
 	// bottom bar
 	note := widget.NewButtonWithIcon("Note", theme.DocumentCreateIcon(), func() { u.addNote(c) })
