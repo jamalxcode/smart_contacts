@@ -60,6 +60,8 @@ type paperDialog struct {
 	tracked          bool
 	w                fyne.Window
 
+	clipboard bool // always a clipboard (a wizard of choices has no text fields to spot)
+
 	fallback dialog.Dialog
 	overlay  *fyne.Container
 	sheet    *paperSheet
@@ -222,7 +224,7 @@ func (d *paperDialog) Show() {
 	}
 	u := paperUI
 	kind := kindStamp
-	if hasInput(d.content) {
+	if d.clipboard || hasInput(d.content) {
 		kind = kindClipboard
 	}
 	var buttons []fyne.CanvasObject

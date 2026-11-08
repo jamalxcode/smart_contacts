@@ -67,7 +67,11 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("New Group", cmdShift(fyne.KeyN), u.newGroupDialog),
 		item("Smart Add…", cmdOpt(fyne.KeyN), u.smartAdd),
 		sep(),
-		item("Import…", cmd(fyne.KeyO), u.importHub),
+		func() *fyne.MenuItem { // the winged cards flying into the funnel, as on the cover
+			m := item("Import…", cmd(fyne.KeyO), u.importHub)
+			m.Icon = resImportMenu
+			return m
+		}(),
 		fyne.NewMenuItem("Bring Everything In…", u.bringEverythingIn),
 		item("Import from Mac Contacts", cmdShift(fyne.KeyR), u.importMac),
 		fyne.NewMenuItem("Paste People from Text…", u.pasteImport),
@@ -1195,7 +1199,7 @@ func (u *ui) help() {
 
 **Bring Everything In.** File → Bring Everything In is a checklist of every source, then clean-up and duplicates; each step is ticked once done.
 
-**Importing (⌘O).** File → Import brings people in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf, Bluetooth or AirDrop), Gmail, Outlook, Yahoo or iCloud, LinkedIn, Telegram, Facebook, Snapchat, any spreadsheet (.csv or .xlsx, English or Arabic headers) and notes. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name, in Arabic or English, and updated instead of duplicated. Anyone matched by name only is listed for you to check. Each phone, email, link and address shows where it came from, and the Timeline on each card records what happened without touching your notes.
+**Importing (⌘O).** Click the funnel under the business-card pocket, or File → Import. It asks where your contacts are now (iPhone, Android, Gmail, Outlook, LinkedIn, another email, a spreadsheet, a note, Telegram, Facebook or Snapchat), perhaps one more question (is the iPhone on this Mac's iCloud? how will you send the file?), then shows numbered steps: what to do on that side, what you'll get, how to send it here, and the button that takes it in. Choose File opens in Downloads, where exports land. It brings people in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf, Bluetooth or AirDrop), Gmail, Outlook, Yahoo or iCloud, LinkedIn, Telegram, Facebook, Snapchat, any spreadsheet (.csv or .xlsx, English or Arabic headers) and notes. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name, in Arabic or English, and updated instead of duplicated. Anyone matched by name only is listed for you to check. Each phone, email, link and address shows where it came from, and the Timeline on each card records what happened without touching your notes.
 
 **Undo (⌘Z, ⇧⌘Z).** Every change can be undone: edits, imports, clean-ups, merges, deletes. Edit → History lists this session's changes and the saved restore points.
 

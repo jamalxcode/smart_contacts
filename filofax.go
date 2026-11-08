@@ -1167,6 +1167,7 @@ type organiserLayout struct {
 	pen                          *hotspot
 	prev, next                   *pageCorner
 	pocket                       *cardPocket
+	importer                     *importFunnel
 	pagesPos                     fyne.Position
 	pagesSize                    fyne.Size
 }
@@ -1184,18 +1185,26 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	}
 	azW := float32(30)
 	x := m + penW
-	pocketH := float32(0)
+	pocketH, importH := float32(0), float32(0)
 	if l.pocket != nil {
-		pocketH = 110
+		pocketH = 104
+	}
+	if l.importer != nil {
+		importH = 92
 	}
 	l.tabs.Move(fyne.NewPos(x, top+pageBar+2))
-	l.tabs.Resize(fyne.NewSize(tabsW, h-pageBar-10-pocketH))
+	l.tabs.Resize(fyne.NewSize(tabsW, h-pageBar-10-pocketH-importH))
 	if l.pocket != nil { // the business-card pocket, low inside the front cover
-		l.pocket.Move(fyne.NewPos(x+6, bottom-pocketH+4))
+		py := bottom - pocketH - importH + 4
+		l.pocket.Move(fyne.NewPos(x+6, py))
 		l.pocket.Resize(fyne.NewSize(tabsW-14, pocketH-6))
 		hs := l.pocket.hint.MinSize()
-		l.pocket.hint.Move(fyne.NewPos(x+6, bottom-pocketH-hs.Height-2))
+		l.pocket.hint.Move(fyne.NewPos(x+6, py-hs.Height-6))
 		l.pocket.hint.Resize(hs)
+	}
+	if l.importer != nil { // the import funnel, right under the pocket
+		l.importer.Move(fyne.NewPos(x+6, bottom-importH+2))
+		l.importer.Resize(fyne.NewSize(tabsW-14, importH-4))
 	}
 	x += tabsW
 	pagesRight := s.Width - m - 22 - 58 - azW // room for the A–Z tabs and the strap
@@ -1273,8 +1282,9 @@ func (u *ui) filofaxLayout(listPane fyne.CanvasObject) fyne.CanvasObject {
 	lay.prev = newPageCorner(true, "Previous letter", func() { u.turnLetter(-1) })
 	lay.next = newPageCorner(false, "Next letter", func() { u.turnLetter(+1) })
 	lay.pocket = newCardPocket(u)
+	lay.importer = newImportFunnel(u.importHub)
 	// order matters: the A–Z and index tabs sit under the page edges, the rings over them
-	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status, lay.pocket,
+	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status, lay.pocket, lay.importer,
 		lay.prev, lay.next, lay.pen, strap, strap.hint, lay.pen.hint, lay.prev.hint, lay.next.hint, lay.pocket.hint)
 }
 

@@ -14,7 +14,6 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -36,48 +35,6 @@ var importSources = []struct {
 }
 
 // importHub is the one place to bring contacts in from anywhere.
-func (u *ui) importHub() {
-	box := container.NewVBox()
-	var d *paperDialog
-	for _, src := range importSources {
-		src := src
-		title := widget.NewLabelWithStyle(src.title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-		how := caption(src.how)
-		how.Wrapping = fyne.TextWrapWord
-		label, icon := "Choose File…", theme.FolderOpenIcon()
-		if src.mac {
-			label, icon = "Import Now", theme.DownloadIcon()
-		}
-		btn := widget.NewButtonWithIcon(label, icon, func() {
-			d.Hide()
-			if src.mac {
-				u.importMac()
-			} else {
-				u.importFile()
-			}
-		})
-		box.Add(container.NewBorder(nil, nil, nil, container.NewVBox(btn), container.NewVBox(title, how)))
-		box.Add(widget.NewSeparator())
-	}
-	phoneBtn := widget.NewButtonWithIcon("Receive from a Phone…", theme.DownloadIcon(), func() { d.Hide(); u.receiveFromPhone() })
-	phoneBtn.Importance = widget.HighImportance
-	phoneHow := caption("Over Bluetooth or AirDrop: the app waits for the contacts file your phone sends and opens it here.")
-	phoneHow.Wrapping = fyne.TextWrapWord
-	box.Objects = append([]fyne.CanvasObject{
-		container.NewBorder(nil, nil, nil, container.NewVBox(phoneBtn), container.NewVBox(
-			widget.NewLabelWithStyle("Receive from a phone (Bluetooth / AirDrop)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), phoneHow)),
-		widget.NewSeparator()}, box.Objects...)
-	paste := widget.NewButtonWithIcon("Paste Text…", theme.ContentPasteIcon(), func() { d.Hide(); u.pasteImport() })
-	social := caption("Instagram and X exports list only usernames or account numbers — nothing to match a person by — so add those profile links by hand. You can also drag files onto the main window.")
-	social.Wrapping = fyne.TextWrapWord
-	privacy := caption("Everything is read on this Mac. People you already have are recognised (by number, email, profile link or name — in Arabic or English) and their cards are updated instead of duplicated. A backup is saved before each import.")
-	privacy.Wrapping = fyne.TextWrapWord
-	content := container.NewBorder(privacy, container.NewVBox(widget.NewSeparator(), container.NewBorder(nil, nil, nil, paste, social)), nil, nil, container.NewVScroll(box))
-	d = newCustom("Import Contacts", "Close", content, u.win)
-	d.Resize(fyne.NewSize(780, 640))
-	d.Show()
-}
-
 // importFile picks any supported file.
 func (u *ui) importFile() {
 	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {

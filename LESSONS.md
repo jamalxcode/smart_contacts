@@ -350,7 +350,18 @@ A real organiser opens on today. `grpToday` is the first tab. When it's open, th
 - The list underneath still holds today's people, so keyboard walking and selection work. A search swaps the page back to the list.
 - Today is first in the View menu (⌘0), the Card menu and the toolbar, so all three match the tabs.
 
-## 26. Ideas not done yet
+## 26. Importing is a conversation
+
+Fourteen import choices on one sheet overwhelmed people. Import is now a wizard on a clipboard (`importwizard.go`):
+
+- It asks where the contacts are, then sometimes one more question, then shows numbered steps ending in the button that imports. Back goes back a page.
+- The questions and guides are plain data (`wizQuestion`, `wizAnswer`, `wizGuide`), so adding a source means adding an entry.
+- Choose File opens in Downloads, because every guide sends the export there.
+- The winged-cards funnel (`assets/import_funnel.png`, cut out of its white background) is the Import button under the business-card pocket.
+- A 36 px, 144 dpi copy of the funnel is File → Import…'s menu icon. macOS sizes a menu image by its dpi, so a plain 256 px PNG would be huge.
+- A dialog made of choices has no text fields, so it's marked `clipboard` by hand.
+
+## 27. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.
