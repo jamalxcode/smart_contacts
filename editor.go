@@ -53,6 +53,7 @@ type fieldRows struct {
 	labels      []string
 	placeholder string
 	rows        []*fieldRow
+	flagCC      string // phone rows: home country code, for the flag beside each number
 }
 
 type fieldRow struct {
@@ -62,7 +63,12 @@ type fieldRow struct {
 }
 
 func newFieldRows(fs []Field, labels []string, placeholder string) *fieldRows {
-	r := &fieldRows{box: container.NewVBox(), labels: labels, placeholder: placeholder}
+	return newFieldRowsCC(fs, labels, placeholder, "")
+}
+
+// newFieldRowsCC is newFieldRows for phone numbers: each shows its country's flag.
+func newFieldRowsCC(fs []Field, labels []string, placeholder, cc string) *fieldRows {
+	r := &fieldRows{box: container.NewVBox(), labels: labels, placeholder: placeholder, flagCC: cc}
 	for _, f := range fs {
 		r.add(f)
 	}
@@ -83,7 +89,14 @@ func (r *fieldRows) add(f Field) *fieldRow {
 	// ↑ makes this the first (main) one: the number Call and Copy use, the email Mail uses.
 	top := widget.NewButtonWithIcon("", theme.MoveUpIcon(), nil)
 	top.Importance = widget.LowImportance
-	row.obj = container.NewBorder(nil, nil, lbl, container.NewHBox(top, del), row.value)
+	var value fyne.CanvasObject = row.value
+	if r.flagCC != "" { // the flag of the number's country, updated as you type
+		fl := newFlag()
+		setFlag(fl, f.Value, r.flagCC)
+		row.value.OnChanged = func(s string) { setFlag(fl, s, r.flagCC) }
+		value = container.NewBorder(nil, nil, container.NewCenter(fl), nil, row.value)
+	}
+	row.obj = container.NewBorder(nil, nil, lbl, container.NewHBox(top, del), value)
 	top.OnTapped = func() {
 		for i, x := range r.rows {
 			if x == row && i > 0 {
@@ -291,7 +304,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.notes.SetMinRowsVisible(4)
 	e.notes.SetPlaceHolder("Where you met, family names, anything worth remembering")
 
-	e.phones = newFieldRows(c.Phones, PhoneLabels, "+965 9999 8888")
+	e.phones = newFieldRowsCC(c.Phones, PhoneLabels, "+965 9999 8888", e.u.cfg.CountryCode)
 	e.emails = newFieldRows(c.Emails, EmailLabels, "name@example.com")
 	e.urls = newFieldRows(c.URLs, URLLabels, "https://…")
 	if len(c.Phones) == 0 {

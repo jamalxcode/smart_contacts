@@ -233,7 +233,18 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Index tabs and A–Z tabs are small custom widgets; the selected tab sticks out further, like a
   real divider pulled forward.
 
-## 13. Ideas not done yet
+## 13. Following a real photo (2026-11-08)
+
+- **Fyne can't draw colour emoji,** so flag "emoji" are 48×36 PNGs rasterised with rsvg-convert
+  from flag-icons (MIT) and embedded; the country comes from libphonenumber's region for the number.
+- **A serif without Arabic breaks Arabic text** (Fyne doesn't fall back between fonts). The theme
+  keeps the app font for everything and gives the serif only to text that asks for it with the
+  otherwise unused Monospace style — and never to text containing Arabic.
+- **Splitting "AB" by bytes broke "ع"** (two bytes in UTF-8): split by runes.
+- Leather corners are rounded with small desk-coloured corner masks, since an image can't have a
+  corner radius; stitching is a row of short lines laid out for the current size.
+
+## 14. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

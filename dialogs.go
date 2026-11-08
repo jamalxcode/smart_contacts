@@ -166,6 +166,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		byFirst, byLast,
 		sep(),
 		filofaxItem,
+		item("Close Organiser", cmdShift(fyne.KeyW), u.showCover),
 		sep(),
 		item("Select Cards", cmdShift(fyne.KeyS), u.toggleSelectMode),
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
@@ -1044,11 +1045,17 @@ func (u *ui) settings() {
 	autoAct.SetChecked(u.cfg.AutoActivity)
 	notify := widget.NewCheck("Remind me of birthdays and people to reach out to", nil)
 	notify.SetChecked(!u.cfg.NoNotify)
+	coverChk := widget.NewCheck("Show the closed organiser when the app opens", nil)
+	coverChk.SetChecked(!u.cfg.NoCover)
+	openAt := widget.NewRadioGroup([]string{"The last page I was on", "The first page (All Contacts)"}, nil)
+	openAt.SetSelected(map[bool]string{false: "The last page I was on", true: "The first page (All Contacts)"}[u.cfg.OpenAtFirst])
 	form := []*widget.FormItem{
 		widget.NewFormItem("Your country code", cc),
 		widget.NewFormItem("Sort by", sortBy),
 		widget.NewFormItem("History", autoAct),
 		widget.NewFormItem("Reminders", notify),
+		widget.NewFormItem("Organiser", coverChk),
+		widget.NewFormItem("Open at", openAt),
 		widget.NewFormItem("Cloud AI", allow),
 		widget.NewFormItem("OpenRouter key", key),
 		widget.NewFormItem("AI model", model),
@@ -1071,6 +1078,8 @@ func (u *ui) settings() {
 		u.cfg.AllowCloudAI = allow.Checked
 		u.cfg.AutoActivity = autoAct.Checked
 		u.cfg.NoNotify = !notify.Checked
+		u.cfg.NoCover = !coverChk.Checked
+		u.cfg.OpenAtFirst = openAt.Selected == "The first page (All Contacts)"
 		u.cfg.AIModel = strings.TrimSpace(model.Text)
 		if u.cfg.AIModel == "" {
 			u.cfg.AIModel = DefaultAIModel
@@ -1085,7 +1094,7 @@ func (u *ui) settings() {
 }
 
 func (u *ui) help() {
-	text := `**The organiser.** The coloured tabs on the left are your lists and groups; the A–Z tabs next to them show only the people filed under that letter (All shows everyone, ع holds Arabic names, # the rest). View → Filofax Look switches to the plain Mac look and back.
+	text := `**The organiser.** It opens closed: click the cover or press any key. The coloured tabs on the left are your lists and groups; the A–Z tabs down the right edge show only the people filed under those letters (All shows everyone, ع holds Arabic names, # the rest). View → Close Organiser (⇧⌘W) closes it; next time it opens at the same page, unless Settings → Open at says the first page. View → Filofax Look switches to the plain Mac look and back. Each phone number shows its country's flag.
 
 **Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
 

@@ -166,11 +166,18 @@ calendar log, history) to a drive or folder you pick, encrypted with AES-256 if 
 password. File → Restore from Backup… brings one back (and can itself be undone). The OpenRouter
 key is never in a backup. Undo history now survives quitting the app.
 
-**A Filofax on screen.** The app looks like an open leather organiser: coloured card-stock index
-tabs on the left for your lists and groups, a strip of A–Z tabs (with All, ع for Arabic names and #),
-a ruled page of names, the binder rings, and the person's page facing it. A–Z files people the way a
-paper address book does ("Al-Mutairi" under M when sorting by last name). View → Filofax Look
-switches back to plain Mac panes.
+**A Filofax on screen.** The app opens as a closed cognac-leather organiser — stitched cover,
+gilt title, strap and brass snap. Click it (or press any key) and it opens at the page you left:
+a chrome pen in its loop, coloured index tabs for your lists and groups coming out of the left
+page, white pages with grey title bars on a stack of page edges, the chrome six-ring binder, and
+cream A–Z tabs (AB, CD … ع, #) down the right edge. View → Close Organiser (⇧⌘W) shuts it again.
+Settings choose whether it opens at the last page or the first, and whether to show the closed
+cover at all. View → Filofax Look switches back to plain Mac panes. Everything is drawn by the
+app; the printed parts are set in Libre Baskerville, names and fields in a font with Arabic.
+
+**Country flags.** Every phone number shows its country's flag — 🇰🇼 for +965, 🇬🇧 for +44 —
+in the list, on the card (updating as you type) and in Quick Find. The flags are small pictures
+because the toolkit can't draw colour emoji.
 
 **A Mac app, by Apple's rules.** Light and dark mode with the system colours, a tinted sidebar,
 13-point text, Contacts-style cards (round message / call / video / mail buttons, grey labels

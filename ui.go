@@ -74,6 +74,10 @@ type ui struct {
 	tabBox      *fyne.Container // Filofax look: the coloured index tabs
 	letterBox   *fyne.Container // Filofax look: the A–Z tabs
 	letter      string          // chosen A–Z tab ("" = All)
+	leftPage    *paperPage      // Filofax look: the page of names
+	rightPage   *paperPage      // Filofax look: the person's page
+	bookContent fyne.CanvasObject
+	coverShown  bool
 	attnGen     int
 }
 
@@ -113,7 +117,17 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	}
 	u.act = LoadActivity(s.Dir())
 	u.win = a.NewWindow("Smart Contacts")
+	u.restorePage()
 	u.build()
+	if i := u.indexOf(u.selectedID); i >= 0 {
+		u.list.ScrollTo(i)
+	}
+	if !cfg.ClassicLook && !cfg.NoCover { // start with the organiser closed
+		cv := &closedCover{count: len(s.Contacts), onOpen: u.openBook}
+		cv.ExtendBaseWidget(cv)
+		u.coverShown = true
+		u.win.SetContent(cv)
+	}
 	if cfg.AutoActivity {
 		u.readActivity(false) // refresh "last talked" quietly in the background
 	}
@@ -224,7 +238,9 @@ func (u *ui) build() {
 			sub.Importance = widget.LowImportance
 			sub.SizeName = theme.SizeNameCaptionText
 			star := widget.NewIcon(iconStar)
-			texts := container.New(&tightVBox{}, name, sub)
+			fl := newFlag() // shown when the second line is a phone number
+			fl.SetMinSize(fyne.NewSize(18, 13))
+			texts := container.New(&tightVBox{}, name, container.NewBorder(nil, nil, container.NewCenter(fl), nil, sub))
 			tick := widget.NewIcon(theme.CheckButtonIcon()) // shown in Select mode
 			tick.Hide()
 			row := container.NewBorder(nil, nil, container.NewHBox(tick, newAvatar(34)), star, texts)
@@ -253,7 +269,15 @@ func (u *ui) build() {
 			b := ca.content.(*fyne.Container)
 			texts := b.Objects[0].(*fyne.Container)
 			texts.Objects[0].(*widget.Label).SetText(c.DisplayName())
-			texts.Objects[1].(*widget.Label).SetText(u.subtitleFor(c))
+			line := texts.Objects[1].(*fyne.Container)
+			st := u.subtitleFor(c)
+			line.Objects[0].(*widget.Label).SetText(st)
+			fl := line.Objects[1].(*fyne.Container).Objects[0].(*canvas.Image)
+			if len(c.Phones) > 0 && st == c.Phones[0].Value {
+				setFlag(fl, st, u.cfg.CountryCode)
+			} else {
+				fl.Hide()
+			}
 			left := b.Objects[1].(*fyne.Container)
 			left.Objects[1].(*avatar).set(c, u.photo(c))
 			tick := left.Objects[0].(*widget.Icon)
@@ -331,10 +355,17 @@ func (u *ui) build() {
 		u.win.SetContent(container.NewBorder(nil, u.status, nil, nil, panes))
 	} else {
 		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
-		u.win.SetContent(u.filofaxLayout(listPane))
+		u.bookContent = u.filofaxLayout(listPane)
+		u.win.SetContent(u.bookContent)
 	}
 	u.win.SetMainMenu(u.mainMenu())
-	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) { dialogKey(k) })
+	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
+		if u.coverShown { // any key opens the organiser
+			u.openBook()
+			return
+		}
+		dialogKey(k)
+	})
 
 	u.refreshAll()
 	u.win.Canvas().Focus(u.search)
@@ -596,7 +627,7 @@ func (u *ui) refreshList() {
 			if u.letterBox != nil { // Filofax: only the chosen A–Z tab
 				l := letterOf(c, u.cfg.SortByLast)
 				used[l] = true
-				if u.letter != "" && l != u.letter {
+				if !letterIn(u.letter, l) {
 					continue
 				}
 			}
@@ -636,6 +667,13 @@ func (u *ui) refreshList() {
 		title = fmt.Sprintf("%s (%d)", title, len(out))
 	}
 	u.listTitle.SetText(title)
+	if u.leftPage != nil { // the title goes in the page's grey bar
+		u.leftPage.SetTitle(title)
+		u.listTitle.Hide()
+	} else {
+		u.listTitle.Show()
+	}
+	u.cfg.LastLetter = u.letter
 	u.list.UnselectAll()
 	u.list.Refresh()
 	if u.busy() {
@@ -753,11 +791,19 @@ func (u *ui) showDetail() {
 	}
 	u.ed = nil
 	c := u.store.Get(u.selectedID)
+	if u.rightPage != nil {
+		if c != nil {
+			u.rightPage.SetTitle(c.DisplayName())
+		} else {
+			u.rightPage.SetTitle("")
+		}
+	}
 	if c == nil {
 		u.right.Objects = []fyne.CanvasObject{u.emptyState()}
 		u.right.Refresh()
 		return
 	}
+	u.cfg.LastContact = c.ID
 	u.openLive(c)
 }
 

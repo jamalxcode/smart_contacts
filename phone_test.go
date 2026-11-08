@@ -226,3 +226,16 @@ func TestSwappedNames(t *testing.T) {
 		}
 	}
 }
+
+func TestPhoneRegionFlags(t *testing.T) {
+	for in, want := range map[string]string{"+965 6000 1234": "KW", "00447700900123": "GB", "+39 333 123 4567": "IT", "6000 1234": "KW", "+966 50 123 4567": "SA", "123": ""} {
+		if got := PhoneRegion(in, "965"); got != want {
+			t.Errorf("%s → %q, want %q", in, got, want)
+		}
+	}
+	for _, r := range []string{"KW", "GB", "IT", "SA", "AE", "US", "IN", "EG"} {
+		if flagResource(r) == nil {
+			t.Errorf("no flag for %s", r)
+		}
+	}
+}

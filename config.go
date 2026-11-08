@@ -32,7 +32,12 @@ type Config struct {
 	// Reminders: birthdays and people to reach out to, once a day.
 	NoNotify bool `json:"noNotify,omitempty"`
 	// ClassicLook turns off the Filofax organiser look (plain Mac panes instead).
-	ClassicLook  bool   `json:"classicLook,omitempty"`
+	ClassicLook bool `json:"classicLook,omitempty"`
+	// Where the organiser opens: the last page (default) or the first page.
+	OpenAtFirst  bool   `json:"openAtFirst,omitempty"`
+	NoCover      bool   `json:"noCover,omitempty"` // skip the closed cover at start
+	LastContact  string `json:"lastContact,omitempty"`
+	LastLetter   string `json:"lastLetter,omitempty"`
 	LastNotified string `json:"lastNotified,omitempty"`
 }
 

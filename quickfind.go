@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
@@ -135,7 +136,7 @@ func (u *ui) newQuickFind() *quickFind {
 			name.Truncation = fyne.TextTruncateEllipsis
 			num := widget.NewLabel("+965 0000 0000")
 			num.Importance = widget.LowImportance
-			return container.NewBorder(nil, nil, newAvatar(28), num, name)
+			return container.NewBorder(nil, nil, newAvatar(28), container.NewHBox(container.NewCenter(newFlag()), num), name)
 		},
 		func(i widget.ListItemID, o fyne.CanvasObject) {
 			if i >= len(q.matches) {
@@ -149,7 +150,14 @@ func (u *ui) newQuickFind() *quickFind {
 			if n == "" && len(c.Emails) > 0 {
 				n = c.Emails[0].Value
 			}
-			b.Objects[2].(*widget.Label).SetText(n)
+			right := b.Objects[2].(*fyne.Container)
+			right.Objects[1].(*widget.Label).SetText(n)
+			fl := right.Objects[0].(*fyne.Container).Objects[0].(*canvas.Image)
+			if strings.Contains(n, "@") {
+				fl.Hide()
+			} else {
+				setFlag(fl, n, u.cfg.CountryCode)
+			}
 		})
 	q.list.OnSelected = func(i widget.ListItemID) { q.sel = i }
 	q.entry.OnChanged = q.filter
