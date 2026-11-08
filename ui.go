@@ -69,7 +69,7 @@ type ui struct {
 	sortFirst     *sortPill // the sort switch in the organiser's tab column
 	sortLast      *sortPill
 	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
-	modalLayer    *fyne.Container // where the clipboard and stamp windows go (paperdialog.go)
+	modalLayer    *fyne.Container    // where the clipboard and stamp windows go (paperdialog.go)
 	tools         *toolbarParts      // the organiser toolbar (nil in the plain look)
 	actThen       func()             // runs once after the next successful read of Messages, calls and Mail
 	saveSearch    *widget.Button     // "Save as Smart Group", shown while searching
