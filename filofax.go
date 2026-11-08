@@ -1463,7 +1463,7 @@ func (u *ui) openBook() {
 	}
 	u.coverShown = false
 	if u.cfg.OpenAtFirst {
-		u.group, u.letter, u.selectedID = grpAll, "", ""
+		u.group, u.letter, u.selectedID = grpToday, "", "" // the first page is Today
 	}
 	u.win.SetContent(u.bookContent)
 	if sz := u.openSize; sz.Width > 0 {
@@ -1483,7 +1483,7 @@ func (u *ui) openBook() {
 // restorePage puts back the list, A–Z tab and person the organiser was left at.
 func (u *ui) restorePage() {
 	if u.cfg.OpenAtFirst {
-		u.group, u.letter, u.selectedID = grpAll, "", ""
+		u.group, u.letter, u.selectedID = grpToday, "", "" // the first page is Today
 		return
 	}
 	if u.cfg.LastGroup != "" {

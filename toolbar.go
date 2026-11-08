@@ -211,6 +211,7 @@ func isSVG(res fyne.Resource) bool {
 type toolbarParts struct {
 	who                                           *canvas.Text
 	note, fav, keep, groups, conn, share, clipBtn *toolButton
+	today                                         *toolButton
 }
 
 // buildToolbar makes the toolbar for the organiser.
@@ -221,6 +222,8 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(b)
 		widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", items...), u.win.Canvas(), pos.Add(fyne.NewPos(0, b.Size().Height)))
 	}
+	today := newToolButton(iconToday, "Today", func(*toolButton) { u.showGroup(grpToday) })
+	t.today = today
 	t.note = newToolButton(theme.DocumentCreateIcon(), "Add Note", func(*toolButton) { u.cmdNote() })
 	t.fav = newToolButton(iconStarOff, "Favorite", func(*toolButton) { u.cmdFavorite() })
 	t.keep = newToolButton(iconClock, "Keep in Touch", func(b *toolButton) { popup(b, u.keepItems()) })
@@ -232,6 +235,7 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	t.clipBtn = newToolButton(clipOn, "Clip Cards", func(*toolButton) { u.toggleSelectMode() })
 	check := newToolButton(iconMessage, "Check Messages", func(*toolButton) { u.cmdCheckMessages() })
 
+	today.col = color.NRGBA{0xF6, 0xF0, 0xE0, 0xFF} // the diary page's cream
 	for i, b := range []*toolButton{t.note, t.fav, t.keep, t.groups, t.conn, tidy, dupes, t.share, t.clipBtn, check} {
 		b.col = tabCards[i%len(tabCards)]
 	}
@@ -251,6 +255,8 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	row := container.NewHBox(
 		whoBox,
 		layout.NewSpacer(),
+		today,
+		divider(),
 		t.note, t.fav, t.keep, t.groups, t.conn,
 		divider(),
 		tidy, dupes, t.share,
@@ -298,6 +304,10 @@ func (u *ui) refreshToolbar() {
 		t.who.Color = deskInk
 	}
 	t.who.Refresh()
+	if t.today != nil {
+		t.today.on = u.group == grpToday // stands up while Today is open
+		t.today.Refresh()
+	}
 	for _, b := range []*toolButton{t.note, t.fav, t.keep, t.groups, t.share} {
 		b.setDisabled(none)
 	}

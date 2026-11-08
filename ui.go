@@ -69,12 +69,15 @@ type ui struct {
 	sortFirst     *cardLine // the sort switch in the organiser's tab column
 	sortLast      *cardLine
 	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
-	modalLayer    *fyne.Container    // where the clipboard and stamp windows go (paperdialog.go)
-	tools         *toolbarParts      // the organiser toolbar (nil in the plain look)
-	actThen       func()             // runs once after the next successful read of Messages, calls and Mail
-	saveSearch    *widget.Button     // "Save as Smart Group", shown while searching
-	attention     map[string]int     // clean-up suggestions per contact (worked out in the background)
-	qf            *quickFind         // the menu bar's Quick Find window
+	todayBox      *fyne.Container    // the Today page (today.go)
+	todayScroll   *container.Scroll
+	todaySet      map[string]bool // who is on today's page
+	modalLayer    *fyne.Container // where the clipboard and stamp windows go (paperdialog.go)
+	tools         *toolbarParts   // the organiser toolbar (nil in the plain look)
+	actThen       func()          // runs once after the next successful read of Messages, calls and Mail
+	saveSearch    *widget.Button  // "Save as Smart Group", shown while searching
+	attention     map[string]int  // clean-up suggestions per contact (worked out in the background)
+	qf            *quickFind      // the menu bar's Quick Find window
 	trayMenuSig   string
 	selAnchor     string          // where a Shift-click range starts
 	tabBox        *fyne.Container // Filofax look: the coloured index tabs
@@ -406,7 +409,10 @@ func (u *ui) build() {
 	}
 	u.bulkBar = container.NewVBox()
 	u.bulkBar.Hide()
-	listPane := container.NewBorder(listTop, u.bulkBar, nil, nil, u.list)
+	u.todayBox = container.NewVBox()
+	u.todayScroll = container.NewVScroll(container.NewPadded(u.todayBox))
+	u.todayScroll.Hide()
+	listPane := container.NewBorder(listTop, u.bulkBar, nil, nil, container.NewStack(u.list, u.todayScroll))
 	u.listPane = listPane
 
 	// --- right ---
@@ -592,6 +598,7 @@ func (u *ui) refreshSidebar() {
 		}
 	}
 	items := []sideItem{
+		{grpToday, "Today", iconToday, u.today(now).count()},
 		{grpAll, "All Contacts", theme.AccountIcon(), len(u.store.Contacts)},
 		{grpFavorites, "Favorites", iconStar, fav},
 		{grpBirthdays, "Birthdays", iconCake, bday},
@@ -693,6 +700,8 @@ func (u *ui) inGroup(c *Contact, now time.Time) bool {
 	switch {
 	case u.group == grpAll:
 		return true
+	case u.group == grpToday:
+		return u.todaySet[c.ID]
 	case u.group == grpFavorites:
 		return c.Favorite
 	case u.group == grpBirthdays:
@@ -733,9 +742,13 @@ func (u *ui) refreshList() {
 	u.showFilterForm()
 	out := make([]*Contact, 0, len(u.store.Contacts))
 	used := map[string]bool{}
+	isToday := u.group == grpToday && strings.TrimSpace(q) == ""
+	if isToday {
+		u.todaySet = u.today(now).set()
+	}
 	for _, c := range u.store.Contacts {
 		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) && (!u.filterOpen || u.filter.matches(c)) {
-			if u.letterBox != nil { // Filofax: only the chosen A–Z tab
+			if u.letterBox != nil && !isToday { // Filofax: only the chosen A–Z tab
 				l := letterOf(c, u.cfg.SortByLast)
 				used[l] = true
 				if !letterIn(u.letter, l) {
@@ -790,8 +803,21 @@ func (u *ui) refreshList() {
 	if u.busy() {
 		return
 	}
-	// Keep the shown contact if it is still in the list, otherwise show the first one.
-	if u.indexOf(u.selectedID) < 0 {
+	// Today is a page, not a list: show it instead of the list (a search shows the list again)
+	if u.todayScroll != nil {
+		if isToday {
+			u.buildToday()
+			u.list.Hide()
+			u.todayScroll.Show()
+		} else {
+			u.todayScroll.Hide()
+			u.list.Show()
+		}
+	}
+	// Keep the shown contact if it is still in the list, otherwise show the first one. (On
+	// Today, the card that's open stays open.)
+	if isToday && u.store.Get(u.selectedID) != nil {
+	} else if u.indexOf(u.selectedID) < 0 {
 		u.selectedID = ""
 		if len(out) > 0 {
 			u.selectedID = out[0].ID

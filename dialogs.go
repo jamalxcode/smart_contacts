@@ -169,6 +169,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	filofaxItem := fyne.NewMenuItem("Filofax Look", u.toggleLook)
 	filofaxItem.Checked = !u.cfg.ClassicLook
 	view := fyne.NewMenu("View",
+		list("Today", cmd(fyne.Key0), grpToday),
 		list("All Contacts", cmd(fyne.Key1), grpAll),
 		list("Favorites", cmd(fyne.Key2), grpFavorites),
 		list("Birthdays", cmd(fyne.Key3), grpBirthdays),
@@ -226,6 +227,8 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	dupes := item("Find Duplicates…", cmdShift(fyne.KeyD), u.cmdDuplicates)
 	dupes.Disabled = len(u.store.Contacts) < 2
 	cardItems := []*fyne.MenuItem{
+		item("Today", nil, func() { u.showGroup(grpToday) }), // the day's page: birthdays, who to call, who you met (⌘0 in View)
+		sep(),
 		onTargets("Add Note…", cmd(fyne.KeyJ), u.cmdNote),
 		fav,
 		keepMenu,
@@ -1173,6 +1176,8 @@ func (u *ui) help() {
 **Search filters.** company:boubyan · title:engineer · group:family · source:linkedin · city:salmiya · country:kuwait · code:965 · has:email · no:phone · talked:<30d · talked:>1y · is:favorite · is:due — and a minus in front reverses one (-group:work). Save any search as a Smart Group in the sidebar.
 
 **The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. A card shows only what's written on it. Click a line for what it's for (call, message, email, open, copy). Double-click a line, or press Write, to write on the card: every field opens, and the one you clicked is ready to type in. Done or Esc puts the pen down and saves. Turn Over shows the back of the card: notes, how you met, keeping in touch and the history. On a card with several numbers, the star marks the main one; × crosses a line out. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
+
+**Today.** The first tab, Today (⌘0, also first in the Card menu and the toolbar), is the day's page: birthdays this week (call, message or WhatsApp them), people due a call from Keep in Touch (with Done to mark you've been in touch), people you met in the last two weeks from the calendar log (with Note), and cards waiting to be tidied (with Review). Click anyone to open their card. Typing a search shows the list again. Settings → Open at the first page now opens on Today.
 
 **Menus and the organiser match.** The View menu and the tabs down the left have the same sections, names and order: the lists, To Tidy, Saved Searches, Groups, then Sort and Also in the Book (Calendar Log, Trash). The tabs show each group and saved search by name; in the menu use Go to Group… (⌘G) and Go to Saved Search…. The Card menu and the toolbar above the book also match each other.
 

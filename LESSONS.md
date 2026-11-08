@@ -342,7 +342,15 @@ Twenty-five Card commands came down to ten by having one rule for what they act 
 
 Fyne moves menu items titled exactly "About", "Settings…" or "Preferences…" into the macOS app menu. For About it takes over Apple's own item. That didn't always hold: About sometimes did nothing until the app was reopened. The Help item is now "About Smart Contacts…", which Fyne leaves alone. The app menu keeps Apple's standard About panel, which shows the name, version and icon from the app bundle.
 
-## 25. Ideas not done yet
+## 25. The Today page
+
+A real organiser opens on today. `grpToday` is the first tab. When it's open, the left page shows a diary page (`today.go`) instead of the list: the date in the serif, then Birthdays this week, Time to get in touch, Met recently (from the calendar log) and Cards to tidy.
+
+- Each person has quick actions (call, message, WhatsApp, Done, Note, Review). Clicking the row opens their card.
+- The list underneath still holds today's people, so keyboard walking and selection work. A search swaps the page back to the list.
+- Today is first in the View menu (⌘0), the Card menu and the toolbar, so all three match the tabs.
+
+## 26. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.
