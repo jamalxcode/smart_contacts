@@ -34,14 +34,14 @@ type editor struct {
 	saveBtn      *widget.Button
 	revertBtn    *widget.Button
 
-	first, last, nick, title, birthday, met *widget.Entry
+	first, last, nick, title, birthday, met *cardEntry
 	company                                 *widget.SelectEntry // offers the companies already in the book
-	alt                                     *widget.Entry
-	notes                                   *widget.Entry
+	alt                                     *cardEntry
+	notes                                   *cardEntry
 	phones, emails, urls                    *fieldRows
 	addrs                                   *addrRows
 	groups                                  *widget.CheckGroup
-	newGroup                                *widget.Entry
+	newGroup                                *cardEntry
 	fav                                     *widget.Check
 	av                                      *avatar
 	bdayHint                                *widget.Label
@@ -58,8 +58,26 @@ type fieldRows struct {
 
 type fieldRow struct {
 	label *widget.SelectEntry
-	value *widget.Entry
+	value *cardEntry
+	star  *widget.Button // filled on the main one; click another's to make it the main one
 	obj   fyne.CanvasObject
+}
+
+// syncStars fills the main (first) row's star and outlines the others; with one row there's no
+// choosing, so no star.
+func (r *fieldRows) syncStars() {
+	for i, x := range r.rows {
+		if len(r.rows) < 2 {
+			x.star.Hide()
+			continue
+		}
+		x.star.Show()
+		if i == 0 {
+			x.star.SetIcon(iconStar)
+		} else {
+			x.star.SetIcon(iconStarOff)
+		}
+	}
 }
 
 func newFieldRows(fs []Field, labels []string, placeholder string) *fieldRows {
@@ -76,19 +94,20 @@ func newFieldRowsCC(fs []Field, labels []string, placeholder, cc string) *fieldR
 }
 
 func (r *fieldRows) add(f Field) *fieldRow {
-	row := &fieldRow{label: widget.NewSelectEntry(r.labels), value: widget.NewEntry()}
+	row := &fieldRow{label: widget.NewSelectEntry(r.labels), value: newCardEntry()}
 	if f.Label == "" {
 		f.Label = r.labels[0]
 	}
 	row.label.SetText(f.Label)
 	row.value.SetText(f.Value)
 	row.value.SetPlaceHolder(r.placeholder)
-	del := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), nil)
+	del := widget.NewButtonWithIcon("", theme.ContentClearIcon(), nil) // × crosses the line out
 	del.Importance = widget.LowImportance
 	lbl := container.NewGridWrap(fyne.NewSize(130, row.label.MinSize().Height), row.label)
-	// ↑ makes this the first (main) one: the number Call and Copy use, the email Mail uses.
-	top := widget.NewButtonWithIcon("", theme.MoveUpIcon(), nil)
+	// the star marks the main one: the number Call and Copy use, the email Mail uses
+	top := widget.NewButtonWithIcon("", iconStarOff, nil)
 	top.Importance = widget.LowImportance
+	row.star = top
 	var value fyne.CanvasObject = row.value
 	if r.flagCC != "" { // the flag of the number's country, updated as you type
 		fl := newFlag()
@@ -108,6 +127,7 @@ func (r *fieldRows) add(f Field) *fieldRow {
 				break
 			}
 		}
+		r.syncStars()
 	}
 	del.OnTapped = func() {
 		for i, x := range r.rows {
@@ -117,9 +137,11 @@ func (r *fieldRows) add(f Field) *fieldRow {
 			}
 		}
 		r.box.Remove(row.obj)
+		r.syncStars()
 	}
 	r.rows = append(r.rows, row)
 	r.box.Add(row.obj)
+	r.syncStars()
 	return row
 }
 
@@ -150,13 +172,13 @@ type addrRows struct {
 
 type addrRow struct {
 	label                                   *widget.SelectEntry
-	street, city, region, postcode, country *widget.Entry
+	street, city, region, postcode, country *cardEntry
 	obj                                     fyne.CanvasObject
 }
 
 func (r *addrRows) add(a Address) *addrRow {
-	ent := func(v, ph string) *widget.Entry {
-		e := widget.NewEntry()
+	ent := func(v, ph string) *cardEntry {
+		e := newCardEntry()
 		e.SetText(v)
 		e.SetPlaceHolder(ph)
 		return e
@@ -166,13 +188,13 @@ func (r *addrRows) add(a Address) *addrRow {
 		a.Label = "Home"
 	}
 	row.label.SetText(a.Label)
-	row.street = widget.NewMultiLineEntry()
+	row.street = newCardMultiLineEntry()
 	row.street.SetText(a.Street)
 	row.street.SetPlaceHolder("Street, block, building")
 	row.street.SetMinRowsVisible(2)
 	row.city, row.region = ent(a.City, "City / area"), ent(a.Region, "Governorate / state")
 	row.postcode, row.country = ent(a.Postcode, "Postcode"), ent(a.Country, "Country")
-	del := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), nil)
+	del := widget.NewButtonWithIcon("", theme.ContentClearIcon(), nil)
 	del.Importance = widget.LowImportance
 	lbl := container.NewGridWrap(fyne.NewSize(130, row.label.MinSize().Height), row.label)
 	fields := container.NewVBox(row.street, container.NewGridWithColumns(2, row.city, row.region), container.NewGridWithColumns(2, row.postcode, row.country))
@@ -260,8 +282,8 @@ func (u *ui) openEditorMode(c *Contact, prefill *Contact, banner string, card []
 
 func (e *editor) build(banner string) fyne.CanvasObject {
 	c := e.c
-	ent := func(v, ph string) *widget.Entry {
-		x := widget.NewEntry()
+	ent := func(v, ph string) *cardEntry {
+		x := newCardEntry()
 		x.SetText(v)
 		x.SetPlaceHolder(ph)
 		return x
@@ -301,7 +323,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 		}
 	}
 	e.birthday.OnChanged(c.Birthday)
-	e.notes = widget.NewMultiLineEntry()
+	e.notes = newCardMultiLineEntry()
 	e.notes.SetText(c.Notes)
 	e.notes.Wrapping = fyne.TextWrapWord
 	e.notes.SetMinRowsVisible(4)
@@ -334,7 +356,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.groups = widget.NewCheckGroup(allGroups, nil)
 	e.groups.Horizontal = false // one per line: no sideways scroller to trap the mouse wheel
 	e.groups.SetSelected(c.Groups)
-	e.newGroup = widget.NewEntry()
+	e.newGroup = newCardEntry()
 	e.newGroup.SetPlaceHolder("New group name")
 	addGroup := func() {
 		g := strings.TrimSpace(e.newGroup.Text)

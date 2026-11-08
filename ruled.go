@@ -52,6 +52,8 @@ func ruledFields(o fyne.CanvasObject, at fyne.Position, out *[]ruledField) {
 		// a scroller inside the card would need its offset; the card has none
 	case *widget.Entry:
 		*out = append(*out, ruledField{at, t.Size(), t.MultiLine})
+	case *cardEntry:
+		*out = append(*out, ruledField{at, t.Size(), t.MultiLine})
 	case *widget.SelectEntry:
 		*out = append(*out, ruledField{at, t.Size(), false})
 	case *widget.Select:

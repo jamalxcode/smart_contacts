@@ -78,7 +78,9 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Show Data Folder in Finder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
 		sep(),
 		item("Save", cmd(fyne.KeyS), func() {
-			if u.ed != nil {
+			if u.ed != nil && u.ed.live {
+				u.finishWriting()
+			} else if u.ed != nil {
 				u.ed.save()
 			}
 		}),
@@ -118,18 +120,14 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 			}
 		}),
 		sep(),
-		item("Edit Card", cmd(fyne.KeyL), func() { // the card is editable: go to its first field
-			if u.ed != nil {
-				u.win.Canvas().Focus(u.ed.first)
-			}
-		}),
+		item("Write on Card", cmd(fyne.KeyL), func() { u.writeCard(nil) }), // pick up the pen
 		item("Delete…", cmd(fyne.KeyBackspace), func() {
 			// In the search box ⌘⌫ clears what was typed; while typing it never deletes a card.
 			if u.win.Canvas().Focused() == u.search {
 				u.search.SetText("")
 				return
 			}
-			if _, typing := u.win.Canvas().Focused().(*widget.Entry); typing {
+			if typing(u.win.Canvas().Focused()) {
 				return
 			}
 			if u.selectMode && len(u.picked) > 0 {
@@ -1187,7 +1185,7 @@ func (u *ui) settings() {
 }
 
 func (u *ui) help() {
-	text := `**Search Filter.** The first tab opens a form on the page: fill in any of Name, Company, Country, City or Other, and only the people matching all of them are shown. Save as Smart Group keeps it in the sidebar.
+	text := `**Finding people.** Start typing a name anywhere and it goes into the search field. The arrow keys walk the list. The funnel at the end of the search field opens a filter form: Name, Company, Country, City, From (where the card came from: LinkedIn, a spreadsheet, a business card) and Other. Only the people matching all of them are shown. Save as Smart Group keeps it in the sidebar. In the search field itself, from:linkedin does the same as From.
 
 **The organiser.** It opens closed: click the cover or press any key. The coloured tabs on the left are your lists and groups; the A–Z tabs down the right edge show only the people filed under those letters (All shows everyone, ع holds Arabic names, # the rest). Click the strap on the right (or press ⇧⌘W) to close it; next time it opens at the same page, unless Settings → Open at says the first page. View → Filofax Look switches to the plain Mac look and back. Each phone number shows its country's flag.
 
@@ -1205,7 +1203,7 @@ func (u *ui) help() {
 
 **Search filters.** company:boubyan · title:engineer · group:family · source:linkedin · city:salmiya · country:kuwait · code:965 · has:email · no:phone · talked:<30d · talked:>1y · is:favorite · is:due — and a minus in front reverses one (-group:work). Save any search as a Smart Group in the sidebar.
 
-**The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. Cards are printed pages: click a ruled line and write; the blue box shows where you're writing. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
+**The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. A card shows only what's written on it. Click a line for what it's for (call, message, email, open, copy). Double-click a line, or press Write, to write on the card: every field opens, and the one you clicked is ready to type in. Done or Esc puts the pen down and saves. Turn Over shows the back of the card: notes, how you met, keeping in touch and the history. On a card with several numbers, the star marks the main one; × crosses a line out. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
 **What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right), *Clipped Cards* (the people you've clipped together; the sticky note shows how many) and *Whole Address Book* (every card). Commands that can't act right now are dimmed. Edit → Delete deletes the clipped cards if there are any, otherwise the open card, and always asks first, naming them. Right-click a person and the menu starts with their name.
 

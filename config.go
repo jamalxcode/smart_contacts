@@ -11,12 +11,13 @@ import (
 // The OpenRouter key lives here on purpose, not in the macOS Keychain, so the app never
 // asks for the Mac password.
 type Config struct {
-	WindowW       float32 `json:"windowW,omitempty"`
-	WindowH       float32 `json:"windowH,omitempty"`
-	LayoutVersion int     `json:"layoutVersion,omitempty"`
-	SortByLast    bool    `json:"sortByLast,omitempty"`
-	CountryCode   string  `json:"countryCode"`
-	OpenRouterKey string  `json:"openRouterKey,omitempty"`
+	Learned       map[string]bool `json:"learned,omitempty"` // hints already acted on ("strap", "write", "turn"), so they're not shown again
+	WindowW       float32         `json:"windowW,omitempty"`
+	WindowH       float32         `json:"windowH,omitempty"`
+	LayoutVersion int             `json:"layoutVersion,omitempty"`
+	SortByLast    bool            `json:"sortByLast,omitempty"`
+	CountryCode   string          `json:"countryCode"`
+	OpenRouterKey string          `json:"openRouterKey,omitempty"`
 	// AllowCloudAI lets Smart Add send pasted text to OpenRouter. Off by default: with it off,
 	// nothing about any contact ever leaves this Mac.
 	AllowCloudAI bool      `json:"allowCloudAI,omitempty"`

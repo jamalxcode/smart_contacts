@@ -82,7 +82,9 @@ type ui struct {
 	recentFields  map[string][]string // what the last change altered on each card, for the pencil note
 	recent        map[string]bool     // cards the last change touched: a blue dot for a while
 	recentGen     int
-	menu          *fyne.MainMenu // the menu bar, built once (see refreshMenu)
+	menu          *fyne.MainMenu  // the menu bar, built once (see refreshMenu)
+	backID        string          // the card shown turned over (its back), if any
+	filterOpen    bool            // the filter form under the search field is open
 	usedLetters   map[string]bool // the first letters people are filed under, for turning pages
 	actionVerb    string          // what the next save is doing ("Cleaned up"), for the banner
 	coverShown    bool
@@ -250,8 +252,13 @@ func (u *ui) build() {
 
 	// --- list ---
 	u.search = newSearchEntry()
-	u.search.SetPlaceHolder("Search")
-	u.search.ActionItem = widget.NewIcon(theme.SearchIcon())
+	u.search.SetPlaceHolder("Find a name, company, city, number…")
+	// the funnel opens the filter form (name, company, country, city, where it came from)
+	filterBtn := newIconTap(iconFilter, "Filter by company, country, city or where the card came from", func() {
+		u.filterOpen = !u.filterOpen
+		u.refreshList()
+	})
+	u.search.ActionItem = filterBtn
 	u.search.OnChanged = func(string) { u.refreshList() }
 	u.search.onKey = u.searchKey
 	u.search.onSelectAll = u.selectAllCards
@@ -274,7 +281,9 @@ func (u *ui) build() {
 			wash := canvas.NewRectangle(color.NRGBA{0xFF, 0xEE, 0x90, 0x70}) // clipped: the note's yellow
 			wash.CornerRadius = 4
 			wash.Hide()
-			row := container.NewStack(wash, container.NewBorder(nil, nil, container.NewHBox(dot, tick, newAvatar(34)), star, texts))
+			tidy := widget.NewIcon(theme.NewErrorThemedResource(theme.WarningIcon())) // something on this card needs fixing
+			tidy.Hide()
+			row := container.NewStack(wash, container.NewBorder(nil, nil, container.NewHBox(dot, tick, newAvatar(34)), container.NewHBox(tidy, star), texts))
 			var ca *contextArea
 			ca = newContextArea(row, u.win, func() *fyne.Menu { return u.rowMenu(ca.data) })
 			ca.onTap = func() {
@@ -327,7 +336,13 @@ func (u *ui) build() {
 			clip.set(u.selectMode && u.picked[c.ID])
 			cid := c.ID
 			clip.onTap = func() { u.toggleClip(cid) }
-			star := b.Objects[2].(*widget.Icon)
+			right := b.Objects[2].(*fyne.Container)
+			if tidy := right.Objects[0]; u.attention[c.ID] > 0 || (len(c.Phones) == 0 && len(c.Emails) == 0) {
+				tidy.Show()
+			} else {
+				tidy.Hide()
+			}
+			star := right.Objects[1].(*widget.Icon)
 			if c.Favorite {
 				star.Show()
 			} else {
@@ -365,12 +380,23 @@ func (u *ui) build() {
 	u.saveSearch = widget.NewButtonWithIcon("Save as Smart Group…", theme.SearchIcon(), u.saveSmartGroup)
 	u.saveSearch.Importance = widget.LowImportance
 	u.saveSearch.Hide()
-	listTop := container.NewVBox(
-		container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
-		u.buildFilter(),
-		u.search,
-		u.saveSearch,
-	)
+	// In the organiser the pen writes a new card and the pocket takes business cards, so the list
+	// has no buttons of its own for those; the plain look keeps them.
+	var listTop *fyne.Container
+	if u.cfg.ClassicLook {
+		listTop = container.NewVBox(
+			container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
+			u.buildFilter(),
+			u.search,
+			u.saveSearch,
+		)
+	} else { // the page's printed heading names the list; the clip sits beside the search
+		listTop = container.NewVBox(
+			container.NewBorder(nil, nil, nil, selBtn, u.search),
+			u.buildFilter(),
+			u.saveSearch,
+		)
+	}
 	u.bulkBar = container.NewVBox()
 	u.bulkBar.Hide()
 	listPane := container.NewBorder(listTop, u.bulkBar, nil, nil, u.list)
@@ -386,6 +412,7 @@ func (u *ui) build() {
 	inner.Offset = 0.40
 	outer := container.NewHSplit(sidebar, inner)
 	outer.Offset = 0.19
+	inkAvatars = !u.cfg.ClassicLook
 	if u.cfg.ClassicLook {
 		u.tabBox, u.letterBox, u.letter = nil, nil, ""
 		u.app.Settings().SetTheme(newAppTheme())
@@ -406,8 +433,41 @@ func (u *ui) build() {
 			u.openBook()
 			return
 		}
-		dialogKey(k)
+		if dialogKey(k) {
+			return
+		}
+		switch k.Name { // nothing being typed in: the arrows walk the list, as in Finder
+		case fyne.KeyDown:
+			u.stepList(1)
+		case fyne.KeyUp:
+			u.stepList(-1)
+		}
 	})
+	// typing a name anywhere finds it (the keys go to the search field)
+	u.win.Canvas().SetOnTypedRune(func(r rune) {
+		if u.coverShown || len(keyDialogs) > 0 || u.ed != nil || r == ' ' {
+			return
+		}
+		u.win.Canvas().Focus(u.search)
+		u.search.SetText(u.search.Text + string(r))
+		u.search.CursorColumn = len([]rune(u.search.Text))
+		u.search.Refresh()
+	})
+	// Esc puts the pen down: from a field on the card (cardEntry), or with nothing focused
+	escape := func() {
+		if u.ed == nil || !u.ed.live || len(keyDialogs) > 0 || u.win.Canvas().Overlays().Top() != nil {
+			return
+		}
+		u.finishWriting()
+	}
+	onCardEscape = escape
+	if dc, ok := u.win.Canvas().(desktop.Canvas); ok {
+		dc.SetOnKeyDown(func(k *fyne.KeyEvent) {
+			if k.Name == fyne.KeyEscape {
+				escape()
+			}
+		})
+	}
 
 	u.refreshAll()
 	u.win.Canvas().Focus(u.search)
@@ -520,19 +580,10 @@ func (u *ui) refreshSidebar() {
 			incomplete++
 		}
 	}
-	filterN := 0
-	if !u.filter.empty() {
-		for _, c := range u.store.Contacts {
-			if u.filter.matches(c) {
-				filterN++
-			}
-		}
-	}
 	items := []sideItem{
-		{grpFilter, "Search Filter", theme.SearchIcon(), filterN},
 		{grpAll, "All Contacts", theme.AccountIcon(), len(u.store.Contacts)},
 		{grpFavorites, "Favorites", iconStar, fav},
-		{grpBirthdays, "Upcoming Birthdays", iconCake, bday},
+		{grpBirthdays, "Birthdays", iconCake, bday},
 		{grpRecent, "Recently Added", theme.HistoryIcon(), recent},
 	}
 	keeping, due := 0, 0
@@ -584,18 +635,8 @@ func (u *ui) refreshSidebar() {
 		}
 		items = append(items, sideItem{"g:" + g, g, iconLabel, n})
 	}
-	if srcs := u.store.SourceNames(); len(srcs) > 0 {
-		items = append(items, sideItem{key: grpHeader, title: "Sources"})
-		for _, src := range srcs {
-			n := 0
-			for _, c := range u.store.Contacts {
-				if c.HasSource(src) {
-					n++
-				}
-			}
-			items = append(items, sideItem{"s:" + src, src, theme.DownloadIcon(), n})
-		}
-	}
+	// where cards came from (LinkedIn, a spreadsheet…) isn't somewhere you go: it's in the
+	// filter form and in search (from:linkedin)
 	u.sideItems = items
 	u.side.Refresh()
 	u.refreshTabs()
@@ -682,7 +723,7 @@ func (u *ui) refreshList() {
 	out := make([]*Contact, 0, len(u.store.Contacts))
 	used := map[string]bool{}
 	for _, c := range u.store.Contacts {
-		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) {
+		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) && (!u.filterOpen || u.filter.matches(c)) {
 			if u.letterBox != nil { // Filofax: only the chosen A–Z tab
 				l := letterOf(c, u.cfg.SortByLast)
 				used[l] = true
@@ -756,6 +797,22 @@ func (u *ui) indexOf(id string) int {
 		}
 	}
 	return -1
+}
+
+// stepList opens the next (d = 1) or previous (d = -1) person in the list.
+func (u *ui) stepList(d int) {
+	if len(u.filtered) == 0 || u.selectMode {
+		return
+	}
+	i := u.indexOf(u.selectedID) + d
+	if u.indexOf(u.selectedID) < 0 {
+		i = 0
+	}
+	if i < 0 || i >= len(u.filtered) {
+		return
+	}
+	u.list.Select(i)
+	u.list.ScrollTo(i)
 }
 
 // reselect highlights the current contact in the list without re-triggering OnSelected work.
@@ -861,6 +918,9 @@ func (u *ui) showDetail() {
 	if u.busy() {
 		return
 	}
+	if u.ed != nil && u.ed.live && u.ed.orig != nil && u.ed.orig.ID == u.selectedID {
+		return // still writing on this card: leave the pen where it is
+	}
 	u.ed = nil
 	c := u.store.Get(u.selectedID)
 	if u.rightPage != nil {
@@ -876,7 +936,10 @@ func (u *ui) showDetail() {
 		return
 	}
 	u.cfg.LastContact = c.ID
-	u.openLive(c)
+	if u.backID != c.ID {
+		u.backID = "" // another card opens on its front
+	}
+	u.openRead(c)
 }
 
 func (u *ui) emptyState() fyne.CanvasObject {
@@ -1066,12 +1129,41 @@ func (u *ui) flash(msg string) {
 	}()
 }
 
+// tidyCount is how many cards are waiting to be fixed (To Tidy).
+func (u *ui) tidyCount() int {
+	n := 0
+	for _, c := range u.store.Contacts {
+		if u.attention[c.ID] > 0 || (len(c.Phones) == 0 && len(c.Emails) == 0) {
+			n++
+		}
+	}
+	return n
+}
+
+// dueCount is how many people it's time to get in touch with.
+func (u *ui) dueCount() int {
+	n, now := 0, time.Now()
+	for _, c := range u.store.Contacts {
+		if c.KeepInTouch > 0 && u.dueToReachOut(c, now) {
+			n++
+		}
+	}
+	return n
+}
+
 func (u *ui) statusText() string {
 	where := "private · stored only on this Mac"
 	if u.cloudAI() {
 		where = "stored only on this Mac · Cloud AI on for Smart Add"
 	}
-	return fmt.Sprintf("%d contacts   ·   %s", len(u.store.Contacts), where)
+	s := plural(len(u.store.Contacts), "contact")
+	if n := u.tidyCount(); n > 0 {
+		s += "   ·   " + plural(n, "card") + " to tidy"
+	}
+	if n := u.dueCount(); n > 0 {
+		s += "   ·   " + fmt.Sprintf("%d %s to reach out to", n, pluralWords(n, "person", "people"))
+	}
+	return s + "   ·   " + where
 }
 
 func (u *ui) deleteContact(c *Contact) {
@@ -1117,8 +1209,25 @@ func newAvatar(size float32) *avatar {
 	return a
 }
 
+// inkAvatars draws people without a photo as an ink monogram on the page (the organiser look)
+// rather than white letters on a coloured disc.
+var inkAvatars bool
+
 func (a *avatar) set(c *Contact, photo fyne.Resource) {
 	a.circle.FillColor = avatarColor(c.ID)
+	a.circle.StrokeWidth = 0
+	a.text.Color = color.White
+	a.text.TextStyle = fyne.TextStyle{Bold: true}
+	if inkAvatars {
+		// the same hue per person, darkened to ink, on a disc of slightly deeper paper
+		k := avatarColor(c.ID)
+		ink := color.NRGBA{uint8(int(k.R) * 55 / 100), uint8(int(k.G) * 55 / 100), uint8(int(k.B) * 55 / 100), 0xFF}
+		a.circle.FillColor = color.NRGBA{0xEE, 0xE8, 0xDA, 0xFF}
+		a.circle.StrokeColor = ink
+		a.circle.StrokeWidth = fyne.Max(1, a.size/36)
+		a.text.Color = ink
+		a.text.TextStyle = serif(c.Initials(), true, false)
+	}
 	a.text.Text = c.Initials()
 	if photo != nil {
 		a.img.Resource = photo

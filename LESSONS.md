@@ -305,7 +305,18 @@ Opening one card and then another made the app vanish. Since 1.0.33 the Card men
 
 `Icon.png` is drawn in code by `TestMakeIcon` (`MAKE_ICON=Icon.png go test -run TestMakeIcon .`), with the same leather, brass and serif fonts as the cover, so it matches the closed organiser. After an update, `touch` and `lsregister` make Finder and the Dock show the new icon instead of a cached one.
 
-## 20. Ideas not done yet
+## 20. A card is read, then written on
+
+A form showing every empty field hides the few lines that matter. A card that is always editable can be changed by one stray keystroke. So a card now has two states.
+
+- **Reading** (`readcard.go`) shows only what's written: the name, job and company in the serif, the ways to reach them, then one ruled `inkLine` per number, email, address, link and birthday. Clicking a line offers what it's for; double-clicking writes on that field. One faint "+ add …" line lists what's missing.
+- **Writing** is the old editable card, with Done instead of Save. `showDetail` leaves a card that's being written on alone.
+- Fyne gives Esc only to the field that has the keyboard, never to the window. So the card's fields are a `cardEntry` that passes Esc to the card. Any type check for "is the user typing" must use `typing()`, or ⌘⌫ would delete the card while you type on it.
+- The front stays short; Turn Over shows the back (notes, how you met, keeping in touch, history), with a squeeze animation like a card turning on its axis.
+- One way to do each thing in the organiser: the pen makes a new card, the pocket takes business cards, and the funnel in the search field opens the filter. Sources are in the filter form and `from:` searches, not tabs.
+- Hints go away once you've used the thing they explain (`cfg.Learned`). The status line then shows counts instead: contacts, cards to tidy, people to reach out to.
+
+## 21. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

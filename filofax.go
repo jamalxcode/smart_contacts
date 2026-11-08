@@ -828,6 +828,7 @@ func (r *tabRenderer) MinSize() fyne.Size {
 
 func (r *tabRenderer) Layout(s fyne.Size) {
 	if r.t.header {
+		r.title.Text = r.t.title
 		r.title.Move(fyne.NewPos(14, 4))
 		return
 	}
@@ -845,8 +846,21 @@ func (r *tabRenderer) Layout(s fyne.Size) {
 	r.card.Resize(fyne.NewSize(w, s.Height-4))
 	r.sheen.Move(fyne.NewPos(out, 1))
 	r.sheen.Resize(fyne.NewSize(w, (s.Height-4)/2))
-	r.title.Move(fyne.NewPos(out+9, (s.Height-4-r.title.MinSize().Height)/2+1))
 	cs := r.count.MinSize()
+	// a long name fits its tab: a little smaller first, then cut short with "…"
+	avail := s.Width - cs.Width - 16 - 8 - (out + 9)
+	if r.t.count == "" {
+		avail = s.Width - 16 - (out + 9)
+	}
+	r.title.Text, r.title.TextSize = r.t.title, 12
+	for r.title.MinSize().Width > avail && r.title.TextSize > 10 {
+		r.title.TextSize -= 0.5
+	}
+	for rs := []rune(r.t.title); r.title.MinSize().Width > avail && len(rs) > 4; {
+		rs = rs[:len(rs)-1]
+		r.title.Text = strings.TrimSpace(string(rs)) + "…"
+	}
+	r.title.Move(fyne.NewPos(out+9, (s.Height-4-r.title.MinSize().Height)/2+1))
 	r.count.Move(fyne.NewPos(s.Width-cs.Width-16, (s.Height-4-cs.Height)/2+1)) // clear of the page edge
 	fw := fyne.Max(cs.Width+10, 18)
 	r.flag.Move(fyne.NewPos(s.Width-16-cs.Width/2-fw/2, (s.Height-4-16)/2+1))
@@ -855,7 +869,7 @@ func (r *tabRenderer) Layout(s fyne.Size) {
 
 func (r *tabRenderer) Refresh() {
 	r.card.FillColor = r.t.col
-	r.title.Text, r.count.Text = r.t.title, r.t.count
+	r.count.Text = r.t.count
 	if r.t.header {
 		r.title.Color = color.NRGBA{0xF0, 0xD8, 0xB8, 0xD0}
 		r.title.TextSize = 10
@@ -1429,6 +1443,7 @@ func (u *ui) showCover() {
 	if u.cfg.ClassicLook || u.bookContent == nil {
 		return
 	}
+	u.learn("strap")
 	u.leaveEditor(func() {
 		u.saveWindow() // remembers the page it was left at
 		u.openSize = u.win.Canvas().Size()
@@ -1458,7 +1473,7 @@ func (u *ui) openBook() {
 		u.list.ScrollTo(i)
 	}
 	u.win.Canvas().Focus(u.search)
-	if !u.closeTipShown {
+	if !u.closeTipShown && !u.learned("strap") { // until it's been closed with the strap once
 		u.closeTipShown = true
 		u.flash("To close the organiser, click the strap on the right (or press ⇧⌘W)")
 	}

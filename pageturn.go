@@ -207,3 +207,64 @@ func (u *ui) stampCard() {
 		fyne.Do(func() { layer.Remove(st) })
 	}()
 }
+
+// cardFlip turns the card on the right page over: a picture of the side showing narrows to its
+// middle like a card turning on its axis, and swap (which puts the other side in place) runs
+// underneath it.
+func (u *ui) cardFlip(swap func()) {
+	layer := u.overlay()
+	if layer == nil || u.rightPage == nil {
+		swap()
+		return
+	}
+	cv := u.win.Canvas()
+	shot := cv.Capture()
+	pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(u.right)
+	size := u.right.Size()
+	if shot == nil || size.Width < 10 {
+		swap()
+		return
+	}
+	scale := float32(shot.Bounds().Dx()) / cv.Size().Width
+	r := image.Rect(int(pos.X*scale), int(pos.Y*scale), int((pos.X+size.Width)*scale), int((pos.Y+size.Height)*scale))
+	old := image.NewNRGBA(image.Rect(0, 0, r.Dx(), r.Dy()))
+	draw.Draw(old, old.Bounds(), shot, r.Min, draw.Src)
+	side := canvas.NewImageFromImage(old)
+	side.FillMode = canvas.ImageFillStretch
+	side.ScaleMode = canvas.ImageScaleFastest
+	shade := canvas.NewRectangle(color.NRGBA{0x30, 0x20, 0x10, 0})
+	paper := canvas.NewRectangle(paperColor) // hides the new side until the old one has turned away
+	place := func(t float32) {
+		e := t * t * (3 - 2*t)
+		w := size.Width * (1 - e)
+		x := pos.X + (size.Width-w)/2
+		side.Move(fyne.NewPos(x, pos.Y))
+		side.Resize(fyne.NewSize(w, size.Height))
+		shade.Move(side.Position())
+		shade.Resize(side.Size())
+		shade.FillColor = color.NRGBA{0x30, 0x20, 0x10, uint8(120 * e)}
+	}
+	paper.Move(pos)
+	paper.Resize(size)
+	place(0)
+	layer.Objects = append(layer.Objects, paper, side, shade)
+	layer.Refresh()
+	swap()
+	a := fyne.NewAnimation(240*time.Millisecond, func(t float32) {
+		place(t)
+		paper.FillColor = color.NRGBA{paperColor.R, paperColor.G, paperColor.B, uint8(255 * (1 - t))}
+		paper.Refresh()
+		side.Refresh()
+		shade.Refresh()
+	})
+	a.Curve = fyne.AnimationLinear
+	a.Start()
+	go func() {
+		time.Sleep(300 * time.Millisecond)
+		fyne.Do(func() {
+			layer.Remove(paper)
+			layer.Remove(side)
+			layer.Remove(shade)
+		})
+	}()
+}

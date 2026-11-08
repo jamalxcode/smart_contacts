@@ -8,7 +8,7 @@ import (
 
 // Search filters. Plain words search everything as before; words with a colon filter:
 //
-//	company:boubyan  title:engineer  group:family  source:linkedin  city:salmiya  country:kuwait
+//	company:boubyan  title:engineer  group:family  from:linkedin (or source:)  city:salmiya  country:kuwait
 //	has:email  no:phone  (phone, email, photo, birthday, address, link, note, card, reminder, met)
 //	code:965          numbers with that country code
 //	talked:<30d       in touch in the last 30 days (d, w, m, y);  talked:>1y  not for a year
@@ -26,7 +26,7 @@ type searchFilter struct {
 }
 
 var filterKeys = map[string]bool{"company": true, "title": true, "group": true, "source": true, "city": true,
-	"country": true, "has": true, "no": true, "code": true, "talked": true, "is": true, "label": true}
+	"country": true, "has": true, "no": true, "code": true, "talked": true, "is": true, "label": true, "from": true}
 
 func parseQuery(q string) searchQuery {
 	var sq searchQuery
@@ -35,7 +35,11 @@ func parseQuery(q string) searchQuery {
 		neg := strings.HasPrefix(w, "-") && len(w) > 1
 		ww := strings.TrimPrefix(w, "-")
 		if k, v, ok := strings.Cut(ww, ":"); ok && filterKeys[strings.ToLower(k)] && v != "" {
-			sq.filters = append(sq.filters, searchFilter{strings.ToLower(k), strings.Trim(v, `"`), neg})
+			k = strings.ToLower(k)
+			if k == "from" { // from:linkedin — where the card came from
+				k = "source"
+			}
+			sq.filters = append(sq.filters, searchFilter{k, strings.Trim(v, `"`), neg})
 			continue
 		}
 		words = append(words, w)

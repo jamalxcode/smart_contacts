@@ -13,9 +13,9 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The card is editable in place: there's no Edit button. Fields look like plain text with a
-// hairline outline until clicked. Save and Revert appear at the bottom once something changes,
-// and leaving the card with unsaved changes asks "Are you sure you want to update…?".
+// Writing on a card (readcard.go has reading it). Fields look like writing on ruled lines, with
+// no box until clicked. Revert appears once something changes, and leaving the card with unsaved
+// changes asks "Are you sure you want to update…?".
 
 // liveTheme makes text fields on the card look like writing on a ruled page: no fill and no box
 // until clicked (the blue focus box shows where you're writing).
@@ -31,71 +31,32 @@ func (t *liveTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Colo
 	return t.Theme.Color(n, v)
 }
 
+// liveCard is the card with the pen picked up: every field writable, the one clicked ready to
+// type in. Done (or Esc) puts the pen down; Revert throws the changes away.
 func (u *ui) liveCard(e *editor, body *fyne.Container) fyne.CanvasObject {
 	c := e.orig
-	// what goes between the name block and the fields: ways to reach them, notices
-	var extras []fyne.CanvasObject
-	if a := u.actionsRow(c); a != nil {
-		extras = append(extras, a)
-	}
-	if lt := u.lastTalkedLine(c); lt != nil {
-		extras = append(extras, lt)
-	}
-	if pn := u.pencilNote(c); pn != nil {
-		extras = append(extras, pn)
-	}
-	if n := u.attention[c.ID]; n > 0 {
-		review := widget.NewButtonWithIcon(plural(n, "suggestion")+" to tidy this card — Review…", theme.WarningIcon(),
-			func() { u.leaveEditor(func() { u.cleanupFor([]*Contact{c}, c.DisplayName()) }, nil) })
-		review.Importance = widget.LowImportance
-		review.Alignment = widget.ButtonAlignLeading
-		extras = append(extras, review)
-	}
-	objs := append([]fyne.CanvasObject{}, body.Objects...)
-	head := 1 // the photo and name fields come first
-	all := append(append(append([]fyne.CanvasObject{}, objs[:head]...), extras...), objs[head:]...)
-	all = append(all, widget.NewSeparator(), u.foldingSections(c))
-	meta := []string{"Added " + c.Created.Format("2 Jan 2006")}
-	if len(c.Sources) > 0 {
-		meta = append(meta, "from "+strings.Join(c.Sources, ", "))
-	}
-	m := caption(strings.Join(meta, " · "))
-	m.Wrapping = fyne.TextWrapWord
-	all = append(all, m)
+	all := append([]fyne.CanvasObject{}, body.Objects...)
+	all = append(all, u.cardMeta(c))
 	fields := container.NewVBox(all...)
 	content := container.NewThemeOverride(container.NewStack(fields, newRuleOverlay(fields)), &liveTheme{fyne.CurrentApp().Settings().Theme()})
 
-	// bottom bar
-	note := widget.NewButtonWithIcon("Note", theme.DocumentCreateIcon(), func() { u.addNote(c) })
-	var keep *widget.Button
-	keep = widget.NewButtonWithIcon("Keep in Touch", theme.MailReplyIcon(), func() {
-		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(keep)
-		widget.ShowPopUpMenuAtPosition(u.keepInTouchMenu(c), u.win.Canvas(), pos.Add(fyne.NewPos(0, -270)))
-	})
-	note.Importance, keep.Importance = widget.LowImportance, widget.LowImportance
-	var share *widget.Button
-	share = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(share)
-		menu := fyne.NewMenu("",
-			fyne.NewMenuItem("Copy Card as Text", func() { u.copyCard(c) }),
-			fyne.NewMenuItem("Save as vCard…", func() { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
-			fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts([]*Contact{c}) }),
-		)
-		widget.ShowPopUpMenuAtPosition(menu, u.win.Canvas(), pos.Add(fyne.NewPos(0, -96)))
-	})
+	done := widget.NewButtonWithIcon("Done", theme.ConfirmIcon(), u.finishWriting)
+	done.Importance = widget.HighImportance
 	e.revertBtn = widget.NewButton("Revert", func() {
 		u.ed = nil
 		u.showDetail()
 		u.flash("Changes discarded")
 	})
-	e.saveBtn = widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), e.save)
-	e.saveBtn.Importance = widget.HighImportance
+	e.saveBtn = done
 	e.revertBtn.Hide()
-	e.saveBtn.Hide()
+	writing := caption("Writing on the card — Done or Esc when finished")
+	if u.learned("write") {
+		writing.SetText("Writing on the card")
+	}
 	cornerRoom := canvas.NewRectangle(color.Transparent) // the turned-up page corner sits here
 	cornerRoom.SetMinSize(fyne.NewSize(26, 1))
-	bar := container.NewBorder(widget.NewSeparator(), nil, container.NewHBox(note, keep),
-		container.NewHBox(share, e.revertBtn, e.saveBtn, cornerRoom), layout.NewSpacer())
+	bar := container.NewBorder(widget.NewSeparator(), nil, writing,
+		container.NewHBox(e.revertBtn, done, cornerRoom), layout.NewSpacer())
 	return container.NewBorder(nil, container.NewPadded(bar), nil, nil, container.NewVScroll(container.NewPadded(content)))
 }
 
@@ -116,11 +77,9 @@ func (e *editor) watch() {
 				}
 				e.dirtyShown = d
 				if d {
-					e.saveBtn.Show()
 					e.revertBtn.Show()
-					e.u.status.SetText("Unsaved changes to " + e.c.DisplayName() + " — ⌘S saves")
+					e.u.status.SetText("Unsaved changes to " + e.c.DisplayName() + " — Done saves them")
 				} else {
-					e.saveBtn.Hide()
 					e.revertBtn.Hide()
 					e.u.status.SetText(e.u.statusText())
 				}
