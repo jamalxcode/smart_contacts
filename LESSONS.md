@@ -398,6 +398,9 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - Every import guide has the same shape: what it does, numbered steps each with "You should see…", "Check before you continue", "If it doesn't work". A step without a visible result is a step people get lost on.
 - macOS refuses Bluetooth files until Bluetooth Sharing is on — the guide puts that first, not last.
 
+- A step that says "press X" must have X in sight. Guide buttons are pinned under the steps, outside the scroll, and steps say "at the bottom of this window" — never "below".
+- Check every menu path against the vendor's current help page; they move (Google now: ⋮ More actions → Export; iCloud: Select → Select All Contacts, then Actions → Export vCard).
+
 ## 31. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.

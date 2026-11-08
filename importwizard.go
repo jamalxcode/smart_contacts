@@ -88,36 +88,38 @@ const (
 
 func (u *ui) importQuestions() *wizQuestion {
 	makeFile := wizStep{
-		do:  "On the phone, make the contacts file: open Contacts → ☰ or ⋮ → Settings (or Manage contacts) → Export → Export to .vcf file (choose \"Device\" or \"All contacts\" if asked).",
-		see: "A message like \"Exported to Contacts.vcf\" — it's saved in the phone's Downloads or Files.",
+		do: "On the phone, make the contacts file.\n" +
+			"• Samsung: Contacts → ☰ (menu) → Manage contacts → Import or export contacts → Export → choose Internal storage → tick All → Done → Export.\n" +
+			"• Pixel and most others (Google Contacts app): Fix & manage (bottom of the screen) → Export to file → Save.",
+		see: "A message that the contacts were exported, and a file ending in .vcf (often Contacts.vcf) in the phone's Files or My Files app.",
 	}
 	email := &wizGuide{
 		title: "Send the file to yourself",
 		intro: "The surest way: you send the contacts file to yourself by email (or WhatsApp, Telegram, Google Drive), open it on this Mac and bring it in.",
 		steps: []wizStep{
 			makeFile,
-			{"On the phone, open Files (or My Files), find Contacts.vcf, tap Share and choose your email app (or WhatsApp to yourself).", "A new message with Contacts.vcf attached."},
+			{"On the phone, open Files (or My Files), find the .vcf file (look in Downloads or Internal storage), tap Share and choose Gmail or your email app — or WhatsApp to yourself.", "A new message with Contacts.vcf attached."},
 			{"Send it to an email address you can open on this Mac.", "The message arrives on the Mac within a minute."},
-			{"On the Mac, open the message and save the attachment (drag it to the desktop, or click it and choose Save).", "Contacts.vcf in your Downloads folder."},
-			{"Press Choose File below and pick Contacts.vcf.", "A preview of the people found, before anything is added."},
+			{"On the Mac, open the message and download the attachment (in Mail: click it and choose Save to Downloads; in Gmail: the ⬇ on the attachment).", "The .vcf file in your Downloads folder."},
+			{"Press Choose File… at the bottom of this window and pick the .vcf file.", "A window listing the people found — nothing is added until you press Import there."},
 		},
 		check:   []string{"The file ends in .vcf (a vCard).", "It's in Downloads — Choose File opens there."},
-		trouble: []string{"No Export option on the phone? Open contacts.google.com instead (Back → Yes, in Google).", "The attachment is too big for email? Use Google Drive or WhatsApp to yourself."},
+		trouble: []string{"No Export option on the phone? The contacts are probably in Google — press Back twice and choose Yes, in Google.", "The attachment is too big for email? Use Google Drive or WhatsApp to yourself."},
 		expect:  "Everyone from the phone, with their numbers and emails.",
 		finish:  finishFile,
 	}
 	airdrop := &wizGuide{
 		title: "Send it with AirDrop",
-		intro: "AirDrop sends the file straight to this Mac over the air. It works from an iPhone, and from some Android phones that can share to AirDrop.",
+		intro: "AirDrop sends the file straight to this Mac over the air. A few newer Android phones (such as the Pixel 10, through Quick Share) can send to AirDrop; most can't — if yours has no such option, use Send it to myself.",
 		steps: []wizStep{
 			makeFile,
-			{"On this Mac, open Finder → AirDrop (in the sidebar) and set \"Allow me to be discovered by\" to Everyone for 10 Minutes (or Contacts Only if the phone is yours).", "This Mac's name shows in the AirDrop window."},
-			{"On the phone, share Contacts.vcf and choose AirDrop, then this Mac.", "\"Sent\" on the phone."},
-			{"Accept it on the Mac if it asks.", "Contacts.vcf in your Downloads folder."},
-			{"Press Choose File below and pick it.", "A preview of the people found."},
+			{"On this Mac, open Finder → AirDrop (in the sidebar, or Go → AirDrop) and at the bottom set \"Allow me to be discovered by\" to Everyone for 10 Minutes.", "This Mac's name shows in the AirDrop window."},
+			{"On the phone, open Files, find the .vcf file, tap Share → Quick Share (or AirDrop) and choose this Mac.", "This Mac's name in the list, then \"Sent\" on the phone."},
+			{"If the Mac asks, click Accept.", "The .vcf file in your Downloads folder."},
+			{"Press Choose File… at the bottom of this window and pick the .vcf file.", "A window listing the people found — nothing is added until you press Import there."},
 		},
 		check:   []string{"Wi-Fi and Bluetooth are both on, on the phone and on the Mac.", "The phone and the Mac are within a few metres."},
-		trouble: []string{"The Mac doesn't appear on the phone? Keep Finder's AirDrop window open, and set discovery to Everyone for 10 Minutes.", "The phone has no AirDrop? Use Send it to yourself or Bluetooth instead."},
+		trouble: []string{"The Mac doesn't appear on the phone? Keep Finder's AirDrop window open, and set discovery to Everyone for 10 Minutes.", "The phone has no AirDrop option? Use Send it to myself or Bluetooth instead."},
 		expect:  "A .vcf file in Downloads.",
 		finish:  finishFile,
 	}
@@ -125,16 +127,16 @@ func (u *ui) importQuestions() *wizQuestion {
 		title: "Send it over Bluetooth",
 		intro: "Bluetooth sends the file from the phone to this Mac without the internet. macOS turns away Bluetooth files until you switch on Bluetooth Sharing, so that comes first.",
 		steps: []wizStep{
-			{"Press Open Sharing Settings below (or System Settings → General → Sharing).", "The Sharing settings, with Bluetooth Sharing in the list."},
-			{"Click ⓘ next to Bluetooth Sharing and turn it on.", "The switch is green."},
-			{"In the same window set \"When receiving items\" to Accept and Save, and \"Folder for accepted items\" to Downloads. Click Done.", "Bluetooth Sharing shows as on in the list."},
-			{"Pair the phone with this Mac if you haven't: System Settings → Bluetooth, and accept the code on both.", "The phone listed as Connected (or Not Connected — that's fine) under My Devices."},
+			{"Press Open Sharing Settings at the bottom of this window (or open System Settings → General → Sharing).", "The Sharing settings, with Bluetooth Sharing in the list."},
+			{"Turn on the switch next to Bluetooth Sharing.", "The switch turns blue (on)."},
+			{"Click ⓘ next to Bluetooth Sharing. Set \"When receiving items\" to Accept and Save, and \"Folder for accepted items\" to Downloads. Click Done.", "Back in the Sharing list, with Bluetooth Sharing on."},
+			{"Pair the phone with this Mac if you haven't: on the Mac open System Settings → Bluetooth; on the phone open Settings → Bluetooth (or Connections → Bluetooth) and tap this Mac; confirm the same code on both.", "The phone under My Devices on the Mac (Connected or Not Connected — both are fine)."},
 			makeFile,
-			{"Press Start Waiting below. The app watches Downloads for the file.", "A window saying it's waiting."},
-			{"On the phone, share Contacts.vcf → Bluetooth → choose this Mac.", "\"Sending…\" then \"Sent\" on the phone. The file opens in the app by itself."},
+			{"Back in Smart Contacts, press Start Waiting at the bottom of this window. The app watches Downloads for the file for 15 minutes.", "A window saying \"Waiting for the file…\"."},
+			{"On the phone, open Files, find the .vcf file, tap Share → Bluetooth and choose this Mac.", "\"Sending…\" then \"Sent\" on the phone; a moment later the list of people found opens here by itself."},
 		},
-		check:   []string{"Bluetooth Sharing is on (step 2) — without it the phone says the Mac refused the file.", "\"When receiving items\" isn't set to Never Allow.", "Bluetooth is on, on both."},
-		trouble: []string{"The phone says \"refused\" or \"failed\"? Bluetooth Sharing is still off, or set to Never Allow — go back to step 2.", "The Mac doesn't appear on the phone? Unpair both and pair again, with Bluetooth settings open on the Mac.", "Still stuck? Use Send it to yourself — it always works."},
+		check:   []string{"Bluetooth Sharing is on (step 2) and set to Accept and Save (step 3) — without these the phone says the Mac refused the file.", "\"When receiving items\" isn't set to Never Allow.", "Bluetooth is on, on both."},
+		trouble: []string{"The phone says \"refused\" or \"failed\"? Bluetooth Sharing is still off, or set to Never Allow or Ask What to Do — go back to steps 2 and 3.", "The Mac doesn't appear on the phone? Unpair both and pair again, with Bluetooth settings open on the Mac.", "Still stuck? Use Send it to myself — it always works."},
 		expect:  "The app finds Contacts.vcf as soon as it lands in Downloads.",
 		link:    "x-apple.systempreferences:com.apple.Sharing-Settings.extension", linkTo: "Open Sharing Settings",
 		finish: finishReceive,
@@ -144,23 +146,23 @@ func (u *ui) importQuestions() *wizQuestion {
 		note: "Each way starts by making the file on the phone, and shows you how.",
 		answers: []wizAnswer{
 			{label: "Send it to myself", detail: "email, WhatsApp, Google Drive — the surest way", icon: theme.MailSendIcon(), guide: email},
-			{label: "AirDrop", detail: "iPhone, or an Android that can share to AirDrop", icon: theme.UploadIcon(), guide: airdrop},
-			{label: "Bluetooth", detail: "needs one setting on this Mac first", icon: theme.MediaFastForwardIcon(), guide: bluetooth},
+			{label: "AirDrop", detail: "only some newer Android phones, like the Pixel 10", icon: theme.UploadIcon(), guide: airdrop},
+			{label: "Bluetooth", detail: "works with most phones — needs one setting on this Mac first", icon: theme.MediaFastForwardIcon(), guide: bluetooth},
 		},
 	}
 
 	google := &wizGuide{
 		title: "Export from Google Contacts",
-		intro: "If the contacts are in your Google account, you download them from the Google Contacts website — nothing to send from the phone.",
+		intro: "If the contacts are in your Google account, you download them from the Google Contacts website on this Mac — nothing to send from the phone.",
 		steps: []wizStep{
-			{"Press Open Google Contacts below and sign in with the Google account the phone uses.", "Your contacts listed at contacts.google.com."},
-			{"Click Export — on the left, or under ⋮ (More) at the top.", "A small window: \"Export contacts\"."},
-			{"Choose \"Contacts\" (all of them) and the format Google CSV, then press Export.", "A file called contacts.csv downloads."},
-			{"Press Choose File below and pick contacts.csv in Downloads.", "A preview of the people found."},
+			{"Press Open Google Contacts at the bottom of this window. It opens contacts.google.com in your browser; sign in with the Google account the phone uses if asked.", "Your contacts listed, with a count at the top (\"Contacts (452)\")."},
+			{"Click ⋮ (More actions) at the top of the list and choose Export. If you don't see ⋮, tick the box on one contact first, then the box at the top → All.", "A small window: \"Export contacts\"."},
+			{"Leave \"Contacts\" chosen (that's everyone), choose vCard (for iOS Contacts) — it keeps photos and notes — and press Export.", "A file called contacts.vcf in your Downloads folder."},
+			{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick contacts.vcf.", "A window listing the people found — nothing is added until you press Import there."},
 		},
 		check:   []string{"You signed in with the same account the phone uses (its Contacts app shows which).", "The number of contacts at the top looks right."},
 		trouble: []string{"Fewer contacts than on the phone? Some are saved on the phone only — use Back and send the file instead.", "Several Google accounts? Export each one; people already in your book are updated, not duplicated."},
-		expect:  "A file called contacts.csv with everyone in that account.",
+		expect:  "One file, contacts.vcf, with everyone in that account.",
 		link:    "https://contacts.google.com", linkTo: "Open Google Contacts",
 		finish: finishFile,
 	}
@@ -173,11 +175,11 @@ func (u *ui) importQuestions() *wizQuestion {
 				title: "Bring in this Mac's contacts",
 				intro: "The iPhone's contacts are already on this Mac through iCloud, so Smart Contacts reads them here. It only reads; nothing is changed in Apple's Contacts.",
 				steps: []wizStep{
-					{"Press Import Now below.", "macOS may ask whether Smart Contacts can see your contacts."},
+					{"Press Import Now at the bottom of this window.", "\"Reading Mac Contacts…\", and macOS may ask whether Smart Contacts can use Contacts."},
 					{"If it asks, press OK (or Allow).", "A preview of the people found."},
-					{"Look through the preview and press Import.", "\"Added … · updated …\" on the banner."},
+					{"Look through the list of people found and press Import.", "A note at the top saying how many were added and updated."},
 				},
-				check:   []string{"Contacts is on in iCloud on both (see the note above).", "Open Apple's Contacts app once — if your iPhone people are there, they'll come in."},
+				check:   []string{"Contacts is on in iCloud on both — iPhone: Settings → your name → iCloud → Contacts; Mac: System Settings → your name → iCloud → Contacts.", "Open Apple's Contacts app once — if your iPhone people are there, they'll come in."},
 				trouble: []string{"It says it isn't allowed? System Settings → Privacy & Security → Contacts (and Automation) → turn on Smart Contacts, then try again.", "Nobody new appears? The iPhone isn't syncing to this Mac — use Back and choose No."},
 				expect:  "Everyone from the iPhone, plus any Google or Exchange accounts added on this Mac.",
 				finish:  finishMac,
@@ -186,10 +188,10 @@ func (u *ui) importQuestions() *wizQuestion {
 				title: "Export them from iCloud on the web",
 				intro: "You download the iPhone's contacts from icloud.com as one file, then bring that file in.",
 				steps: []wizStep{
-					{"Press Open icloud.com below and sign in with the iPhone's Apple Account.", "The Contacts list at icloud.com."},
-					{"Click any contact, then press ⌘A to select everyone.", "All contacts highlighted, and a count like \"452 contacts selected\"."},
-					{"Click ⋯ (or the gear) and choose Export vCard.", "A .vcf file downloads."},
-					{"Press Choose File below and pick it in Downloads.", "A preview of the people found."},
+					{"Press Open icloud.com at the bottom of this window and sign in with the iPhone's Apple Account.", "Your contacts listed at icloud.com/contacts."},
+					{"Open the Select menu at the top of the list and choose Select All Contacts.", "Everyone highlighted, with a count of how many are selected."},
+					{"Click the Actions button (⋯) and choose Export vCard.", "A .vcf file in your Downloads folder."},
+					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick that .vcf file.", "A window listing the people found — nothing is added until you press Import there."},
 				},
 				check:   []string{"The count in step 2 matches the iPhone.", "The file ends in .vcf."},
 				trouble: []string{"Contacts isn't on icloud.com? On the iPhone, turn on Settings → your name → iCloud → Contacts, wait a few minutes, and reload."},
@@ -220,10 +222,10 @@ func (u *ui) importQuestions() *wizQuestion {
 				title: "Export from Outlook",
 				intro: "You download your Outlook (or Hotmail) contacts from the Outlook website as a file, then bring it in.",
 				steps: []wizStep{
-					{"Press Open Outlook People below and sign in.", "Your contacts listed under People."},
-					{"Choose Manage contacts (or ⋯) → Export contacts.", "An \"Export contacts\" panel."},
-					{"Choose All contacts and press Export.", "A file called contacts.csv downloads."},
-					{"Press Choose File below and pick it in Downloads.", "A preview of the people found."},
+					{"Press Open Outlook People at the bottom of this window and sign in.", "Your contacts on the People page."},
+					{"On the toolbar, open Manage contacts and choose Export contacts.", "An \"Export contacts\" panel."},
+					{"Choose All contacts and press Export.", "A file called contacts.csv in your Downloads folder."},
+					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick contacts.csv.", "A window listing the people found, with how each column was read — nothing is added until you press Import there."},
 				},
 				check:   []string{"You signed in with the right account (work and personal are separate).", "The file is contacts.csv."},
 				trouble: []string{"No Export option? On a work account it may be switched off by your company — ask IT, or export from the Outlook app on a PC (File → Open & Export → Import/Export → Export to a file → CSV)."},
@@ -235,11 +237,11 @@ func (u *ui) importQuestions() *wizQuestion {
 				title: "Download your LinkedIn connections",
 				intro: "LinkedIn emails you a file of your connections. It takes a little while to arrive, so this is two sittings: ask now, import when the email comes.",
 				steps: []wizStep{
-					{"Press Open LinkedIn below (Me → Settings & Privacy → Data privacy → Get a copy of your data).", "\"Download your data\" page."},
+					{"Press Open LinkedIn at the bottom of this window and sign in. (On LinkedIn it's Me → Settings & Privacy → Data privacy → Get a copy of your data.)", "A page asking which data you want."},
 					{"Choose \"Want something in particular?\", tick only Connections, then Request archive (it may ask for your password).", "\"Your download is being prepared\"."},
 					{"Wait for LinkedIn's email — usually about ten minutes, sometimes up to a day.", "An email \"Your LinkedIn data archive is ready\"."},
-					{"Open the link in the email and download the file, then double-click it to open it.", "A folder with Connections.csv inside."},
-					{"Press Choose File below and pick Connections.csv.", "A preview of the people found."},
+					{"Open the link in the email, press Download archive, then double-click the downloaded .zip in Downloads.", "A folder with Connections.csv inside."},
+					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick Connections.csv.", "A window listing the people found — nothing is added until you press Import there."},
 				},
 				check:   []string{"You picked Connections.csv (not Messages or Profile).", "Many connections hide their email — that's LinkedIn, not a fault."},
 				trouble: []string{"No email after a day? Check Spam, or request the archive again."},
@@ -254,10 +256,10 @@ func (u *ui) importQuestions() *wizQuestion {
 					{"Sign in to the email account on the web and open its Contacts or Address Book.", "Your contacts listed."},
 					{"Look for Export — often under ⋯, the gear, or Settings → Contacts.", "A choice of formats."},
 					{"Choose vCard (.vcf) or CSV and export everyone.", "A file downloads."},
-					{"Press Choose File below and pick it in Downloads.", "A preview of the people found."},
+					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick it.", "A window listing the people found — nothing is added until you press Import there."},
 				},
 				check:   []string{"The file ends in .vcf or .csv."},
-				trouble: []string{"Yahoo: Contacts → ⋯ → Export → Yahoo CSV. iCloud: see iPhone → No, or I'm not sure."},
+				trouble: []string{"iCloud mail: use iPhone → No, or I'm not sure. Gmail: use Gmail / Google. Outlook or Hotmail: use Outlook / Hotmail."},
 				expect:  "A .vcf or .csv file.",
 				finish:  finishFile,
 			}},
@@ -267,11 +269,11 @@ func (u *ui) importQuestions() *wizQuestion {
 				steps: []wizStep{
 					{"Check the sheet has one person per row, and headings in the first row (Name, Phone, Email, Company… in English or Arabic).", "Headings across the top, people below."},
 					{"From Numbers, use File → Export To → CSV. Excel files (.xlsx) work as they are.", "A .csv or .xlsx file."},
-					{"Press Choose File below and pick it.", "A window matching each column to a field."},
-					{"Check each column is matched the way you want, then import.", "\"Added …\" on the banner."},
+					{"Press Choose File… at the bottom of this window and pick it.", "A window listing the people found, with a \"Column matching\" section."},
+					{"Open Column matching and check each column is read the way you want (change any that aren't), then press Import.", "A note at the top saying how many were added."},
 				},
-				check:   []string{"Phone numbers without a country code are taken as Kuwait (+965) — change that in Settings if needed.", "Only the first sheet of an Excel file is read."},
-				trouble: []string{"A column isn't recognised? Pick its field in the matching window."},
+				check:   []string{"Phone numbers without a country code are taken as your country (Kuwait, +965) — change it in Settings → Your country code.", "Only the first sheet of an Excel file is read."},
+				trouble: []string{"A column isn't recognised? Choose what it holds under Column matching."},
 				expect:  "A window showing which column is which before anything is added.",
 				finish:  finishFile,
 			}},
@@ -280,11 +282,11 @@ func (u *ui) importQuestions() *wizQuestion {
 				intro: "Paste a list of names and numbers from anywhere; each person is read from their line.",
 				steps: []wizStep{
 					{"Put one person per line (\"Ali Hassan 9999 8888\"), or separate people with an empty line.", "A tidy list in Notes or an email."},
-					{"Select the text and copy it (⌘C).", ""},
-					{"Press Paste Text below (or save it as a .txt file and use Choose File).", "The people found, one per line."},
-					{"Check the people found, then import.", "\"Added …\" on the banner."},
+					{"Select the text and copy it (⌘C).", "Nothing yet — it's on the clipboard."},
+					{"Press Paste Text… at the bottom of this window, click in the box, paste (⌘V) and press Read. (Or save it as a .txt file and use Choose File….)", "A window listing the people found."},
+					{"Check the people found, then press Import.", "A note at the top saying how many were added."},
 				},
-				check:   []string{"Each line has a name and a number or email."},
+				check:   []string{"Each person has a name and a number or email — lines without either are skipped."},
 				trouble: []string{"Two people read as one? Put an empty line between them."},
 				expect:  "Each line read as a name with its number or email.",
 				finish:  finishPaste,
@@ -293,29 +295,31 @@ func (u *ui) importQuestions() *wizQuestion {
 				title: "Export your Telegram contacts",
 				intro: "Telegram's desktop app can export your contacts with their phone numbers. The phone app can't.",
 				steps: []wizStep{
-					{"Install and open Telegram Desktop on this Mac (from telegram.org — not the App Store version) and sign in.", "Your chats."},
-					{"Settings → Advanced → Export Telegram data.", "A list of what to export."},
-					{"Tick only Contacts list, choose the format Machine-readable JSON, and press Export.", "\"Done\" and a folder in Downloads."},
-					{"Press Choose File below and pick result.json from that folder.", "A preview of the people found."},
+					{"Press Get Telegram Desktop at the bottom of this window, download it for macOS, install and open it, and sign in with your phone.", "Your chats in Telegram Desktop."},
+					{"Open Settings → Advanced → Export Telegram data.", "A window of things to export."},
+					{"Untick everything except Contacts list, set Format to Machine-readable JSON, and press Export.", "\"Done\", and a Telegram Desktop folder in Downloads."},
+					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick result.json inside that folder.", "A window listing the people found — nothing is added until you press Import there."},
 				},
 				check:   []string{"The format was JSON, not HTML."},
-				trouble: []string{"No Export option? The App Store version lacks it — use the one from telegram.org."},
+				trouble: []string{"No Export option? You're in the Mac App Store \"Telegram\" app — it can't export. Use Telegram Desktop from desktop.telegram.org."},
 				expect:  "Your Telegram contacts with their phone numbers.",
-				finish:  finishFile,
+				link:    "https://desktop.telegram.org", linkTo: "Get Telegram Desktop",
+				finish: finishFile,
 			}},
 			{label: "Facebook or Snapchat friends", icon: iconPeople, guide: &wizGuide{
 				title: "Download your friends list",
 				intro: "Facebook and Snapchat give names only (no numbers), so they're matched to people already in your book — they add a profile link, not new cards.",
 				steps: []wizStep{
-					{"Facebook: Settings → Download your information → choose Friends, format JSON. Snapchat: Settings → My Data → Friends.", "\"Your download is being prepared\"."},
-					{"When it's ready (they email or notify you), download and open it.", "A folder of files."},
-					{"Find your_friends.json (Facebook) or friends.json (Snapchat).", ""},
-					{"Press Choose File below and pick it.", "The friends matched to your cards, for you to check."},
+					{"Facebook: press Open Facebook at the bottom of this window (Accounts Center → Your information and permissions → Export your information). Create an export → Export to device → Customize information: tick only Friends and followers → Format JSON → Start export.", "\"Your export is in progress\"."},
+					{"Snapchat instead: in the app, Settings → My Data → turn on Export JSON files, tick Friends → Next → All time → Submit.", "A note that they'll email you when it's ready."},
+					{"When the email or notification comes (minutes to a day), download the .zip and double-click it in Downloads.", "A folder of files."},
+					{"Press Choose File… at the bottom of this window and pick connections/friends/your_friends.json (Facebook) or json/friends.json (Snapchat).", "The friends matched to people in your book, for you to check before pressing Import."},
 				},
 				check:   []string{"The format was JSON."},
 				trouble: []string{"Few matches? Names often differ (nicknames, Arabic vs English) — matched ones are listed for you to check."},
 				expect:  "Names only, matched to people you already have.",
-				finish:  finishFile,
+				link:    "https://accountscenter.facebook.com/info_and_permissions/dyi", linkTo: "Open Facebook",
+				finish: finishFile,
 			}},
 			{label: "Instagram or X", icon: iconLink, guide: &wizGuide{
 				title: "Instagram and X can't be imported",
@@ -444,11 +448,15 @@ func (u *ui) importHub() {
 				newPaperButton("Choose File…", btnPlain, func() { d.Hide(); u.importFileFrom(downloadsDir()) }),
 				newPaperButton("Paste Text…", btnPrimary, func() { d.Hide(); u.pasteImport() }))
 		}
-		if len(acts) > 0 {
-			box.Add(newCardGap(6))
-			box.Add(container.NewHBox(append([]fyne.CanvasObject{layout.NewSpacer()}, acts...)...))
+		if len(acts) == 0 {
+			set(container.NewVScroll(box))
+			return
 		}
-		set(container.NewVScroll(box))
+		// The buttons the steps mention stay in sight at the bottom, however far you scroll.
+		rule := canvas.NewRectangle(color.NRGBA{0x8A, 0x6A, 0x4A, 0x60})
+		rule.SetMinSize(fyne.NewSize(1, 1))
+		bar := container.NewVBox(rule, container.NewHBox(append([]fyne.CanvasObject{caption("The steps' buttons:"), layout.NewSpacer()}, acts...)...))
+		set(container.NewBorder(nil, bar, nil, nil, container.NewVScroll(box)))
 	}
 	go1(func() { showQ(u.importQuestions()) })
 

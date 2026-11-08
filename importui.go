@@ -429,10 +429,11 @@ func (u *ui) receiveFromPhone() {
 	home, _ := os.UserHomeDir()
 	dirs := []string{filepath.Join(home, "Downloads")}
 	start := time.Now()
-	how := widget.NewLabel("First, on this Mac: System Settings → General → Sharing → click ⓘ next to Bluetooth Sharing → turn it on, set When receiving items to Accept and Save, and the folder to Downloads. Without this the Mac turns the file away.\n\n" +
-		"Android: Contacts → select all (or ⋮ → Share) → Bluetooth → choose this Mac.\n" +
-		"iPhone: Contacts → a contact → Share Contact → AirDrop → this Mac (or share many from icloud.com as a vCard).\n" +
-		"Other phones: send the contacts as a .vcf file over Bluetooth.\n\nWaiting for the file…")
+	how := widget.NewLabel("Waiting for the file… (up to 15 minutes)\n\n" +
+		"Now, on the phone: open Files, find the .vcf file, tap Share → Bluetooth and choose this Mac. " +
+		"When it lands in Downloads, the list of people found opens here by itself.\n\n" +
+		"If the phone says the Mac refused it: Bluetooth Sharing is off, or isn't set to Accept and Save — " +
+		"press Open Sharing Settings, turn it on, click ⓘ and choose Accept and Save, then send again.")
 	how.Wrapping = fyne.TextWrapWord
 	stop := make(chan struct{})
 	settings := widget.NewButtonWithIcon("Open Sharing Settings", theme.SettingsIcon(), func() {
