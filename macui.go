@@ -220,8 +220,8 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 		fyne.NewMenuItem("Save as vCard…", func() { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
 		fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts([]*Contact{c}) }),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(selectLabel(u, id), func() { u.clickWithKeys(id, fyne.KeyModifierShortcutDefault) }),
-		fyne.NewMenuItem("Select All", u.selectAllCards),
+		fyne.NewMenuItem(selectLabel(u, id), func() { u.toggleClip(id) }),
+		fyne.NewMenuItem("Clip All", u.selectAllCards),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Clean Up This Card…", func() { u.cleanupFor([]*Contact{c}, "") }),
 		fyne.NewMenuItem("Delete "+c.DisplayName()+"…", func() { u.deleteContact(c) }),
@@ -230,9 +230,9 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 
 func selectLabel(u *ui, id string) string {
 	if u.selectMode {
-		return "Add to Selection"
+		return "Clip This Card Too"
 	}
-	return "Select"
+	return "Clip This Card"
 }
 
 // confirmCB is confirm for callers that want the answer (the window argument is ignored; it

@@ -275,7 +275,23 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Fyne pads window content with the theme background by default; SetPadded(false) removes the
   cream frame round the dark grey.
 
-## 17. Ideas not done yet
+## 17. Making the organiser explain itself (2026-11-08)
+
+- Rule followed: everything you can see should do what that object does in real life; anything
+  with no real-world counterpart is turned into one. Pen = new card, page corner = next/previous
+  letter, pocket = business cards, strap = close, paper clips = choosing several cards, sticky
+  note = what to do with the clipped cards, rubber stamp + pencil note = what just changed.
+- Ruled fields without rebuilding the editor: the card's theme hides Fyne's field box until a
+  field has focus, and a transparent overlay (ruled.go) walks the card's containers and draws a
+  line under every Entry/Select at its real position. It re-lays out whenever the card resizes.
+- Page turns use Canvas.Capture(): a picture of the old page is laid over the new one and
+  squeezed towards the rings (forward) or the outer edge (back) in 340 ms.
+- The stamp is drawn once with x/image/opentype (the cover's serif), its ink knocked back with the
+  same value noise as the leather, and tilted 8° with x/image/draw's bilinear transform.
+- Hints on the book are drawn objects, not pop-ups: a pop-up would take the click meant for the
+  object under it.
+
+## 18. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

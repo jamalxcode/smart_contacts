@@ -7,6 +7,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -19,7 +20,7 @@ func (u *ui) toggleSelectMode() {
 	u.list.Refresh()
 	if u.selectMode {
 		u.bulkBar.Show()
-		u.flash("Select mode: click people to tick them, then choose an action below")
+		u.flash("Click people to clip them together, then choose what to do on the yellow note")
 	} else {
 		u.bulkBar.Hide()
 		u.reselect()
@@ -46,20 +47,20 @@ func (u *ui) updateBulkBar() {
 	}
 	cs := u.pickedContacts()
 	n := len(cs)
-	count := widget.NewLabelWithStyle(fmt.Sprintf("%d selected", n), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	all := widget.NewButton("All", func() {
+	count := widget.NewLabelWithStyle(fmt.Sprintf("%d %s clipped", n, pluralWords(n, "card", "cards")), fyne.TextAlignLeading, serif("x", true, true))
+	all := widget.NewButton("Clip All", func() {
 		for _, c := range u.filtered {
 			u.picked[c.ID] = true
 		}
 		u.list.Refresh()
 		u.updateBulkBar()
 	})
-	none := widget.NewButton("None", func() {
+	none := widget.NewButton("Unclip All", func() {
 		u.picked = map[string]bool{}
 		u.list.Refresh()
 		u.updateBulkBar()
 	})
-	done := widget.NewButton("Done", u.toggleSelectMode)
+	done := widget.NewButton("Take Clips Off", u.toggleSelectMode)
 	done.Importance = widget.HighImportance
 	btn := func(label string, icon fyne.Resource, need int, f func([]*Contact)) *widget.Button {
 		b := widget.NewButtonWithIcon(label, icon, func() { f(u.pickedContacts()) })
@@ -85,9 +86,13 @@ func (u *ui) updateBulkBar() {
 		btn("Delete", theme.DeleteIcon(), 1, u.bulkDelete),
 		more,
 	)
-	hint := caption("⌘-click adds or removes one · Shift-click selects a range · right-click for every command")
+	hint := caption("Click a card (or its clip) to clip or unclip it · Shift-click clips a range · right-click for every command")
 	hint.Wrapping = fyne.TextWrapWord // don't widen the list
-	u.bulkBar.Objects = []fyne.CanvasObject{widget.NewSeparator(), container.NewBorder(nil, nil, count, container.NewHBox(all, none, done)), actions, hint}
+	for _, o := range []*widget.Button{all, none, done} {
+		o.Importance = widget.LowImportance
+	}
+	u.bulkBar.Objects = []fyne.CanvasObject{stickyNote(container.NewVBox(
+		count, container.NewHBox(all, none, layout.NewSpacer(), done), actions, hint))}
 	u.bulkBar.Refresh()
 }
 
@@ -208,7 +213,7 @@ func (u *ui) bulkDelete(cs []*Contact) {
 func (u *ui) bulkMenu(cs []*Contact) *fyne.Menu {
 	n := len(cs)
 	what := fmt.Sprintf("%d %s", n, pluralWords(n, "card", "cards"))
-	head := fyne.NewMenuItem(what+" selected", nil)
+	head := fyne.NewMenuItem(what+" clipped", nil)
 	head.Disabled = true
 
 	addG := fyne.NewMenuItem("Add to Group", nil)
@@ -277,7 +282,7 @@ func (u *ui) bulkMenu(cs []*Contact) *fyne.Menu {
 		fyne.NewMenuItem("Copy Cards as Text", func() { u.copyCards(cs) }),
 		export,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Select All", u.selectAllCards),
+		fyne.NewMenuItem("Clip All", u.selectAllCards),
 		fyne.NewMenuItem("Select None", u.selectNone),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Delete "+what+"…", func() { u.bulkDelete(cs) }),
@@ -331,7 +336,7 @@ func (u *ui) copyCards(cs []*Contact) {
 	u.flash(fmt.Sprintf("Copied %d cards", len(cs)))
 }
 
-// selectNone clears the ticks (and leaves Select mode on).
+// selectNone takes the clips off every card (and leaves clipping on).
 func (u *ui) selectNone() {
 	u.picked = map[string]bool{}
 	u.list.Refresh()

@@ -21,7 +21,7 @@ import (
 
 var changedDot = color.NRGBA{0x0A, 0x84, 0xFF, 0xFF} // the system blue of Mail's unread dot
 
-// scopeName names what a command acts on: a person, "3 Selected Cards", or "All 453 Cards".
+// scopeName names what a command acts on: a person, "3 Clipped Cards", or "All 453 Cards".
 func (u *ui) scopeName(cs []*Contact) string {
 	switch {
 	case len(cs) == 1:
@@ -29,7 +29,7 @@ func (u *ui) scopeName(cs []*Contact) string {
 	case len(cs) == len(u.store.Contacts):
 		return fmt.Sprintf("All %d Cards", len(cs))
 	case u.selectMode && len(cs) == len(u.picked):
-		return fmt.Sprintf("%d Selected Cards", len(cs))
+		return fmt.Sprintf("%d Clipped Cards", len(cs))
 	}
 	return fmt.Sprintf("%d Cards", len(cs))
 }
@@ -197,6 +197,12 @@ func (u *ui) afterChange(changes []CardChange, verb string) {
 		return
 	}
 	u.markRecent(changes)
+	for _, c := range changes { // the open card changed: stamp it
+		if c.ID == u.selectedID && c.Kind != "deleted" {
+			u.stampCard()
+			break
+		}
+	}
 	title := summariseChanges(changes)
 	if verb != "" {
 		title = verb + ": " + title
@@ -222,6 +228,35 @@ func (u *ui) afterChange(changes []CardChange, verb string) {
 	}
 }
 
+// noteFields remembers which fields the last change altered on each card (the pencil note).
+func (u *ui) noteFields(changes []CardChange) {
+	u.recentFields = map[string][]string{}
+	for _, c := range changes {
+		if c.Kind != "changed" {
+			continue
+		}
+		var f []string
+		for _, x := range c.Fields {
+			f = append(f, strings.ToLower(x.Field))
+		}
+		u.recentFields[c.ID] = f
+	}
+}
+
+// pencilNote is the note in pencil on a card that just changed: "pencilled in just now: phones".
+func (u *ui) pencilNote(c *Contact) fyne.CanvasObject {
+	f := u.recentFields[c.ID]
+	if len(f) == 0 {
+		return nil
+	}
+	t := canvas.NewText("pencilled in just now: "+strings.Join(f, ", "), color.NRGBA{0x6A, 0x66, 0x60, 0xFF})
+	t.TextSize = 12
+	t.TextStyle = serif("x", false, true)
+	ic := canvas.NewImageFromResource(theme.DocumentCreateIcon())
+	ic.SetMinSize(fyne.NewSize(14, 14))
+	return container.NewHBox(container.NewCenter(ic), t)
+}
+
 // ---------- blue dots on changed cards ----------
 
 func (u *ui) markRecent(changes []CardChange) {
@@ -239,6 +274,7 @@ func (u *ui) markRecent(changes []CardChange) {
 		fyne.Do(func() {
 			if u.recentGen == gen {
 				u.recent = nil
+				u.recentFields = nil
 				u.list.Refresh()
 			}
 		})

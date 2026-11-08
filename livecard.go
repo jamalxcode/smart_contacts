@@ -17,7 +17,8 @@ import (
 // hairline outline until clicked. Save and Revert appear at the bottom once something changes,
 // and leaving the card with unsaved changes asks "Are you sure you want to update…?".
 
-// liveTheme makes text fields on the card look like text: no grey fill, a faint outline.
+// liveTheme makes text fields on the card look like writing on a ruled page: no fill and no box
+// until clicked (the blue focus box shows where you're writing).
 type liveTheme struct{ fyne.Theme }
 
 func (t *liveTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
@@ -25,7 +26,7 @@ func (t *liveTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Colo
 	case theme.ColorNameInputBackground:
 		return color.Transparent // the page shows through
 	case theme.ColorNameInputBorder:
-		return t.Theme.Color(theme.ColorNameSeparator, v)
+		return color.Transparent // a ruled line is drawn under each field instead (ruled.go)
 	}
 	return t.Theme.Color(n, v)
 }
@@ -39,6 +40,9 @@ func (u *ui) liveCard(e *editor, body *fyne.Container) fyne.CanvasObject {
 	}
 	if lt := u.lastTalkedLine(c); lt != nil {
 		extras = append(extras, lt)
+	}
+	if pn := u.pencilNote(c); pn != nil {
+		extras = append(extras, pn)
 	}
 	if n := u.attention[c.ID]; n > 0 {
 		review := widget.NewButtonWithIcon(plural(n, "suggestion")+" to tidy this card — Review…", theme.WarningIcon(),
@@ -58,7 +62,8 @@ func (u *ui) liveCard(e *editor, body *fyne.Container) fyne.CanvasObject {
 	m := caption(strings.Join(meta, " · "))
 	m.Wrapping = fyne.TextWrapWord
 	all = append(all, m)
-	content := container.NewThemeOverride(container.NewVBox(all...), &liveTheme{fyne.CurrentApp().Settings().Theme()})
+	fields := container.NewVBox(all...)
+	content := container.NewThemeOverride(container.NewStack(fields, newRuleOverlay(fields)), &liveTheme{fyne.CurrentApp().Settings().Theme()})
 
 	// bottom bar
 	note := widget.NewButtonWithIcon("Note", theme.DocumentCreateIcon(), func() { u.addNote(c) })
@@ -87,8 +92,10 @@ func (u *ui) liveCard(e *editor, body *fyne.Container) fyne.CanvasObject {
 	e.saveBtn.Importance = widget.HighImportance
 	e.revertBtn.Hide()
 	e.saveBtn.Hide()
+	cornerRoom := canvas.NewRectangle(color.Transparent) // the turned-up page corner sits here
+	cornerRoom.SetMinSize(fyne.NewSize(26, 1))
 	bar := container.NewBorder(widget.NewSeparator(), nil, container.NewHBox(note, keep),
-		container.NewHBox(share, e.revertBtn, e.saveBtn), layout.NewSpacer())
+		container.NewHBox(share, e.revertBtn, e.saveBtn, cornerRoom), layout.NewSpacer())
 	return container.NewBorder(nil, container.NewPadded(bar), nil, nil, container.NewVScroll(container.NewPadded(content)))
 }
 

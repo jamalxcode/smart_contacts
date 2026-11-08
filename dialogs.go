@@ -87,7 +87,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	// Edit → Delete says what it will delete, as Finder's "Move 3 Items to Trash" does.
 	delLabel := "Delete Card…"
 	if u.selectMode && len(u.picked) > 0 {
-		delLabel = fmt.Sprintf("Delete %d Selected %s…", len(u.picked), pluralWords(len(u.picked), "Card", "Cards"))
+		delLabel = fmt.Sprintf("Delete %d Clipped %s…", len(u.picked), pluralWords(len(u.picked), "Card", "Cards"))
 	} else if c := current(); c != nil {
 		delLabel = "Delete " + c.DisplayName() + "…"
 	}
@@ -178,7 +178,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		filofaxItem,
 		item("Close Organiser", cmdShift(fyne.KeyW), u.showCover),
 		sep(),
-		item("Select Cards", cmdShift(fyne.KeyS), u.toggleSelectMode),
+		item("Clip Cards Together", cmdShift(fyne.KeyS), u.toggleSelectMode),
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
 		fyne.NewMenuItem("Trash", u.trash),
 	)
@@ -243,7 +243,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	}
 
 	n := len(picked)
-	sel := fmt.Sprintf("%d Selected %s", n, pluralWords(n, "Card", "Cards"))
+	sel := fmt.Sprintf("%d Clipped %s", n, pluralWords(n, "Card", "Cards"))
 	onPicked := func(label string, sc fyne.Shortcut, need int, f func([]*Contact)) *fyne.MenuItem {
 		m := item(label, sc, func() {
 			if cs := u.pickedContacts(); u.selectMode && len(cs) >= need {
@@ -255,11 +255,11 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	}
 	var section2 []*fyne.MenuItem
 	if !u.selectMode || n == 0 {
-		hint := "Selected Cards — none ticked"
+		hint := "Clipped Cards — none clipped yet"
 		if !u.selectMode {
-			hint = "Selected Cards — choose Select Cards first"
+			hint = "Clipped Cards — click a card's paper clip to start"
 		}
-		section2 = []*fyne.MenuItem{header(hint), item("Select Cards", cmdShift(fyne.KeyS), func() {
+		section2 = []*fyne.MenuItem{header(hint), item("Clip Cards Together", cmdShift(fyne.KeyS), func() {
 			if !u.selectMode {
 				u.toggleSelectMode()
 			}
@@ -1219,15 +1219,17 @@ func (u *ui) help() {
 
 **Search filters.** company:boubyan · title:engineer · group:family · source:linkedin · city:salmiya · country:kuwait · code:965 · has:email · no:phone · talked:<30d · talked:>1y · is:favorite · is:due — and a minus in front reverses one (-group:work). Save any search as a Smart Group in the sidebar.
 
-**What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right, by name), *Selected Cards* (the people ticked in Select mode, with the count) and *Whole Address Book* (every card, with the count). Commands that can't act right now are dimmed. Right-click a person and the menu starts with their name.
+**The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. Cards are printed pages: click a ruled line and write; the blue box shows where you're writing. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
-**Seeing what changed.** After any change a banner at the bottom says what was done (“Clean Up applied to 3 Selected Cards — 1 fix”), with *Show Changes* (each card, how it was in grey and how it is now in bold) and *Undo*. Cards that just changed have a blue dot in the list for a short while.
+**What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right, by name), *Clipped Cards* (the people you've clipped together, with the count) and *Whole Address Book* (every card, with the count). Commands that can't act right now are dimmed. Right-click a person and the menu starts with their name.
+
+**Seeing what changed.** After any change a banner at the bottom says what was done (“Clean Up applied to 3 Clipped Cards — 1 fix”), with *Show Changes* (each card, how it was in grey and how it is now in bold) and *Undo*. Cards that just changed have a blue dot in the list for a short while.
 
 **Needs Attention** lists cards with something to tidy (a number without its country code, a typo in an email…); the card shows a Review button.
 
 **Tidy notes with AI.** Card → Tidy Jumbled Notes with AI finds notes that are run together, full of export codes or repeats, and rewrites them readably, keeping every fact. It only runs with Cloud AI on (the note text goes to your OpenRouter model), asks first, and shows each rewrite before and after; one that seems to have lost a number, email or date isn't ticked.
 
-**Merging.** Merge… in Look for Duplicates or in Select mode shows where the cards disagree (name, job, birthday, photo) so you pick; every number, email and note is kept.
+**Merging.** Merge… in Look for Duplicates or on the clipped cards' note shows where the cards disagree (name, job, birthday, photo) so you pick; every number, email and note is kept.
 
 **Smart Add** (⌥⌘N). Paste an email signature, a business card's text or a WhatsApp contact message, or choose a business card photo. It's read privately on this Mac unless you switch on Cloud AI in Settings. You check the result before it's saved.
 
@@ -1237,7 +1239,7 @@ func (u *ui) help() {
 
 **Undo (⌘Z, ⇧⌘Z).** Every change can be undone: edits, imports, clean-ups, merges, deletes. Edit → History lists this session's changes and the saved restore points.
 
-**Many at once.** Select some people with ⌘-click (add or remove one) or Shift-click (a range), the tick button above the list, View → Select Cards (⇧⌘S), or ⌘A for everyone shown (⇧⌘A clears). Right-click the selection — or use More… in the bar under the list — for Clean Up Cards, Tidy Notes with AI, Look for Duplicates Among These, Merge, Add to / Remove from Group, Favorites, Keep in Touch, Copy as Text, Export, and Delete. Deleting several cards asks twice, and Return never confirms a delete: the red button has to be clicked.
+**Many at once: paper clips.** Every card in the list has a paper clip at its left edge. Click it to clip that card; clip more and they gather under a yellow sticky note with what you can do to all of them. ⌘-click and Shift-click (a range) work too, as do ⌘A for everyone shown (⇧⌘A unclips all) and View → Clip Cards Together (⇧⌘S). Take Clips Off ends it. Right-click a clipped card — or use More… on the note — for Clean Up Cards, Tidy Notes with AI, Look for Duplicates Among These, Merge, Add to / Remove from Group, Favorites, Keep in Touch, Copy as Text, Export, and Delete. Deleting several cards asks twice, and Return never confirms a delete: the red button has to be clicked.
 
 **Duplicates and clean-up.** Card → Look for Duplicates (⇧⌘D) merges the same person on several cards and removes repeats inside cards. Card → Clean Up writes every number the same way (+965 9999 8888), fixes emails and links, and tidies notes.
 

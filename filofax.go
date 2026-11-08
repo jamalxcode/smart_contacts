@@ -386,11 +386,23 @@ func img(i image.Image, mode canvas.ImageFill) *canvas.Image {
 type leatherCover struct {
 	widget.BaseWidget
 	pageArea func() (fyne.Position, fyne.Size) // where the pages are, to put the lip under them
+	penUp    bool                              // the pointer is on the pen: it lifts out of its loop
+	strapOut bool                              // the pointer is on the strap: it pulls away from the snap
+	r        *coverRenderer
+}
+
+// lift moves the pen or strap without redrawing the stitching.
+func (l *leatherCover) lift() {
+	if l.r != nil {
+		l.r.Layout(l.Size())
+		canvas.Refresh(l)
+	}
 }
 
 func (l *leatherCover) CreateRenderer() fyne.WidgetRenderer {
 	loadTextures()
 	r := &coverRenderer{l: l}
+	l.r = r
 	r.desk = canvas.NewRectangle(deskColor)
 	r.shadow = canvas.NewRectangle(color.NRGBA{0x30, 0x18, 0x08, 0x50})
 	r.shadow.CornerRadius = 26
@@ -455,6 +467,7 @@ type coverRenderer struct {
 	corners                     []fyne.CanvasObject
 	stitches                    []fyne.CanvasObject
 	last                        fyne.Size
+	strapWasOut                 bool
 }
 
 const coverMargin = 3 // the leather runs almost to the window edge
@@ -483,7 +496,11 @@ func (r *coverRenderer) Layout(s fyne.Size) {
 	r.lipEdge.Resize(ps.Add(fyne.NewSize(24, 24)))
 	// pen loop on the left, pen through it
 	lx := m + 18
-	r.pen.Move(fyne.NewPos(lx+4, m+ch*0.14))
+	penY := m + ch*0.14
+	if r.l.penUp {
+		penY -= 14
+	}
+	r.pen.Move(fyne.NewPos(lx+4, penY))
 	r.pen.Resize(fyne.NewSize(30, ch*0.72))
 	r.loop.Move(fyne.NewPos(lx-6, m+ch*0.33))
 	r.loop.Resize(fyne.NewSize(48, 56))
@@ -492,6 +509,9 @@ func (r *coverRenderer) Layout(s fyne.Size) {
 	// strap with the brass snap, over the right edge
 	sw, sh := float32(86), float32(118)
 	sx, sy := m+cw-50, m+ch/2-sh/2
+	if r.l.strapOut {
+		sx += 7 // pulled a little towards you
+	}
 	r.strap.Move(fyne.NewPos(sx, sy))
 	r.strap.Resize(fyne.NewSize(sw, sh))
 	r.strapShade.Move(fyne.NewPos(sx, sy))
@@ -507,6 +527,11 @@ func (r *coverRenderer) Layout(s fyne.Size) {
 		r.stitchRect(pp.X-20, pp.Y-20, ps.Width+40, ps.Height+40)
 		r.stitchRect(lx-2, m+ch*0.33+5, 40, 46)
 		r.stitchRect(sx+7, sy+7, sw-14, sh-14)
+	}
+	if r.l.strapOut != r.strapWasOut { // the strap's stitches move with it
+		r.strapWasOut = r.l.strapOut
+		r.last = fyne.Size{}
+		r.Layout(s)
 	}
 }
 
@@ -543,7 +568,7 @@ func (r *coverRenderer) Destroy() {}
 
 // ---------- pages ----------
 
-// paperPage is one white page with a grey title bar, on a small stack of page edges, with the
+// paperPage is one white page with a printed heading, on a small stack of page edges, with the
 // shadow the rings and the binding cast at its inner edge.
 type paperPage struct {
 	widget.BaseWidget
@@ -555,9 +580,9 @@ type paperPage struct {
 
 func newPaperPage(content fyne.CanvasObject, innerLeft, ruled bool) *paperPage {
 	p := &paperPage{content: content, innerLeft: innerLeft, ruled: ruled}
-	p.title = canvas.NewText("", color.NRGBA{0x4A, 0x4E, 0x56, 0xFF})
+	p.title = canvas.NewText("", color.NRGBA{0x5A, 0x22, 0x18, 0xFF}) // printed in the refill's red-brown
 	p.title.TextStyle = serif("", true, false)
-	p.title.TextSize = 13
+	p.title.TextSize = 15
 	p.ExtendBaseWidget(p)
 	return p
 }
@@ -591,9 +616,9 @@ func (p *paperPage) CreateRenderer() fyne.WidgetRenderer {
 	} else {
 		r.gutter = canvas.NewHorizontalGradient(out, in)
 	}
-	r.bar = canvas.NewHorizontalGradient(color.NRGBA{0xC4, 0xC8, 0xCE, 0xFF}, color.NRGBA{0xD6, 0xD9, 0xDD, 0xFF})
-	r.barShape = canvas.NewRectangle(color.NRGBA{0xCB, 0xCF, 0xD4, 0xFF})
-	r.barShape.CornerRadius = 7
+	// the page's heading is printed: ink on paper over a double rule, as on Filofax refills
+	r.bar = canvas.NewHorizontalGradient(color.NRGBA{0x6E, 0x2A, 0x1E, 0xB0}, color.NRGBA{0x6E, 0x2A, 0x1E, 0x40})
+	r.barShape = canvas.NewRectangle(color.NRGBA{0x6E, 0x2A, 0x1E, 0x60})
 	return r
 }
 
@@ -635,11 +660,11 @@ func (r *pageRenderer) Layout(s fyne.Size) {
 	if !r.p.innerLeft {
 		inL, inR = 16, 28
 	}
-	r.barShape.Move(fyne.NewPos(inL, 12))
-	r.barShape.Resize(fyne.NewSize(s.Width-inL-inR, 22))
-	r.bar.Move(fyne.NewPos(inL+2, 13))
-	r.bar.Resize(fyne.NewSize(s.Width-inL-inR-4, 20))
-	r.p.title.Move(fyne.NewPos(inL+12, 12+(22-r.p.title.MinSize().Height)/2))
+	r.bar.Move(fyne.NewPos(inL+4, 33)) // thick rule
+	r.bar.Resize(fyne.NewSize(s.Width-inL-inR-8, 1.6))
+	r.barShape.Move(fyne.NewPos(inL+4, 36.5)) // thin rule
+	r.barShape.Resize(fyne.NewSize(s.Width-inL-inR-8, 0.7))
+	r.p.title.Move(fyne.NewPos(inL+6, 31-r.p.title.MinSize().Height))
 	if r.p.ruled && s.Height != r.lastH {
 		r.lastH = s.Height
 		r.rules = r.rules[:0]
@@ -744,6 +769,7 @@ type indexTab struct {
 	col          color.NRGBA
 	selected     bool
 	header       bool
+	flag         bool // a To Tidy tab: muted, with its count on a red flag
 	onTap        func()
 	hover        bool
 }
@@ -774,12 +800,21 @@ func (t *indexTab) CreateRenderer() fyne.WidgetRenderer {
 	title.TextSize = 12
 	count := canvas.NewText(t.count, color.NRGBA{0xFF, 0xFF, 0xFF, 0xD8})
 	count.TextSize = 11
-	return &tabRenderer{t: t, shadow: shadow, card: card, sheen: sheen, title: title, count: count}
+	flag := canvas.NewRectangle(color.NRGBA{0xC6, 0x28, 0x28, 0xFF})
+	flag.CornerRadius = 8
+	if !t.flag {
+		flag.Hide()
+	} else {
+		count.TextStyle.Bold = true
+		count.Color = color.White
+	}
+	return &tabRenderer{t: t, shadow: shadow, card: card, sheen: sheen, title: title, count: count, flag: flag}
 }
 
 type tabRenderer struct {
 	t            *indexTab
 	shadow, card *canvas.Rectangle
+	flag         *canvas.Rectangle
 	sheen        *canvas.LinearGradient
 	title, count *canvas.Text
 }
@@ -813,6 +848,9 @@ func (r *tabRenderer) Layout(s fyne.Size) {
 	r.title.Move(fyne.NewPos(out+9, (s.Height-4-r.title.MinSize().Height)/2+1))
 	cs := r.count.MinSize()
 	r.count.Move(fyne.NewPos(s.Width-cs.Width-16, (s.Height-4-cs.Height)/2+1)) // clear of the page edge
+	fw := fyne.Max(cs.Width+10, 18)
+	r.flag.Move(fyne.NewPos(s.Width-16-cs.Width/2-fw/2, (s.Height-4-16)/2+1))
+	r.flag.Resize(fyne.NewSize(fw, 16))
 }
 
 func (r *tabRenderer) Refresh() {
@@ -830,7 +868,7 @@ func (r *tabRenderer) Objects() []fyne.CanvasObject {
 	if r.t.header {
 		return []fyne.CanvasObject{r.title}
 	}
-	return []fyne.CanvasObject{r.shadow, r.card, r.sheen, r.title, r.count}
+	return []fyne.CanvasObject{r.shadow, r.card, r.sheen, r.title, r.flag, r.count}
 }
 func (r *tabRenderer) Destroy() {}
 
@@ -845,20 +883,30 @@ func (u *ui) refreshTabs() {
 	}
 	u.tabBox.Objects = nil
 	ci := 0
+	tidy := false
 	for _, it := range u.sideItems {
 		it := it
 		t := &indexTab{title: it.title}
 		if it.key == grpHeader {
 			t.header = true
 			t.title = strings.ToUpper(it.title)
+			tidy = it.title == "To Tidy"
 		} else {
 			t.col = tabColors[ci%len(tabColors)]
 			ci++
+			if tidy {
+				t.flag = true
+				t.col = color.NRGBA{0x8A, 0x84, 0x7A, 0xFF} // muted stone: a job list, not people
+			}
 			if it.count > 0 {
 				t.count = itoa(it.count)
 			}
 			t.selected = it.key == u.group
 			t.onTap = func() {
+				if u.group == it.key {
+					return
+				}
+				u.pageTurn(u.tabOrder(it.key) - u.tabOrder(u.group))
 				u.group = it.key
 				u.cfg.LastGroup = it.key
 				u.refreshTabs()
@@ -1031,6 +1079,7 @@ func (u *ui) refreshLetters(used map[string]bool) {
 	if u.letterBox == nil {
 		return
 	}
+	u.usedLetters = used
 	u.letterBox.Objects = nil
 	for _, l := range letterTabs {
 		l := l
@@ -1042,10 +1091,14 @@ func (u *ui) refreshLetters(used map[string]bool) {
 		}
 		t := &letterTab{letters: l, selected: l == u.letter || (l == "All" && u.letter == ""), empty: !any}
 		t.onTap = func() {
+			was := u.letter
 			if l == "All" {
 				u.letter = ""
 			} else {
 				u.letter = l
+			}
+			if was != u.letter {
+				u.pageTurn(letterIndex(u.letter) - letterIndex(was))
 			}
 			u.refreshList()
 		}
@@ -1096,22 +1149,39 @@ type organiserLayout struct {
 	cover                        *leatherCover
 	tabs, left, rings, right, az fyne.CanvasObject
 	status, strap                fyne.CanvasObject
+	pen                          *hotspot
+	prev, next                   *pageCorner
+	pocket                       *cardPocket
 	pagesPos                     fyne.Position
 	pagesSize                    fyne.Size
 }
 
-func (l *organiserLayout) MinSize([]fyne.CanvasObject) fyne.Size { return fyne.NewSize(1000, 560) }
+func (l *organiserLayout) MinSize([]fyne.CanvasObject) fyne.Size { return fyne.NewSize(900, 560) }
 
 func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	m := float32(coverMargin)
-	top, bottom := m+22, s.Height-m-34
+	top, bottom := m+22, s.Height-m-42 // room under the pages for the gilded status line
 	h := bottom - top
 	penW := float32(64)
 	tabsW := float32(165)
+	if s.Width < 1180 { // a smaller screen: slimmer cover parts so the pages keep their width
+		penW, tabsW = 50, 132
+	}
 	azW := float32(30)
 	x := m + penW
+	pocketH := float32(0)
+	if l.pocket != nil {
+		pocketH = 110
+	}
 	l.tabs.Move(fyne.NewPos(x, top+pageBar+2))
-	l.tabs.Resize(fyne.NewSize(tabsW, h-pageBar-10))
+	l.tabs.Resize(fyne.NewSize(tabsW, h-pageBar-10-pocketH))
+	if l.pocket != nil { // the business-card pocket, low inside the front cover
+		l.pocket.Move(fyne.NewPos(x+6, bottom-pocketH+4))
+		l.pocket.Resize(fyne.NewSize(tabsW-14, pocketH-6))
+		hs := l.pocket.hint.MinSize()
+		l.pocket.hint.Move(fyne.NewPos(x+6, bottom-pocketH-hs.Height-2))
+		l.pocket.hint.Resize(hs)
+	}
 	x += tabsW
 	pagesRight := s.Width - m - 22 - 58 - azW // room for the A–Z tabs and the strap
 	total := pagesRight - x
@@ -1127,11 +1197,33 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	l.az.Move(fyne.NewPos(pagesRight, top+14))
 	l.az.Resize(fyne.NewSize(azW, h-28))
 	if l.status != nil { // the status line, small, on the leather under the pages
-		l.status.Move(fyne.NewPos(x-6, bottom+2))
-		l.status.Resize(fyne.NewSize(pagesRight-x, 16))
+		l.status.Move(fyne.NewPos(x-6, bottom+1))
+		l.status.Resize(fyne.NewSize(pagesRight-x, 15))
 	}
 	l.pagesPos = fyne.NewPos(x, top)
 	l.pagesSize = fyne.NewSize(pagesRight-x, h)
+	if l.prev != nil { // turned-up corners: bottom-left of the left page, bottom-right of the right
+		cs := float32(cornerBig)
+		l.prev.Move(fyne.NewPos(x, bottom-cs))
+		l.prev.Resize(fyne.NewSize(cs, cs))
+		l.next.Move(fyne.NewPos(pagesRight-cs, bottom-cs))
+		l.next.Resize(fyne.NewSize(cs, cs))
+		ph := l.prev.hint.MinSize()
+		l.prev.hint.Move(fyne.NewPos(x+cs+4, bottom-ph.Height-4))
+		l.prev.hint.Resize(ph)
+		nh := l.next.hint.MinSize()
+		l.next.hint.Move(fyne.NewPos(pagesRight-cs-nh.Width-4, bottom-nh.Height-4))
+		l.next.hint.Resize(nh)
+	}
+	if l.pen != nil { // over the drawn pen (same sums as the cover's)
+		ch := s.Height - 2*m - 2
+		px, py := m+18, m+ch*0.14
+		l.pen.Move(fyne.NewPos(px, py))
+		l.pen.Resize(fyne.NewSize(38, ch*0.72))
+		hs := l.pen.hint.MinSize()
+		l.pen.hint.Move(fyne.NewPos(px+44, py+10))
+		l.pen.hint.Resize(hs)
+	}
 	l.cover.Move(fyne.NewPos(0, 0))
 	l.cover.Resize(s)
 	if l.strap != nil { // over the drawn strap (same sums as the cover's)
@@ -1161,8 +1253,14 @@ func (u *ui) filofaxLayout(listPane fyne.CanvasObject) fyne.CanvasObject {
 	cover := &leatherCover{pageArea: func() (fyne.Position, fyne.Size) { return lay.pagesPos, lay.pagesSize }}
 	cover.ExtendBaseWidget(cover)
 	lay.cover = cover
+	strap.cover = cover
+	lay.pen = newHotspot("Write a new card", func() { u.editContact(nil) }, func(on bool) { cover.penUp = on; cover.lift() })
+	lay.prev = newPageCorner(true, "Previous letter", func() { u.turnLetter(-1) })
+	lay.next = newPageCorner(false, "Next letter", func() { u.turnLetter(+1) })
+	lay.pocket = newCardPocket(u)
 	// order matters: the A–Z and index tabs sit under the page edges, the rings over them
-	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status, strap, strap.hint)
+	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status, lay.pocket,
+		lay.prev, lay.next, lay.pen, strap, strap.hint, lay.pen.hint, lay.prev.hint, lay.next.hint, lay.pocket.hint)
 }
 
 // toggleLook switches between the Filofax organiser and the classic Mac panes.
@@ -1386,7 +1484,7 @@ type leatherTextTheme struct{ fyne.Theme }
 
 func (t *leatherTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	if n == theme.ColorNameForeground || n == theme.ColorNameDisabled {
-		return color.NRGBA{0xF0, 0xD6, 0xB0, 0xD8}
+		return color.NRGBA{0xE6, 0xC2, 0x72, 0xF0} // gilded, like the title on the cover
 	}
 	return t.Theme.Color(n, v)
 }
@@ -1395,9 +1493,31 @@ func (t *leatherTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) col
 // windowGrey is what shows around the book: dark grey, like a desk in a dim room, instead of white.
 var windowGrey = deskColor
 
-// onGrey puts o on the dark grey window background.
+// onGrey puts o on the dark grey desk: a faint felt texture, so the book sits on something.
 func onGrey(o fyne.CanvasObject) fyne.CanvasObject {
-	return container.NewStack(canvas.NewRectangle(windowGrey), o)
+	felt := canvas.NewImageFromImage(feltImage())
+	felt.FillMode = canvas.ImageFillStretch
+	return container.NewStack(canvas.NewRectangle(windowGrey), felt, o)
+}
+
+var feltCache image.Image
+
+func feltImage() image.Image {
+	if feltCache == nil {
+		const w, h = 600, 600
+		m := image.NewNRGBA(image.Rect(0, 0, w, h))
+		n := newNoise(11)
+		for y := 0; y < h; y++ {
+			for x := 0; x < w; x++ {
+				v := n.fbm(float64(x)/3, float64(y)/3, 3) - 0.5 // fine fibres
+				i := y*m.Stride + x*4
+				g := float64(deskColor.R) + v*14
+				m.Pix[i], m.Pix[i+1], m.Pix[i+2], m.Pix[i+3] = clamp8(g), clamp8(g), clamp8(g+2), 255
+			}
+		}
+		feltCache = m
+	}
+	return feltCache
 }
 
 // sizeWindow changes the window size. On the Mac it animates, keeps the right edge (the cover
@@ -1426,8 +1546,9 @@ func closedSize(h float32) fyne.Size {
 // up, and a click asks to close the book.
 type strapHit struct {
 	widget.BaseWidget
-	u    *ui
-	hint fyne.CanvasObject // drawn on the book, beside the strap (a pop-up would swallow the click)
+	u     *ui
+	cover *leatherCover
+	hint  fyne.CanvasObject // drawn on the book, beside the strap (a pop-up would swallow the click)
 }
 
 func newStrapHit(u *ui) *strapHit {
@@ -1447,9 +1568,17 @@ func (s *strapHit) CreateRenderer() fyne.WidgetRenderer {
 	return widget.NewSimpleRenderer(canvas.NewRectangle(color.Transparent))
 }
 func (s *strapHit) Cursor() desktop.Cursor         { return desktop.PointerCursor }
-func (s *strapHit) MouseIn(*desktop.MouseEvent)    { s.hint.Show() }
+func (s *strapHit) MouseIn(*desktop.MouseEvent)    { s.hint.Show(); s.pull(true) }
 func (s *strapHit) MouseMoved(*desktop.MouseEvent) {}
-func (s *strapHit) MouseOut()                      { s.hint.Hide() }
+func (s *strapHit) MouseOut()                      { s.hint.Hide(); s.pull(false) }
+
+// pull draws the strap a little away from the snap while the pointer is on it.
+func (s *strapHit) pull(on bool) {
+	if s.cover != nil && s.cover.strapOut != on {
+		s.cover.strapOut = on
+		s.cover.lift()
+	}
+}
 
 func (s *strapHit) Tapped(*fyne.PointEvent) {
 	s.MouseOut()

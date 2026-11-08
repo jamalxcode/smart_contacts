@@ -58,7 +58,7 @@ type ui struct {
 	calCache      map[string][]Mention // cached calendar matches per contact
 	openSec       map[string]bool      // which folding card sections are open
 	selectMode    bool                 // list shows tick boxes for bulk actions
-	picked        map[string]bool      // contacts ticked in Select mode
+	picked        map[string]bool      // contacts clipped together (Select mode)
 	bulkBar       *fyne.Container
 	listPane      *fyne.Container
 	flashGen      int
@@ -78,10 +78,13 @@ type ui struct {
 	rightPage     *paperPage      // Filofax look: the person's page
 	bookContent   fyne.CanvasObject
 	toast         *toast
-	recent        map[string]bool // cards the last change touched: a blue dot for a while
+	flipLayer     *fyne.Container     // animations over the book: page turns, the stamp
+	recentFields  map[string][]string // what the last change altered on each card, for the pencil note
+	recent        map[string]bool     // cards the last change touched: a blue dot for a while
 	recentGen     int
 	menuSig       string
-	actionVerb    string // what the next save is doing ("Cleaned up"), for the banner
+	usedLetters   map[string]bool // the first letters people are filed under, for turning pages
+	actionVerb    string          // what the next save is doing ("Cleaned up"), for the banner
 	coverShown    bool
 	openSize      fyne.Size // the window size with the organiser open
 	filter        *contactFilter
@@ -265,11 +268,13 @@ func (u *ui) build() {
 			fl := newFlag() // the country of the main phone number
 			fl.SetMinSize(fyne.NewSize(18, 13))
 			texts := container.New(&tightVBox{}, name, container.NewBorder(nil, nil, container.NewCenter(fl), nil, sub))
-			tick := widget.NewIcon(theme.CheckButtonIcon()) // shown in Select mode
-			tick.Hide()
+			tick := newRowClip()   // the paper clip: click to clip this card with others
 			dot := newChangedDot() // "this card just changed"; its slot is always there so rows don't shift
 			dot.Objects[0].Hide()
-			row := container.NewBorder(nil, nil, container.NewHBox(dot, tick, newAvatar(34)), star, texts)
+			wash := canvas.NewRectangle(color.NRGBA{0xFF, 0xEE, 0x90, 0x70}) // clipped: the note's yellow
+			wash.CornerRadius = 4
+			wash.Hide()
+			row := container.NewStack(wash, container.NewBorder(nil, nil, container.NewHBox(dot, tick, newAvatar(34)), star, texts))
 			var ca *contextArea
 			ca = newContextArea(row, u.win, func() *fyne.Menu { return u.rowMenu(ca.data) })
 			ca.onTap = func() {
@@ -292,7 +297,13 @@ func (u *ui) build() {
 			c := u.filtered[id]
 			ca := o.(*contextArea)
 			ca.data = c.ID
-			b := ca.content.(*fyne.Container)
+			layers := ca.content.(*fyne.Container) // the yellow wash, then the row itself
+			b := layers.Objects[1].(*fyne.Container)
+			if u.selectMode && u.picked[c.ID] {
+				layers.Objects[0].Show()
+			} else {
+				layers.Objects[0].Hide()
+			}
 			texts := b.Objects[0].(*fyne.Container)
 			texts.Objects[0].(*widget.Label).SetText(c.DisplayName())
 			line := texts.Objects[1].(*fyne.Container)
@@ -312,17 +323,10 @@ func (u *ui) build() {
 			} else {
 				dot.Hide()
 			}
-			tick := left.Objects[1].(*widget.Icon)
-			if u.selectMode {
-				tick.Show()
-				if u.picked[c.ID] {
-					tick.SetResource(theme.CheckButtonCheckedIcon())
-				} else {
-					tick.SetResource(theme.CheckButtonIcon())
-				}
-			} else {
-				tick.Hide()
-			}
+			clip := left.Objects[1].(*rowClip)
+			clip.set(u.selectMode && u.picked[c.ID])
+			cid := c.ID
+			clip.onTap = func() { u.toggleClip(cid) }
 			star := b.Objects[2].(*widget.Icon)
 			if c.Favorite {
 				star.Show()
@@ -335,7 +339,7 @@ func (u *ui) build() {
 			return
 		}
 		c := u.filtered[id]
-		if u.selectMode { // in Select mode a click ticks or unticks
+		if u.selectMode { // while cards are clipped, a click clips or unclips
 			u.picked[c.ID] = !u.picked[c.ID]
 			if !u.picked[c.ID] {
 				delete(u.picked, c.ID)
@@ -356,7 +360,8 @@ func (u *ui) build() {
 	newBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() { u.editContact(nil) })
 	smartBtn := widget.NewButtonWithIcon("Smart Add", iconSparkle, u.smartAdd)
 	u.listTitle = widget.NewLabelWithStyle("All Contacts", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-	selBtn := widget.NewButtonWithIcon("", theme.CheckButtonCheckedIcon(), u.toggleSelectMode)
+	loadClips()
+	selBtn := widget.NewButtonWithIcon("", clipIcon, u.toggleSelectMode) // start or stop clipping cards
 	u.saveSearch = widget.NewButtonWithIcon("Save as Smart Group…", theme.SearchIcon(), u.saveSmartGroup)
 	u.saveSearch.Importance = widget.LowImportance
 	u.saveSearch.Hide()
@@ -390,7 +395,8 @@ func (u *ui) build() {
 	} else {
 		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
 		u.toast = u.newToast()
-		u.bookContent = container.NewStack(onGrey(u.filofaxLayout(listPane)), u.toast.box)
+		u.flipLayer = container.NewWithoutLayout()
+		u.bookContent = container.NewStack(onGrey(u.filofaxLayout(listPane)), u.flipLayer, u.toast.box)
 		u.win.SetContent(u.bookContent)
 	}
 	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)
@@ -541,6 +547,11 @@ func (u *ui) refreshSidebar() {
 	if keeping > 0 {
 		items = append(items, sideItem{grpReachOut, "Reach Out", theme.MailReplyIcon(), due})
 	}
+	// lists of cards to tidy are jobs, not people: they sit together under their own heading,
+	// with a red flag for how many need you
+	if len(u.attention) > 0 || incomplete > 0 {
+		items = append(items, sideItem{key: grpHeader, title: "To Tidy"})
+	}
 	if len(u.attention) > 0 {
 		items = append(items, sideItem{grpAttention, "Needs Attention", theme.WarningIcon(), len(u.attention)})
 	}
@@ -548,7 +559,7 @@ func (u *ui) refreshSidebar() {
 		items = append(items, sideItem{grpIncomplete, "Missing Phone or Email", theme.QuestionIcon(), incomplete})
 	}
 	if len(u.cfg.SmartGroups) > 0 {
-		items = append(items, sideItem{key: grpHeader, title: "Smart Groups"})
+		items = append(items, sideItem{key: grpHeader, title: "Saved Searches"})
 		for _, sg := range u.cfg.SmartGroups {
 			sq := parseQuery(sg.Query)
 			n := 0
@@ -808,9 +819,14 @@ func (u *ui) save() {
 	if err := u.store.Save(); err != nil {
 		showErr(fmt.Errorf("couldn't save your contacts: %w", err), u.win)
 	}
+	var changes []CardChange
+	if u.store.StepSerial() != before { // an undoable change was made
+		changes = u.store.LastChanges()
+		u.noteFields(changes) // before the card is redrawn, so it shows the pencil note
+	}
 	u.refreshAll()
-	if u.store.StepSerial() != before { // an undoable change was made: say what it did
-		u.afterChange(u.store.LastChanges(), verb)
+	if changes != nil { // say what it did
+		u.afterChange(changes, verb)
 	}
 	u.refreshMenu()
 }
