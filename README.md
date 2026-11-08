@@ -116,6 +116,40 @@ one — and the image is kept on the card under *Business Cards*.
 (محمد المطيري / Mohammed Al-Mutairi); *Suggest* fills the other spelling for common names. Search
 finds people in either language.
 
+**When you last talked.** Card → Update Last Talked reads Messages, call history and Mail on this
+Mac (macOS asks you to give the app Full Disk Access) and shows on every card when you were last
+in touch and how: "Last talked 3 days ago · WhatsApp". WhatsApp chat exports dropped on the window
+count too, as do meetings in the calendar. *People Not in Contacts* lists numbers and emails you
+write to or call often that aren't in your book, to add or dismiss. It all stays on this Mac.
+
+**Keep in touch.** Set "keep in touch every month" (or week, quarter, year) on anyone; *Reach Out*
+lists who's due, longest first, and a daily notification reminds you, along with birthdays. *Note*
+adds a dated entry to the card's timeline, and "How we met" is a field of its own.
+
+**Quick Find from the menu bar.** The menu bar icon opens a small search window (⇧⌘O in the app):
+type a name, press Return, the number is copied. Favorites sit in the same menu with call and
+message.
+
+**Search filters and smart groups.** `company:boubyan`, `title:engineer`, `group:family`,
+`source:linkedin`, `city:salmiya`, `country:kuwait`, `code:965`, `has:email`, `no:phone`,
+`talked:<30d`, `talked:>1y`, `is:favorite`, `is:due`; a minus reverses one (`-group:work`).
+Any search can be saved as a smart group in the sidebar.
+
+**Needs Attention.** Cards with something to tidy are listed in the sidebar, and the card shows a
+*Review* button.
+
+**Tidy jumbled notes with AI.** Finds notes that are run together, full of export codes or
+repeated, and rewrites them readably while keeping every name, number, date and email. It runs only
+with Cloud AI on (the note text goes to your OpenRouter model), asks before sending, and shows each
+note before and after; a rewrite that seems to have dropped a number, email or date isn't ticked.
+
+**Merge your way.** Merging shows where the cards disagree — name, job, birthday, photo — and you
+pick; every number, email and note is kept.
+
+**Edit right on the card.** There's no Edit button: every field on the card can be changed where it
+is. Save and Revert appear once something changes, and moving to another person (or quitting)
+with unsaved changes asks "Are you sure you want to update…?" — Save, Don't Save or Cancel.
+
 **Undo everything (⌘Z / ⌘⇧Z).** Every change — an edit, an import, a clean-up, a merge, a
 delete — can be undone and redone. Edit → History lists this session's changes ("Undo back to
 here") and the saved restore points (before each import, clean-up and de-duplication, and daily).
@@ -123,13 +157,14 @@ here") and the saved restore points (before each import, clean-up and de-duplica
 **Many at once.** The tick button above the list turns on Select mode: tick people, then add or
 remove a group, favorite, merge, export or delete them together.
 
-**Backups you control.** File → Back Up To… writes one .zip of everything (contacts, photos,
-business cards, calendar log) to a drive or folder you pick. The OpenRouter key is left out, and
-it warns you if the folder syncs to the cloud.
+**Backups you control.** File → Back Up To… writes everything (contacts, photos, business cards,
+calendar log, history) to a drive or folder you pick, encrypted with AES-256 if you give a
+password. File → Restore from Backup… brings one back (and can itself be undone). The OpenRouter
+key is never in a backup. Undo history now survives quitting the app.
 
 **A Mac app, by Apple's rules.** Light and dark mode with the system colours, a tinted sidebar,
 13-point text, Contacts-style cards (round message / call / video / mail buttons, grey labels
-beside each value, Edit and Share at the bottom), the standard File, Edit, View, Card and Help
+beside each value, Share at the bottom), the standard File, Edit, View, Card and Help
 menus with Contacts' shortcuts, right-click menus on people, buttons named for what they do
 ("Delete", not "Yes"), and Esc / Return in every dialog.
 
@@ -192,7 +227,7 @@ The shortcuts follow Apple's Contacts app where there's an equivalent.
 | ⌘O | import |
 | ⇧⌘R | import from Mac Contacts |
 | ⌘F | find |
-| ⌘L / Return | edit card |
+| ⌘L / Return | start typing in the card |
 | ⌘S | save |
 | ⌘⌫ | delete card (to Trash) |
 | ⌘Z / ⇧⌘Z | undo / redo |
@@ -206,6 +241,10 @@ The shortcuts follow Apple's Contacts app where there's an equivalent.
 | ⇧⌘D | look for duplicates |
 | ⇧⌘L | calendar log |
 | ⌘, | settings |
+| ⌘5 / ⌘6 | Reach Out / Needs Attention |
+| ⌘J | add a note |
+| ⇧⌘U | update last talked |
+| ⇧⌘O | Quick Find |
 | Esc / Return | cancel / confirm a dialog |
 
 ## Roadmap

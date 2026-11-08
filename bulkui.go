@@ -147,48 +147,12 @@ func (u *ui) bulkFavorite(cs []*Contact, fav bool) {
 
 // bulkMerge merges the ticked cards into the one with the most details.
 func (u *ui) bulkMerge(cs []*Contact) {
-	names := []string{}
-	for _, c := range cs {
-		names = append(names, c.DisplayName())
-	}
-	u.confirmCB(fmt.Sprintf("Merge %d cards?", len(cs)), "They become one card (the fullest one keeps its details and gains the others'):\n"+strings.Join(names, "\n")+"\n\nYou can undo this (⌘Z).", "Merge", false, func(ok bool) {
-		if !ok {
-			return
-		}
-		best := 0
-		for i, c := range cs {
-			if richness(c) > richness(cs[best]) {
-				best = i
-			}
-		}
-		keep := cs[best]
-		var others []*Contact
-		var ids []string
-		for i, c := range cs {
-			if i != best {
-				others = append(others, c)
-				ids = append(ids, c.ID)
-				keep.AddEvent(nowTime(), "Merged with another card ("+c.DisplayName()+")", "You")
-				if !keep.HasPhoto {
-					if p := u.store.Photo(c); len(p) > 0 {
-						_ = u.store.SetPhoto(keep, p)
-					}
-				}
-			}
-		}
-		Merge(keep, others, u.cfg.CountryCode)
-		for _, id := range ids {
-			u.store.RepointLinks(id, keep.ID)
-		}
-		u.store.Put(keep)
-		u.store.Delete(ids...)
-		delete(u.photoCache, keep.ID)
+	u.mergeChooser(cs, func(keep *Contact) {
 		u.picked = map[string]bool{keep.ID: true}
 		u.selectedID = keep.ID
-		u.save()
 		u.updateBulkBar()
-		u.flash(fmt.Sprintf("Merged %d cards into %s (⌘Z to undo)", len(cs), keep.DisplayName()))
-	}, u.win)
+		u.refreshList()
+	})
 }
 
 func (u *ui) bulkDelete(cs []*Contact) {

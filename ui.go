@@ -52,18 +52,25 @@ type ui struct {
 	right     *fyne.Container
 	status    *widget.Label
 
-	ed         *editor // non-nil while a contact is being edited
-	cal        *Calendar
-	graph      *Graph               // cached connections graph (nil = rebuild)
-	calCache   map[string][]Mention // cached calendar matches per contact
-	openSec    map[string]bool      // which folding card sections are open
-	selectMode bool                 // list shows tick boxes for bulk actions
-	picked     map[string]bool      // contacts ticked in Select mode
-	bulkBar    *fyne.Container
-	listPane   *fyne.Container
-	flashGen   int
-	photoCache map[string]fyne.Resource
-	sideBusy   bool
+	ed          *editor // non-nil while a contact is being edited
+	cal         *Calendar
+	graph       *Graph               // cached connections graph (nil = rebuild)
+	calCache    map[string][]Mention // cached calendar matches per contact
+	openSec     map[string]bool      // which folding card sections are open
+	selectMode  bool                 // list shows tick boxes for bulk actions
+	picked      map[string]bool      // contacts ticked in Select mode
+	bulkBar     *fyne.Container
+	listPane    *fyne.Container
+	flashGen    int
+	photoCache  map[string]fyne.Resource
+	sideBusy    bool
+	act         *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
+	actBusy     bool
+	saveSearch  *widget.Button // "Save as Smart Group", shown while searching
+	attention   map[string]int // clean-up suggestions per contact (worked out in the background)
+	qf          *quickFind     // the menu bar's Quick Find window
+	trayMenuSig string
+	attnGen     int
 }
 
 // searchEntry passes arrow keys, Return and Escape to the list so you can search and pick without the mouse.
@@ -90,8 +97,15 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	if cfg.LastGroup != "" {
 		u.group = cfg.LastGroup
 	}
+	u.act = LoadActivity(s.Dir())
 	u.win = a.NewWindow("Smart Contacts")
 	u.build()
+	if cfg.AutoActivity {
+		u.readActivity(false) // refresh "last talked" quietly in the background
+	}
+	u.remindLoop()
+	u.checkAttention()
+	u.setupMenuBar()
 	w, h := cfg.WindowW, cfg.WindowH
 	if w < 700 || h < 450 {
 		w, h = 1120, 720
@@ -99,14 +113,9 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	u.win.Resize(fyne.NewSize(w, h))
 	u.win.SetOnDropped(u.importDropped) // drag .vcf / .csv / .xlsx / .txt files onto the window
 	// ⌘Q from the app menu quits without going through the window's close button.
-	a.Lifecycle().SetOnStopped(u.saveWindow)
 	u.win.SetCloseIntercept(func() {
 		if u.ed != nil && u.ed.dirty() {
-			u.confirmCB("Unsaved changes", "Quit without saving the contact you're editing?", "Quit Without Saving", true, func(ok bool) {
-				if ok {
-					u.quit()
-				}
-			}, u.win)
+			u.leaveEditor(u.quit, nil) // Save / Don't Save / Cancel
 			return
 		}
 		u.quit()
@@ -262,7 +271,7 @@ func (u *ui) build() {
 			u.updateBulkBar()
 			return
 		}
-		if c.ID == u.selectedID && u.ed == nil {
+		if c.ID == u.selectedID && (u.ed == nil || u.ed.live) {
 			return
 		}
 		u.leaveEditor(func() {
@@ -274,9 +283,13 @@ func (u *ui) build() {
 	smartBtn := widget.NewButtonWithIcon("Smart Add", iconSparkle, u.smartAdd)
 	u.listTitle = widget.NewLabelWithStyle("All Contacts", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	selBtn := widget.NewButtonWithIcon("", theme.CheckButtonCheckedIcon(), u.toggleSelectMode)
+	u.saveSearch = widget.NewButtonWithIcon("Save as Smart Group…", theme.SearchIcon(), u.saveSmartGroup)
+	u.saveSearch.Importance = widget.LowImportance
+	u.saveSearch.Hide()
 	listTop := container.NewVBox(
 		container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
 		u.search,
+		u.saveSearch,
 	)
 	u.bulkBar = container.NewVBox()
 	u.bulkBar.Hide()
@@ -333,6 +346,17 @@ func (t *tightVBox) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 }
 
 func (u *ui) subtitleFor(c *Contact) string {
+	if u.group == grpReachOut {
+		lt, how := u.lastTalked(c)
+		s := "Never in touch here"
+		if !lt.IsZero() {
+			s = "Last talked " + Ago(lt, time.Now())
+			if how != "" {
+				s += " · " + how
+			}
+		}
+		return s + " · " + keepText(c.KeepInTouch)
+	}
 	if u.group == grpBirthdays {
 		d, turns, _ := c.NextBirthday(time.Now())
 		when := map[int]string{0: "today", 1: "tomorrow"}[d]
@@ -404,8 +428,36 @@ func (u *ui) refreshSidebar() {
 		{grpBirthdays, "Upcoming Birthdays", iconCake, bday},
 		{grpRecent, "Recently Added", theme.HistoryIcon(), recent},
 	}
+	keeping, due := 0, 0
+	for _, c := range u.store.Contacts {
+		if c.KeepInTouch > 0 {
+			keeping++
+			if u.dueToReachOut(c, now) {
+				due++
+			}
+		}
+	}
+	if keeping > 0 {
+		items = append(items, sideItem{grpReachOut, "Reach Out", theme.MailReplyIcon(), due})
+	}
+	if len(u.attention) > 0 {
+		items = append(items, sideItem{grpAttention, "Needs Attention", theme.WarningIcon(), len(u.attention)})
+	}
 	if incomplete > 0 {
-		items = append(items, sideItem{grpIncomplete, "Missing Phone or Email", theme.WarningIcon(), incomplete})
+		items = append(items, sideItem{grpIncomplete, "Missing Phone or Email", theme.QuestionIcon(), incomplete})
+	}
+	if len(u.cfg.SmartGroups) > 0 {
+		items = append(items, sideItem{key: grpHeader, title: "Smart Groups"})
+		for _, sg := range u.cfg.SmartGroups {
+			sq := parseQuery(sg.Query)
+			n := 0
+			for _, c := range u.store.Contacts {
+				if sq.matches(c, u.lastTalkedAt, u.dueNow) {
+					n++
+				}
+			}
+			items = append(items, sideItem{"q:" + sg.Name, sg.Name, theme.SearchIcon(), n})
+		}
 	}
 	groups := u.store.Groups()
 	if len(groups) > 0 {
@@ -434,6 +486,7 @@ func (u *ui) refreshSidebar() {
 	}
 	u.sideItems = items
 	u.side.Refresh()
+	u.refreshMenuBar()
 	if !u.groupExists(u.group) {
 		u.group = grpAll
 	}
@@ -487,20 +540,44 @@ func (u *ui) inGroup(c *Contact, now time.Time) bool {
 		return c.HasGroup(u.group[2:])
 	case strings.HasPrefix(u.group, "s:"):
 		return c.HasSource(u.group[2:])
+	case u.group == grpReachOut:
+		return u.dueToReachOut(c, now)
+	case u.group == grpAttention:
+		return u.attention[c.ID] > 0
+	case strings.HasPrefix(u.group, "q:"):
+		for _, sg := range u.cfg.SmartGroups {
+			if "q:"+sg.Name == u.group {
+				return parseQuery(sg.Query).matches(c, u.lastTalkedAt, u.dueNow)
+			}
+		}
+		return false
 	}
 	return true
 }
 
+func (u *ui) lastTalkedAt(c *Contact) time.Time { t, _ := u.lastTalked(c); return t }
+func (u *ui) dueNow(c *Contact) bool            { return u.dueToReachOut(c, time.Now()) }
+
 func (u *ui) refreshList() {
 	now := time.Now()
 	q := u.search.Text
+	sq := parseQuery(q)
 	out := make([]*Contact, 0, len(u.store.Contacts))
 	for _, c := range u.store.Contacts {
-		if u.inGroup(c, now) && c.Matches(q) {
+		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) {
 			out = append(out, c)
 		}
 	}
+	if u.saveSearch != nil {
+		if strings.TrimSpace(q) != "" {
+			u.saveSearch.Show()
+		} else {
+			u.saveSearch.Hide()
+		}
+	}
 	switch u.group {
+	case grpReachOut: // longest without contact first
+		sort.SliceStable(out, func(i, j int) bool { return u.lastTalkedAt(out[i]).Before(u.lastTalkedAt(out[j])) })
 	case grpBirthdays:
 		sort.SliceStable(out, func(i, j int) bool {
 			a, _, _ := out[i].NextBirthday(now)
@@ -522,7 +599,7 @@ func (u *ui) refreshList() {
 	u.listTitle.SetText(title)
 	u.list.UnselectAll()
 	u.list.Refresh()
-	if u.ed != nil {
+	if u.busy() {
 		return
 	}
 	// Keep the shown contact if it is still in the list, otherwise show the first one.
@@ -583,8 +660,8 @@ func (u *ui) searchKey(k *fyne.KeyEvent) bool {
 	case fyne.KeyUp:
 		move(-1)
 	case fyne.KeyReturn, fyne.KeyEnter:
-		if c := u.store.Get(u.selectedID); c != nil && u.ed == nil {
-			u.editContact(c)
+		if u.ed != nil && u.ed.live { // Return starts typing in the card
+			u.win.Canvas().Focus(u.ed.first)
 		}
 	case fyne.KeyEscape:
 		if u.search.Text != "" {
@@ -599,6 +676,7 @@ func (u *ui) searchKey(k *fyne.KeyEvent) bool {
 // save writes the store and redraws everything, keeping the selection.
 func (u *ui) save() {
 	u.invalidate()
+	defer u.checkAttention()
 	if err := u.store.Save(); err != nil {
 		showErr(fmt.Errorf("couldn't save your contacts: %w", err), u.win)
 	}
@@ -623,18 +701,25 @@ func (u *ui) photo(c *Contact) fyne.Resource {
 
 // ---------- detail view ----------
 
+// busy reports an edit that mustn't be disturbed: a new contact being made, or a card with
+// unsaved changes. A card that's merely shown (editable, but untouched) isn't busy.
+func (u *ui) busy() bool {
+	return u.ed != nil && (!u.ed.live || u.ed.dirty())
+}
+
+// showDetail shows the selected contact's card, editable in place.
 func (u *ui) showDetail() {
-	if u.ed != nil {
+	if u.busy() {
 		return
 	}
+	u.ed = nil
 	c := u.store.Get(u.selectedID)
 	if c == nil {
 		u.right.Objects = []fyne.CanvasObject{u.emptyState()}
 		u.right.Refresh()
 		return
 	}
-	u.right.Objects = []fyne.CanvasObject{u.detailView(c)}
-	u.right.Refresh()
+	u.openLive(c)
 }
 
 func (u *ui) emptyState() fyne.CanvasObject {
@@ -677,188 +762,6 @@ func caption(s string) *widget.Label {
 	l.Importance = widget.LowImportance
 	l.SizeName = theme.SizeNameCaptionText
 	return l
-}
-
-func (u *ui) detailView(c *Contact) fyne.CanvasObject {
-	cc := u.cfg.CountryCode
-	av := newAvatar(72)
-	av.set(c, u.photo(c))
-	av.onTap = func() { u.photoMenu(c, av) }
-
-	nameBox := container.NewVBox(headline(c.DisplayName(), 22, true))
-	if c.AltName != "" {
-		nameBox.Add(headline(c.AltName, 15, false))
-	}
-	if c.Nickname != "" && c.FullName() != "" {
-		nameBox.Add(caption("“" + c.Nickname + "”"))
-	}
-	if s := strings.Join(nonEmpty([]string{c.Title, c.Company}), " · "); s != "" && !c.IsCompany() {
-		sub := canvas.NewText(s, theme.Color(theme.ColorNameDisabled)) // lines up with the name
-		sub.TextSize = theme.TextSize()
-		nameBox.Add(sub)
-	}
-	favIcon := iconStarOff
-	if c.Favorite {
-		favIcon = iconStar
-	}
-	fav := widget.NewButtonWithIcon("", favIcon, func() { u.toggleFavorite(c) })
-	fav.Importance = widget.LowImportance
-	head := container.NewBorder(nil, nil, av, container.NewVBox(fav), container.NewPadded(container.NewVBox(layout.NewSpacer(), nameBox, layout.NewSpacer())))
-
-	// Ways to reach them, from what the card holds (phone, email, profile links): round buttons
-	// like Contacts' message / call / video / mail row; the rest go under "more".
-	actions := container.NewGridWrap(fyne.NewSize(62, roundSize+22))
-	var more []*fyne.MenuItem
-	shown := 0
-	for _, a := range c.Actions(cc) {
-		a := a
-		if a.More || shown == 6 {
-			more = append(more, fyne.NewMenuItem(a.Title, func() { u.open(c, a.Link) }))
-			continue
-		}
-		actions.Add(newRoundAction(a.Title, actionIcon(a.Kind), func() { u.open(c, a.Link) }))
-		shown++
-	}
-	if len(more) > 0 {
-		var mb *roundAction
-		mb = newRoundAction("More", theme.MoreHorizontalIcon(), func() {
-			pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(mb)
-			widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", more...), u.win.Canvas(), pos.Add(fyne.NewPos(0, roundSize)))
-		})
-		actions.Add(mb)
-	}
-
-	body := container.NewVBox(head)
-	if len(actions.Objects) > 0 {
-		body.Add(actions)
-	}
-
-	// Fields: a grey label column on the left and the value beside it, as in Contacts. A thin
-	// line separates each kind of detail.
-	group := func(rows ...fyne.CanvasObject) {
-		if len(rows) == 0 {
-			return
-		}
-		body.Add(widget.NewSeparator())
-		for _, r := range rows {
-			body.Add(r)
-		}
-	}
-
-	var phones []fyne.CanvasObject
-	for _, p := range c.Phones {
-		p := p
-		n := NormalizePhone(p.Value, cc)
-		btns := []fyne.CanvasObject{u.iconLink(iconPhone, "Call", c, "tel:"+n)}
-		if CanWhatsApp(p.Value, cc) {
-			btns = append(btns, u.iconLink(iconChat, "WhatsApp", c, "whatsapp://send?phone="+WhatsAppNumber(p.Value, cc)))
-		}
-		btns = append(btns, u.copyButton(p.Value))
-		phones = append(phones, u.valueRowFrom(p.Label, p.Value, c.OriginText(phoneKey(p.Value)), btns...))
-	}
-	group(phones...)
-
-	var emails []fyne.CanvasObject
-	for _, e := range c.Emails {
-		lbl := e.Label
-		if lbl == "" || strings.EqualFold(lbl, "Other") {
-			lbl = "email"
-		}
-		emails = append(emails, u.valueRowFrom(lbl, e.Value, c.OriginText("e:"+strings.ToLower(strings.TrimSpace(e.Value))),
-			u.iconLink(theme.MailComposeIcon(), "Email", c, "mailto:"+e.Value), u.copyButton(e.Value)))
-	}
-	group(emails...)
-
-	var addrs []fyne.CanvasObject
-	for _, a := range c.Addresses {
-		one := a.OneLine()
-		addrs = append(addrs, u.valueRowFrom(a.Label, strings.TrimSpace(strings.Join(nonEmpty([]string{a.Street, strings.Join(nonEmpty([]string{a.Postcode, a.City}), " "), a.Region, a.Country}), "\n")), c.OriginText("a:"+fold(one)),
-			u.iconLink(iconPlace, "Map", nil, "maps://?q="+url.QueryEscape(one)), u.copyButton(one)))
-	}
-	group(addrs...)
-
-	var links []fyne.CanvasObject
-	for _, l := range c.URLs {
-		v := l.Value
-		if p, ok := parseProfile(l.Label, l.Value); ok && p.URL != "" {
-			v = p.URL // "@khalid_kw" under Telegram opens t.me/khalid_kw
-		} else if !strings.Contains(v, "://") {
-			v = "https://" + v
-		}
-		links = append(links, u.valueRowFrom(l.Label, l.Value, c.OriginText("u:"+linkKey(l.Label, l.Value)), u.iconLink(iconLink, "Open", nil, v), u.copyButton(l.Value)))
-	}
-	group(links...)
-
-	var extra []fyne.CanvasObject
-	if c.Birthday != "" {
-		txt := BirthdayText(c.Birthday)
-		if d, turns, ok := c.NextBirthday(time.Now()); ok {
-			switch {
-			case d == 0 && turns > 0:
-				txt += fmt.Sprintf(" — turns %d today", turns)
-			case d == 0:
-				txt += " — today"
-			case turns > 0:
-				txt += fmt.Sprintf(" — turns %d in %d days", turns, d)
-			default:
-				txt += fmt.Sprintf(" — in %d days", d)
-			}
-		}
-		extra = append(extra, u.valueRow("birthday", txt))
-	}
-	if len(c.Groups) > 0 {
-		chips := container.NewGridWrap(fyne.NewSize(140, 30)) // wraps; a sideways scroller would swallow the mouse wheel
-		for _, g := range c.Groups {
-			g := g
-			b := widget.NewButtonWithIcon(g, iconLabel, func() { u.showGroup("g:" + g) })
-			b.Importance = widget.LowImportance
-			b.Alignment = widget.ButtonAlignLeading
-			chips.Add(b)
-		}
-		extra = append(extra, container.NewBorder(nil, nil, rowLabel("groups"), nil, chips))
-	}
-	group(extra...)
-
-	if strings.TrimSpace(c.Notes) != "" {
-		n := widget.NewLabel(c.Notes)
-		n.Wrapping = fyne.TextWrapWord
-		n.Selectable = true
-		group(container.NewBorder(nil, nil, rowLabel("note"), nil, n))
-	}
-
-	// The rest folds away so the card stays short; open sections stay open between contacts.
-	body.Add(widget.NewSeparator())
-	body.Add(u.foldingSections(c))
-
-	meta := []string{"Added " + c.Created.Format("2 Jan 2006")}
-	if len(c.Sources) > 0 {
-		meta = append(meta, "from "+strings.Join(c.Sources, ", "))
-	}
-	if lm := LastMet(u.eventsFor(c), time.Now()); !lm.IsZero() {
-		meta = append(meta, "last met "+Ago(lm, time.Now()))
-	}
-	if !c.LastContacted.IsZero() {
-		meta = append(meta, "last contacted "+Ago(c.LastContacted, time.Now()))
-	}
-	m := caption(strings.Join(meta, " · "))
-	m.Wrapping = fyne.TextWrapWord
-	body.Add(m)
-
-	// Bottom bar, as in Contacts: Share beside Edit. Deleting is in the Edit menu and the list's
-	// right-click menu, never a big button on the card.
-	var share *widget.Button
-	share = widget.NewButtonWithIcon("", theme.UploadIcon(), func() {
-		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(share)
-		menu := fyne.NewMenu("",
-			fyne.NewMenuItem("Copy Card as Text", func() { u.copyCard(c) }),
-			fyne.NewMenuItem("Save as vCard…", func() { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
-			fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts([]*Contact{c}) }),
-		)
-		widget.ShowPopUpMenuAtPosition(menu, u.win.Canvas(), pos.Add(fyne.NewPos(0, -96)))
-	})
-	edit := widget.NewButton("Edit", func() { u.editContact(c) })
-	bar := container.NewBorder(widget.NewSeparator(), nil, nil, container.NewHBox(share, edit), layout.NewSpacer())
-	return container.NewBorder(nil, container.NewPadded(bar), nil, nil, container.NewVScroll(container.NewPadded(body)))
 }
 
 // rowLabel is the grey, right-aligned label column of a card row.
@@ -979,7 +882,7 @@ func (u *ui) open(c *Contact, link string) {
 		if err := u.store.Save(); err != nil {
 			showErr(err, u.win)
 		}
-		if u.selectedID == c.ID && u.ed == nil {
+		if u.selectedID == c.ID && !u.busy() {
 			u.showDetail()
 		}
 	}
@@ -1164,6 +1067,8 @@ func (u *ui) foldingSections(c *Contact) fyne.CanvasObject {
 		box.Add(head)
 		box.Add(content)
 	}
+	act := u.activitySection(c)
+	add("Activity", 0, act)
 	add("Calendar", len(u.eventsFor(c)), u.calendarSection(c))
 	add("Timeline", len(c.Timeline), u.timelineSection(c))
 	add("Connections", len(u.store.LinksOf(c.ID)), u.connectionsSection(c))
@@ -1189,7 +1094,22 @@ func (u *ui) timelineSection(c *Contact) []fyne.CanvasObject {
 		l := caption(when)
 		t := widget.NewLabel(e.Text)
 		t.Wrapping = fyne.TextWrapWord
-		rows = append(rows, container.NewBorder(nil, nil, container.NewGridWrap(fyne.NewSize(110, l.MinSize().Height), l), nil, t))
+		var del fyne.CanvasObject
+		if e.Source == "You" { // your own notes can be removed
+			i := i
+			b := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
+				u.confirmCB("Delete this note?", e.Text, "Delete", true, func(ok bool) {
+					if ok && i < len(c.Timeline) {
+						c.Timeline = append(c.Timeline[:i], c.Timeline[i+1:]...)
+						u.store.Put(c)
+						u.save()
+					}
+				}, u.win)
+			})
+			b.Importance = widget.LowImportance
+			del = b
+		}
+		rows = append(rows, container.NewBorder(nil, nil, container.NewGridWrap(fyne.NewSize(110, l.MinSize().Height), l), del, t))
 	}
 	return rows
 }

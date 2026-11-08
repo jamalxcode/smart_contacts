@@ -248,6 +248,13 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 		fill(&keep.Company, o.Company)
 		fill(&keep.Title, o.Title)
 		fill(&keep.Birthday, o.Birthday)
+		fill(&keep.HowWeMet, o.HowWeMet)
+		if keep.KeepInTouch == 0 || (o.KeepInTouch > 0 && o.KeepInTouch < keep.KeepInTouch) {
+			keep.KeepInTouch = max(keep.KeepInTouch, 0)
+			if o.KeepInTouch > 0 {
+				keep.KeepInTouch = o.KeepInTouch
+			}
+		}
 		// a name in the other language becomes the second name instead of being lost
 		for _, n := range []string{o.FullName(), o.AltName} {
 			if n == "" || fold(n) == fold(keep.FullName()) || fold(n) == fold(keep.AltName) {

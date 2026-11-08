@@ -70,6 +70,10 @@ type Contact struct {
 	Created       time.Time         `json:"created"`
 	Updated       time.Time         `json:"updated"`
 	LastContacted time.Time         `json:"lastContacted,omitempty"`
+	// KeepInTouch is how often (in days) the user wants to be in touch; 0 = no reminder.
+	KeepInTouch int `json:"keepInTouch,omitempty"`
+	// HowWeMet is the user's own words: "Met at GITEX 2025 through Ali".
+	HowWeMet string `json:"howWeMet,omitempty"`
 
 	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
 	// edits a contact goes through Store.Put or sets Updated, which invalidates these.

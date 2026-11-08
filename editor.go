@@ -28,17 +28,23 @@ type editor struct {
 	fromSmartAdd bool     // the details were read by Smart Add
 	cardNote     string   // "added this contact" / "updated this contact"
 	photoSet     bool     // photo was changed (set or removed)
+	live         bool     // the card itself, editable in place (not a separate edit screen)
+	saved        bool     // save() went through
+	dirtyShown   bool
+	saveBtn      *widget.Button
+	revertBtn    *widget.Button
 
-	first, last, nick, company, title, birthday *widget.Entry
-	alt                                         *widget.Entry
-	notes                                       *widget.Entry
-	phones, emails, urls                        *fieldRows
-	addrs                                       *addrRows
-	groups                                      *widget.CheckGroup
-	newGroup                                    *widget.Entry
-	fav                                         *widget.Check
-	av                                          *avatar
-	bdayHint                                    *widget.Label
+	first, last, nick, title, birthday, met *widget.Entry
+	company                                 *widget.SelectEntry // offers the companies already in the book
+	alt                                     *widget.Entry
+	notes                                   *widget.Entry
+	phones, emails, urls                    *fieldRows
+	addrs                                   *addrRows
+	groups                                  *widget.CheckGroup
+	newGroup                                *widget.Entry
+	fav                                     *widget.Check
+	av                                      *avatar
+	bdayHint                                *widget.Label
 }
 
 // fieldRows is a growable list of label + value rows (phones, emails, links).
@@ -74,7 +80,22 @@ func (r *fieldRows) add(f Field) *fieldRow {
 	del := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), nil)
 	del.Importance = widget.LowImportance
 	lbl := container.NewGridWrap(fyne.NewSize(130, row.label.MinSize().Height), row.label)
-	row.obj = container.NewBorder(nil, nil, lbl, del, row.value)
+	// ↑ makes this the first (main) one: the number Call and Copy use, the email Mail uses.
+	top := widget.NewButtonWithIcon("", theme.MoveUpIcon(), nil)
+	top.Importance = widget.LowImportance
+	row.obj = container.NewBorder(nil, nil, lbl, container.NewHBox(top, del), row.value)
+	top.OnTapped = func() {
+		for i, x := range r.rows {
+			if x == row && i > 0 {
+				r.rows = append([]*fieldRow{row}, append(r.rows[:i:i], r.rows[i+1:]...)...)
+				r.box.Remove(row.obj)
+				objs := append([]fyne.CanvasObject{row.obj}, r.box.Objects...)
+				r.box.Objects = objs
+				r.box.Refresh()
+				break
+			}
+		}
+	}
 	del.OnTapped = func() {
 		for i, x := range r.rows {
 			if x == row {
@@ -180,7 +201,17 @@ func (u *ui) openEditor(c *Contact, prefill *Contact, banner string) {
 // openEditorCard is openEditor with a business card image to keep on Save. With both c and
 // prefill set, it edits c starting from prefill (c with new details merged in).
 func (u *ui) openEditorCard(c *Contact, prefill *Contact, banner string, card []byte, cardNote string) {
-	e := &editor{u: u, orig: c, card: card, cardNote: cardNote, fromSmartAdd: prefill != nil}
+	u.openEditorMode(c, prefill, banner, card, cardNote, false)
+}
+
+// openLive shows c's card, editable in place.
+func (u *ui) openLive(c *Contact) {
+	u.openEditorMode(c, nil, "", nil, "", true)
+}
+
+func (u *ui) openEditorMode(c *Contact, prefill *Contact, banner string, card []byte, cardNote string, live bool) {
+	u.status.SetText(u.statusText()) // clear any "unsaved changes" note from the card before
+	e := &editor{u: u, orig: c, card: card, cardNote: cardNote, fromSmartAdd: prefill != nil, live: live && c != nil && prefill == nil && card == nil}
 	switch {
 	case c != nil && prefill != nil:
 		e.c = prefill
@@ -201,6 +232,10 @@ func (u *ui) openEditorCard(c *Contact, prefill *Contact, banner string, card []
 	u.right.Objects = []fyne.CanvasObject{e.build(banner)}
 	u.right.Refresh()
 	e.start = e.snapshot()
+	if e.live {
+		e.watch() // show Save / Revert as soon as something changes
+		return    // keep the keyboard on the list
+	}
 	u.win.Canvas().Focus(e.first)
 	if c == nil { // a new contact isn't any of the ones in the list
 		u.list.UnselectAll()
@@ -218,7 +253,24 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.first, e.last = ent(c.First, "First name"), ent(c.Last, "Last name")
 	e.nick = ent(c.Nickname, "Nickname")
 	e.alt = ent(c.AltName, "Name in the other language (Arabic or English)")
-	e.company, e.title = ent(c.Company, "Company"), ent(c.Title, "Job title")
+	e.title = ent(c.Title, "Job title")
+	e.met = ent(c.HowWeMet, "How we met (GITEX 2025, through Ali…)")
+	known := e.u.store.Companies()
+	e.company = widget.NewSelectEntry(known)
+	e.company.SetText(c.Company)
+	e.company.SetPlaceHolder("Company")
+	e.company.OnChanged = func(s string) { // narrow the list to what's typed
+		var opts []string
+		for _, k := range known {
+			if s == "" || (strings.Contains(fold(k), fold(s)) && k != s) {
+				opts = append(opts, k)
+			}
+			if len(opts) == 15 {
+				break
+			}
+		}
+		e.company.SetOptions(opts)
+	}
 	e.birthday = ent(c.Birthday, "e.g. 1990-03-14, 14/03/1990 or 14/03")
 	e.bdayHint = caption("")
 	e.birthday.OnChanged = func(s string) {
@@ -318,7 +370,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 		container.NewGridWithColumns(2, e.first, e.last),
 		container.NewBorder(nil, nil, nil, suggest, e.alt),
 		container.NewGridWithColumns(2, e.company, e.title),
-		e.nick,
+		container.NewGridWithColumns(2, e.nick, e.met),
 	)
 	head := container.NewBorder(nil, nil, container.NewVBox(e.av, container.NewHBox(choose, remove)), nil, names)
 
@@ -358,6 +410,9 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	body.Add(label("NOTES"))
 	body.Add(e.notes)
 
+	if e.live {
+		return e.u.liveCard(e, body)
+	}
 	save := widget.NewButtonWithIcon("Save", theme.DocumentSaveIcon(), e.save)
 	save.Importance = widget.HighImportance
 	cancel := widget.NewButton("Cancel", e.cancel)
@@ -384,7 +439,7 @@ func contains(ss []string, s string) bool {
 func (e *editor) collect() {
 	c := e.c
 	c.First, c.Last, c.Nickname, c.AltName = e.first.Text, e.last.Text, e.nick.Text, e.alt.Text
-	c.Company, c.Title = e.company.Text, e.title.Text
+	c.Company, c.Title, c.HowWeMet = e.company.Text, e.title.Text, strings.TrimSpace(e.met.Text)
 	c.Phones, c.Emails, c.URLs = e.phones.fields(), e.emails.fields(), e.urls.fields()
 	c.Addresses = e.addrs.addresses()
 	c.Birthday = strings.TrimSpace(e.birthday.Text)
@@ -449,6 +504,16 @@ func (e *editor) save() {
 		e.card = nil
 	}
 	isNew := e.orig == nil
+	if !isNew { // things changed from the card while editing (notes, reminders, last talked) stay
+		if cur := e.u.store.Get(c.ID); cur != nil {
+			c.Timeline, c.KeepInTouch, c.LastContacted = cur.Timeline, cur.KeepInTouch, cur.LastContacted
+			c.CardImages, c.Sources, c.SourceIDs = cur.CardImages, cur.Sources, cur.SourceIDs
+			if !e.photoSet {
+				c.HasPhoto = cur.HasPhoto
+			}
+		}
+	}
+	e.saved = true
 	e.u.store.Put(c)
 	e.u.ed = nil
 	e.u.selectedID = c.ID
@@ -485,24 +550,57 @@ func (u *ui) leaveEditor(next func(), stay func()) {
 		next()
 		return
 	}
+	ed := u.ed
 	finish := func() {
 		u.ed = nil
-		u.showDetail()
-		u.reselect()
 		next()
+		if u.ed == nil { // next didn't open anything: show the selected card again
+			u.showDetail()
+		}
+		u.reselect()
 	}
-	if !u.ed.dirty() {
+	if !ed.dirty() {
 		finish()
 		return
 	}
-	dialog.ShowCustomConfirm("Discard changes?", "Discard", "Keep Editing",
-		widget.NewLabel("You have unsaved changes to this contact."), func(discard bool) {
-			if discard {
-				finish()
-			} else if stay != nil {
+	name := ed.c.DisplayName()
+	if ed.orig == nil {
+		name = "the new contact"
+	} else {
+		name = "“" + name + "”"
+	}
+	msg := widget.NewLabel("Are you sure you want to update " + name + "? Your changes haven't been saved yet.")
+	msg.Wrapping = fyne.TextWrapWord
+	var d *dialog.CustomDialog
+	saveB := widget.NewButton("Save", func() {
+		d.Hide()
+		ed.save()
+		if !ed.saved { // the details need fixing first (a bad birthday, no name)
+			if stay != nil {
 				stay()
 			}
-		}, u.win)
+			return
+		}
+		u.ed = nil
+		next()
+		if u.ed == nil {
+			u.showDetail()
+		}
+		u.reselect()
+	})
+	saveB.Importance = widget.HighImportance
+	dont := widget.NewButton("Don't Save", func() { d.Hide(); finish() })
+	cancel := widget.NewButton("Cancel", func() {
+		d.Hide()
+		if stay != nil {
+			stay()
+		}
+	})
+	d = dialog.NewCustomWithoutButtons("Save changes?", container.NewVBox(msg,
+		container.NewHBox(dont, layout.NewSpacer(), cancel, saveB)), u.win)
+	d.Resize(fyne.NewSize(460, 0))
+	trackDialog(d, saveB.OnTapped)
+	d.Show()
 }
 
 func (e *editor) choosePhoto() {

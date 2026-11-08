@@ -3,6 +3,7 @@ package main
 import (
 	"archive/zip"
 	"io"
+	"os"
 	"strings"
 	"testing"
 	"time"
@@ -208,5 +209,84 @@ func TestReleaseVersions(t *testing.T) {
 	}
 	if n := releaseNotes(r.Notes); n != "Undo/redo" {
 		t.Errorf("notes %q", n)
+	}
+}
+
+func TestUndoSurvivesRestartAndMeta(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenStore(dir)
+	a, b := NewContact(), NewContact()
+	a.First, b.First = "Alpha", "Beta"
+	s.Put(a)
+	s.Put(b)
+	_ = s.Save()
+	s.AddLink(a.ID, b.ID, "Friend")
+	_ = s.Save()
+	if got := s.CanUndo(); got != "Changed connections" {
+		t.Fatalf("label %q", got)
+	}
+	a.Last = "One"
+	s.Put(a)
+	_ = s.Save()
+	if err := s.SaveUndo(); err != nil {
+		t.Fatal(err)
+	}
+	s2, _ := OpenStore(dir)
+	if s2.CanUndo() != "Changed Alpha One" {
+		t.Fatalf("after restart: %q", s2.CanUndo())
+	}
+	_, _ = s2.Undo()
+	if s2.Get(a.ID).Last != "" {
+		t.Error("undo after restart didn't restore")
+	}
+	_, _ = s2.Undo()
+	if len(s2.Links) != 0 {
+		t.Error("link not undone")
+	}
+	_, _ = s2.Redo()
+	if len(s2.Links) != 1 {
+		t.Error("redo of link")
+	}
+	// a change made elsewhere (file replaced) drops the saved history
+	_ = s2.SaveUndo()
+	_ = os.WriteFile(dir+"/contacts.json", []byte(`{"version":1,"contacts":[]}`), 0o600)
+	s3, _ := OpenStore(dir)
+	if s3.CanUndo() != "" {
+		t.Error("stale history should be dropped")
+	}
+}
+
+func TestEncryptedBackupRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	s, _ := OpenStore(dir)
+	c := NewContact()
+	c.First = "Zed"
+	s.Put(c)
+	_ = s.Save()
+	plain, err := zipDataBytes(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	sealed, err := EncryptBackup(plain, "correct horse")
+	if err != nil || !IsEncryptedBackup(sealed) || strings.Contains(string(sealed), "Zed") {
+		t.Fatal("not encrypted")
+	}
+	if _, err := DecryptBackup(sealed, "wrong"); err == nil {
+		t.Error("wrong password accepted")
+	}
+	back, err := DecryptBackup(sealed, "correct horse")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// restore into a fresh folder
+	dir2 := t.TempDir()
+	s2, _ := OpenStore(dir2)
+	path, cleanup, err := RestoreFiles(back, dir2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+	if err := s2.RestoreFile(path); err != nil || len(s2.Contacts) != 1 || s2.Contacts[0].First != "Zed" {
+		t.Fatalf("restore: %v %d", err, len(s2.Contacts))
 	}
 }

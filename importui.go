@@ -118,6 +118,10 @@ func (u *ui) importData(name string, data []byte) {
 		u.importICS(name, data)
 		return
 	}
+	if IsWhatsAppExport(name, data) { // a chat export: who you talk to and when, not new cards
+		u.importWhatsApp(name, data)
+		return
+	}
 	b, err := ReadImport(name, data, u.cfg.CountryCode)
 	if err != nil {
 		showErr(err, u.win)

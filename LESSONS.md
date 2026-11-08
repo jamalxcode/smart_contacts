@@ -203,7 +203,26 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
   focused field; ⌘C with nothing focused copies the card.
 - Missing glyphs: "↔" rendered as a coloured blob in Fyne's font; use words.
 
-## 11. Ideas not done yet
+## 11. Big address books, history, reminders (2026-11-08)
+
+- **Measure with a fake 10,000-card book** (`SCALE=1 go test -run TestScale`): search was fine
+  (≤40 ms) but each save took 230 ms and every undo step held a full copy of the book. Saves now
+  encode cards in parallel and compare per card; an undo step holds only the cards that changed.
+  Save fell to ~40 ms.
+- **Undo across restarts** is written on quit, tied to a hash of the exact contacts file; if the
+  file changed since (restore, another copy), the old history is dropped rather than misapplied.
+- **The Mac's own history is readable** with `/usr/bin/sqlite3` once the app has Full Disk Access:
+  `chat.db` (handle/message, dates in ns since 2001), `CallHistory.storedata` (ZCALLRECORD, s since
+  2001), Mail's `Envelope Index` (messages/addresses/recipients/mailboxes, Unix seconds). Copy the
+  database with its -wal/-shm first. Tests build tiny databases with the same layout.
+- **Suggest only real conversations:** "People Not in Contacts" counts only people you wrote to or
+  called, several times — otherwise every newsletter sender shows up.
+- **AI rewrites need a safety net:** numbers, emails and dates in the original are checked against
+  the rewrite, and one that lost any isn't pre-ticked.
+- Fyne's system tray is a menu only (no text field), and there's no global hotkey API; Quick Find
+  is a small window opened from that menu.
+
+## 12. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

@@ -192,7 +192,7 @@ func fieldLabel(s string) string {
 // rowMenu is the right-click menu of a contact in the list.
 func (u *ui) rowMenu(id string) *fyne.Menu {
 	c := u.store.Get(id)
-	if c == nil || u.ed != nil {
+	if c == nil || u.busy() {
 		return nil
 	}
 	fav := "Add to Favorites"
@@ -200,7 +200,6 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 		fav = "Remove from Favorites"
 	}
 	return fyne.NewMenu("",
-		fyne.NewMenuItem("Edit Card", func() { u.showContact(id); u.editContact(c) }),
 		fyne.NewMenuItem(fav, func() { u.toggleFavorite(c) }),
 		fyne.NewMenuItem("Connect to…", func() { u.connectDialog(c) }),
 		fyne.NewMenuItemSeparator(),

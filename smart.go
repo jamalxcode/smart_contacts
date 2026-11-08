@@ -215,31 +215,46 @@ no field (where you met, a referral, an assistant's name) in notes, briefly. Set
 
 // ParseAI asks the model. It returns an error the UI can show; callers fall back to ParseLocal.
 func ParseAI(ctx context.Context, key, model, text, defCC string) (*Contact, bool, error) {
+	content, err := aiChat(ctx, key, model, fmt.Sprintf(aiPrompt, defCC), text, true)
+	if err != nil {
+		return nil, false, err
+	}
+	return decodeAIContact(content, defCC)
+}
+
+// aiEndpoint is OpenRouter's chat API (a variable only so tests can point it at a stand-in).
+var aiEndpoint = "https://openrouter.ai/api/v1/chat/completions"
+
+// aiChat sends one system + user message to OpenRouter and returns the reply text.
+func aiChat(ctx context.Context, key, model, system, user string, jsonReply bool) (string, error) {
 	if strings.TrimSpace(key) == "" {
-		return nil, false, errors.New("no OpenRouter key set")
+		return "", errors.New("no OpenRouter key set")
 	}
 	if model == "" {
 		model = DefaultAIModel
 	}
-	body, _ := json.Marshal(map[string]any{
-		"model":           model,
-		"temperature":     0,
-		"response_format": map[string]string{"type": "json_object"},
+	req := map[string]any{
+		"model":       model,
+		"temperature": 0,
 		"messages": []map[string]string{
-			{"role": "system", "content": fmt.Sprintf(aiPrompt, defCC)},
-			{"role": "user", "content": text},
+			{"role": "system", "content": system},
+			{"role": "user", "content": user},
 		},
-	})
-	ctx, cancel := context.WithTimeout(ctx, 45*time.Second)
+	}
+	if jsonReply {
+		req["response_format"] = map[string]string{"type": "json_object"}
+	}
+	body, _ := json.Marshal(req)
+	ctx, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
-	req, _ := http.NewRequestWithContext(ctx, "POST", "https://openrouter.ai/api/v1/chat/completions", bytes.NewReader(body))
-	req.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("HTTP-Referer", "https://github.com/jamalxcode/smart_contacts")
-	req.Header.Set("X-Title", "Smart Contacts")
-	resp, err := http.DefaultClient.Do(req)
+	hr, _ := http.NewRequestWithContext(ctx, "POST", aiEndpoint, bytes.NewReader(body))
+	hr.Header.Set("Authorization", "Bearer "+strings.TrimSpace(key))
+	hr.Header.Set("Content-Type", "application/json")
+	hr.Header.Set("HTTP-Referer", "https://github.com/jamalxcode/smart_contacts")
+	hr.Header.Set("X-Title", "Smart Contacts")
+	resp, err := http.DefaultClient.Do(hr)
 	if err != nil {
-		return nil, false, fmt.Errorf("couldn't reach OpenRouter: %w", err)
+		return "", fmt.Errorf("couldn't reach OpenRouter: %w", err)
 	}
 	defer resp.Body.Close()
 	raw, _ := io.ReadAll(io.LimitReader(resp.Body, 2<<20))
@@ -251,7 +266,7 @@ func ParseAI(ctx context.Context, key, model, text, defCC string) (*Contact, boo
 		if json.Unmarshal(raw, &e) == nil && e.Error.Message != "" {
 			msg = e.Error.Message
 		}
-		return nil, false, fmt.Errorf("OpenRouter said %d: %s", resp.StatusCode, msg)
+		return "", fmt.Errorf("OpenRouter said %d: %s", resp.StatusCode, msg)
 	}
 	var out struct {
 		Choices []struct {
@@ -259,9 +274,9 @@ func ParseAI(ctx context.Context, key, model, text, defCC string) (*Contact, boo
 		} `json:"choices"`
 	}
 	if err := json.Unmarshal(raw, &out); err != nil || len(out.Choices) == 0 {
-		return nil, false, errors.New("OpenRouter sent an empty answer")
+		return "", errors.New("OpenRouter sent an empty answer")
 	}
-	return decodeAIContact(out.Choices[0].Message.Content, defCC)
+	return out.Choices[0].Message.Content, nil
 }
 
 // decodeAIContact is separate so it can be tested without the network.

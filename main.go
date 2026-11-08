@@ -66,7 +66,8 @@ func main() {
 		return
 	}
 	u := newUI(a, store, cfg)
-	if len(os.Args) > 2 && os.Args[1] == "--preview" { // open straight into an import preview
+	a.Lifecycle().SetOnStopped(func() { u.saveWindow(); _ = store.SaveUndo() }) // window size; undo survives quitting
+	if len(os.Args) > 2 && os.Args[1] == "--preview" {                          // open straight into an import preview
 		if data, err := os.ReadFile(os.Args[2]); err == nil {
 			name := os.Args[2]
 			go func() { fyne.Do(func() { u.importData(name, data) }) }()

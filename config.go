@@ -24,6 +24,14 @@ type Config struct {
 	LastGroup    string    `json:"lastGroup,omitempty"`
 	LastCleanup  time.Time `json:"lastCleanup,omitempty"`
 	LastDedupe   time.Time `json:"lastDedupe,omitempty"`
+	// Activity: read Messages, calls and Mail when the app opens (on after the first good read).
+	AutoActivity bool     `json:"autoActivity,omitempty"`
+	IgnoredKeys  []string `json:"ignoredKeys,omitempty"` // "not a contact" numbers/emails
+	// Smart groups are saved searches shown in the sidebar.
+	SmartGroups []SmartGroup `json:"smartGroups,omitempty"`
+	// Reminders: birthdays and people to reach out to, once a day.
+	NoNotify     bool   `json:"noNotify,omitempty"`
+	LastNotified string `json:"lastNotified,omitempty"`
 }
 
 const layoutVersion = 1
@@ -57,4 +65,10 @@ func (c *Config) Save(dir string) error {
 	}
 	_ = os.MkdirAll(dir, 0o700)
 	return writeFileAtomic(configPath(dir), b, 0o600)
+}
+
+// SmartGroup is a saved search ("company:boubyan has:email").
+type SmartGroup struct {
+	Name  string `json:"name"`
+	Query string `json:"query"`
 }

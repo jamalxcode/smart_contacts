@@ -98,7 +98,30 @@ that haven't been built yet.
 - Birthday reminders as Mac notifications
 - Undo history that survives quitting (restore points do; the step-by-step list is per session)
 
+## Current limits of the newest features
+
+- **No system-wide shortcut for Quick Find.** The toolkit can't register a global hotkey; Quick Find
+  opens from the menu bar icon, or ⇧⌘O while the app is in front.
+- **WhatsApp history only from chat exports.** WhatsApp keeps its data encrypted and offers no
+  reader; each chat has to be exported (⋯ → Export Chat) and dropped on the window.
+- **Messages, calls and Mail need Full Disk Access** for the app. The databases' layouts are
+  Apple's and undocumented; if a macOS update changes them, that source shows as "couldn't be read"
+  rather than giving wrong dates.
+- **Calls and Messages only include what reaches the Mac:** iPhone calls appear when the iPhone and
+  Mac share calls (Continuity), and SMS when Text Message Forwarding is on.
+- **AI note tidying sends the note text** (and the person's name) to the OpenRouter model chosen in
+  Settings, and only when Cloud AI is switched on. Everything else in the app stays offline.
+- **Reminders are notifications from the app,** so they only appear while it's running (or when it
+  next opens); there's no background helper.
+
 ## Done
+
+- **Last talked** from Messages, calls, Mail, WhatsApp exports and Calendar; **People Not in
+  Contacts**; **keep-in-touch reminders** with a Reach Out list; dated notes; How we met; birthday
+  and reach-out notifications; **Quick Find** in the menu bar; **search filters** and **smart
+  groups**; **Needs Attention**; **AI note tidying**; **merge chooser**; company suggestions and
+  "make main number"; **encrypted backups and restore**; undo kept across restarts; and saving that
+  stays quick with 10,000 contacts.
 
 - **Undo and redo for every change**, a History window with restore points, **Select mode** for
   changing many people at once, **Bring Everything In** checklist, **Back Up To…** a drive,

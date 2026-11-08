@@ -78,20 +78,60 @@ func (u *ui) bringEverythingIn() {
 // backupTo writes a .zip of everything (contacts, photos, business cards, calendar, backups)
 // to a folder the user picks — an external drive, for example.
 func (u *ui) backupTo() {
+	pw1, pw2 := widget.NewPasswordEntry(), widget.NewPasswordEntry()
+	pw1.SetPlaceHolder("Optional")
+	pw2.SetPlaceHolder("Type it again")
+	info := caption("With a password the backup is encrypted (AES-256): safe on a USB stick or another drive. " +
+		"Without the password it can't be opened — keep it somewhere safe; it isn't stored anywhere.")
+	info.Wrapping = fyne.TextWrapWord
+	form := dialog.NewForm("Back Up To…", "Choose Folder…", "Cancel", []*widget.FormItem{
+		widget.NewFormItem("Password", pw1),
+		widget.NewFormItem("Confirm", pw2),
+		widget.NewFormItem("", info),
+	}, func(ok bool) {
+		if !ok {
+			return
+		}
+		if pw1.Text != pw2.Text {
+			showInfo("Passwords don't match", "Type the same password twice, or leave both empty for a plain backup.", u.win)
+			return
+		}
+		u.chooseBackupFolder(pw1.Text)
+	}, u.win)
+	form.Resize(fyne.NewSize(520, 0))
+	form.Show()
+}
+
+func (u *ui) chooseBackupFolder(password string) {
 	d := dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
 		if err != nil || dir == nil {
 			return
 		}
 		write := func() {
-			name := filepath.Join(dir.Path(), "Smart Contacts backup "+time.Now().Format("2006-01-02 1504")+".zip")
-			if err := zipDataDir(u.store.Dir(), name); err != nil {
+			base := filepath.Join(dir.Path(), "Smart Contacts backup "+time.Now().Format("2006-01-02 1504"))
+			if password == "" {
+				if err := zipDataDir(u.store.Dir(), base+".zip"); err != nil {
+					showErr(err, u.win)
+					return
+				}
+				u.flash("Backed up to " + base + ".zip")
+				return
+			}
+			plain, err := zipDataBytes(u.store.Dir())
+			if err == nil {
+				var sealed []byte
+				if sealed, err = EncryptBackup(plain, password); err == nil {
+					err = os.WriteFile(base+".scbackup", sealed, 0o600)
+				}
+			}
+			if err != nil {
 				showErr(err, u.win)
 				return
 			}
-			u.flash("Backed up to " + name)
+			u.flash("Encrypted backup saved to " + base + ".scbackup")
 		}
-		if InCloudFolder(dir.Path()) {
-			u.confirmCB("This folder syncs to the cloud", "A backup there leaves this Mac. Use an external drive or a local folder to keep it private. Save there anyway?", "Save Anyway", false, func(ok bool) {
+		if InCloudFolder(dir.Path()) && password == "" {
+			u.confirmCB("This folder syncs to the cloud", "A backup there leaves this Mac. Use an external drive, add a password, or save there anyway?", "Save Anyway", false, func(ok bool) {
 				if ok {
 					write()
 				}
@@ -102,6 +142,67 @@ func (u *ui) backupTo() {
 	}, u.win)
 	d.Resize(fyne.NewSize(760, 520))
 	d.Show()
+}
+
+// restoreBackup brings back a backup made with Back Up To… (plain .zip or encrypted .scbackup).
+func (u *ui) restoreBackup() {
+	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		if err != nil || r == nil {
+			return
+		}
+		data, err := io.ReadAll(r)
+		r.Close()
+		if err != nil {
+			showErr(err, u.win)
+			return
+		}
+		if IsEncryptedBackup(data) {
+			pw := widget.NewPasswordEntry()
+			f := dialog.NewForm("Encrypted Backup", "Open", "Cancel", []*widget.FormItem{widget.NewFormItem("Password", pw)}, func(ok bool) {
+				if !ok {
+					return
+				}
+				plain, err := DecryptBackup(data, pw.Text)
+				if err != nil {
+					showErr(err, u.win)
+					return
+				}
+				u.confirmRestore(plain)
+			}, u.win)
+			f.Resize(fyne.NewSize(420, 0))
+			f.Show()
+			u.win.Canvas().Focus(pw)
+			return
+		}
+		u.confirmRestore(data)
+	}, u.win)
+	d.Resize(fyne.NewSize(760, 520))
+	d.Show()
+}
+
+func (u *ui) confirmRestore(zipBytes []byte) {
+	u.confirmCB("Restore this backup?", "Your address book will be replaced with the one in the backup. Photos, business cards and calendar log come back too; your settings stay. "+
+		"A copy of the current address book is saved first, and ⌘Z undoes the restore.", "Restore", false, func(ok bool) {
+		if !ok {
+			return
+		}
+		path, cleanup, err := RestoreFiles(zipBytes, u.store.Dir())
+		if err != nil {
+			showErr(err, u.win)
+			return
+		}
+		defer cleanup()
+		if err := u.store.RestoreFile(path); err != nil {
+			showErr(err, u.win)
+			return
+		}
+		u.cal = LoadCalendar(u.store.Dir())
+		u.act = LoadActivity(u.store.Dir())
+		u.photoCache = map[string]fyne.Resource{}
+		u.invalidate()
+		u.refreshAll()
+		u.flash(fmt.Sprintf("Restored %d contacts from the backup", len(u.store.Contacts)))
+	}, u.win)
 }
 
 // zipDataDir zips the data folder. The settings file goes in without the OpenRouter key.
