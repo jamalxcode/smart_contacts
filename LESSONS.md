@@ -249,7 +249,7 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - "Download failed: 504 Gateway Timeout" came from GitHub's file-storage server, not from a missing file:
   the same file downloaded fine a minute later, and through the API link at the same moment.
 - The updater now retries with pauses (2, 5, 10, 20 s), resumes a half-finished download with a Range
-  request, then tries GitHub's API asset link. Only if all of that fails does it say "try again in a few
+  request, with GitHub's API asset link tried first (the plain release link kept failing), then the other link. Only if all of that fails does it say "try again in a few
   minutes" and show the Terminal line. install.sh does the same with curl --retry and -C -.
 - The build used to delete and recreate the "latest" release, leaving a moment with nothing to
   download. It now replaces the file in place.

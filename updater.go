@@ -111,7 +111,7 @@ func appBundle() string {
 // download instead of starting over.
 var (
 	retryWaits   = []time.Duration{0, 2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
-	downloadURLs = func() []string { return []string{releaseZip, assetAPIURL()} }
+	downloadURLs = func() []string { return []string{assetAPIURL(), releaseZip} } // the API link first: it has been the reliable one
 )
 
 // assetAPIURL is the API link of the release's zip ("" if GitHub can't be asked).
@@ -242,7 +242,7 @@ func downloadZip(path string, progress func(float64), status func(string)) error
 				break
 			}
 		}
-		if ui < len(urls)-1 && status != nil {
+		if ui < len(urls)-1 && urls[ui+1] != "" && status != nil {
 			status("Trying GitHub's other download link…")
 		}
 	}

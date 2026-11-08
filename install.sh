@@ -9,12 +9,13 @@ TMP="$(mktemp -d)"
 API="https://api.github.com/repos/jamalxcode/smart_contacts/releases/tags/latest"
 echo "Downloading Smart Contacts…"
 # GitHub's file server sometimes answers 504; retry, resume, then try the API link.
-get() { curl -fL --retry 5 --retry-delay 3 --retry-all-errors -C - --progress-bar "$@" -o "$TMP/sc.zip"; }
-if ! get "$URL"; then
-  echo "GitHub is slow — trying its other download link…"
+get() { curl -fL --retry 3 --retry-delay 3 --retry-all-errors -C - --progress-bar "$@" -o "$TMP/sc.zip"; }
+# GitHub's API download link has been the reliable one; the plain release link is the backup.
+ASSET="$(curl -fsSL "$API" 2>/dev/null | grep -o '"url": *"https://api.github.com/repos/[^"]*/releases/assets/[0-9]*"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/' || true)"
+if [ -z "$ASSET" ] || ! get -H "Accept: application/octet-stream" "$ASSET"; then
+  echo "Trying GitHub's other download link…"
   rm -f "$TMP/sc.zip"
-  ASSET="$(curl -fsSL "$API" | grep -o '"url": *"https://api.github.com/repos/[^"]*/releases/assets/[0-9]*"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')"
-  if [ -z "$ASSET" ] || ! get -H "Accept: application/octet-stream" "$ASSET"; then
+  if ! get "$URL"; then
     echo "The download didn't finish — GitHub's file server is busy. Try again in a few minutes." >&2
     exit 1
   fi
