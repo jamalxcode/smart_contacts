@@ -80,15 +80,12 @@ func (l *inkLine) CreateRenderer() fyne.WidgetRenderer {
 	r.lbl = canvas.NewText(strings.ToUpper(l.label), color.NRGBA{0x8A, 0x7E, 0x6C, 0xFF})
 	r.lbl.TextSize = 10
 	r.lbl.TextStyle.Bold = true
-	ink := theme.Color(theme.ColorNameForeground)
+	// the words wrap at the page edge instead of running past it
+	r.val = widget.NewLabel(strings.Join(l.lines, "\n"))
+	r.val.Wrapping = fyne.TextWrapWord
 	if l.faint {
-		ink = color.NRGBA{0x9A, 0x92, 0x84, 0xFF}
-	}
-	for _, s := range l.lines {
-		t := canvas.NewText(s, ink)
-		t.TextSize = 14
-		t.TextStyle.Italic = l.faint
-		r.vals = append(r.vals, t)
+		r.val.TextStyle.Italic = true
+		r.val.Importance = widget.LowImportance
 	}
 	r.rule = canvas.NewLine(ruleInk)
 	r.rule.StrokeWidth = 1
@@ -99,41 +96,43 @@ type inkRenderer struct {
 	l    *inkLine
 	bg   *canvas.Rectangle
 	lbl  *canvas.Text
-	vals []*canvas.Text
+	val  *widget.Label
 	rule *canvas.Line
 }
 
-const (
-	inkLabelW = 92
-	inkRowH   = 22
-)
+const inkLabelW = 92
 
-func (r *inkRenderer) Layout(s fyne.Size) {
-	r.bg.Move(fyne.NewPos(0, 1))
-	r.bg.Resize(fyne.NewSize(s.Width, s.Height-2))
-	r.lbl.Move(fyne.NewPos(6, 10))
+// valueX is where the words start: after the small label and the flag, if any.
+func (r *inkRenderer) valueX() float32 {
 	x := float32(inkLabelW + 8)
 	if r.l.label == "" {
 		x = 6
 	}
 	if r.l.icon != nil {
-		r.l.icon.Move(fyne.NewPos(x, 8))
-		r.l.icon.Resize(fyne.NewSize(20, 14))
 		x += 28
 	}
-	for i, t := range r.vals {
-		t.Move(fyne.NewPos(x, 5+float32(i)*inkRowH))
+	return x
+}
+
+func (r *inkRenderer) Layout(s fyne.Size) {
+	r.bg.Move(fyne.NewPos(0, 1))
+	r.bg.Resize(fyne.NewSize(s.Width, s.Height-2))
+	r.lbl.Move(fyne.NewPos(6, 10))
+	if r.l.icon != nil {
+		r.l.icon.Move(fyne.NewPos(r.valueX()-28, 9))
+		r.l.icon.Resize(fyne.NewSize(20, 14))
 	}
+	pad := theme.InnerPadding() // the label's own inset, so the words line up with the small label
+	x := r.valueX() - pad
+	w := fyne.Max(10, s.Width-x-2)
+	r.val.Move(fyne.NewPos(x, -2))
+	r.val.Resize(fyne.NewSize(w, r.val.MinSize().Height))
 	r.rule.Position1 = fyne.NewPos(4, s.Height-1)
 	r.rule.Position2 = fyne.NewPos(s.Width-4, s.Height-1)
 }
 
 func (r *inkRenderer) MinSize() fyne.Size {
-	w := float32(inkLabelW + 8)
-	for _, t := range r.vals {
-		w = fyne.Max(w, inkLabelW+8+t.MinSize().Width)
-	}
-	return fyne.NewSize(fyne.Min(w, 260), float32(len(r.vals))*inkRowH+10)
+	return fyne.NewSize(r.valueX()+40, fyne.Max(32, r.val.MinSize().Height))
 }
 
 func (r *inkRenderer) Refresh() {
@@ -151,10 +150,7 @@ func (r *inkRenderer) Objects() []fyne.CanvasObject {
 	if r.l.icon != nil {
 		objs = append(objs, r.l.icon)
 	}
-	for _, t := range r.vals {
-		objs = append(objs, t)
-	}
-	return append(objs, r.rule)
+	return append(objs, r.val, r.rule)
 }
 func (r *inkRenderer) Destroy() {}
 

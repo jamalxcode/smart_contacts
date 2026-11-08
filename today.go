@@ -303,7 +303,7 @@ func (u *ui) todayRow(c *Contact, why string, highlight bool, actions ...fyne.Ca
 	name := widget.NewLabelWithStyle(c.DisplayName(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	name.Truncation = fyne.TextTruncateEllipsis
 	sub := widget.NewLabel(why)
-	sub.Truncation = fyne.TextTruncateEllipsis
+	sub.Wrapping = fyne.TextWrapWord // the whole reason, on two lines if need be
 	sub.Importance = widget.LowImportance
 	sub.SizeName = theme.SizeNameCaptionText
 	if highlight {

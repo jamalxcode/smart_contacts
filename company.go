@@ -73,7 +73,7 @@ func (u *ui) personRow(c *Contact, why string, open func()) fyne.CanvasObject {
 	name := widget.NewLabelWithStyle(c.DisplayName(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	name.Truncation = fyne.TextTruncateEllipsis
 	sub := caption(why)
-	sub.Truncation = fyne.TextTruncateEllipsis
+	sub.Wrapping = fyne.TextWrapWord
 	return newTapRow(container.NewBorder(nil, nil, container.NewCenter(av), nil, container.New(&tightVBox{}, name, sub)), open)
 }
 

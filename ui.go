@@ -825,7 +825,7 @@ func (u *ui) refreshList() {
 	}
 	u.filtered = out
 	title := u.groupTitle()
-	if u.letter != "" && u.letterBox != nil {
+	if u.letter != "" && u.letterBox != nil && !isToday { // Today is a page, not a lettered list
 		title += " · " + u.letter
 	}
 	if q != "" {
