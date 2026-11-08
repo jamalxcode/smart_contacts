@@ -7,6 +7,7 @@ package main
 #cgo LDFLAGS: -framework Cocoa -framework QuartzCore
 #import <Cocoa/Cocoa.h>
 #import <QuartzCore/QuartzCore.h>
+#include <stdlib.h>
 
 // scFitWindow animates the window to a content size of w×h points. The right edge stays where it
 // is (the front cover swings open to the left, like a real organiser) and the top edge stays put;
@@ -51,13 +52,40 @@ static void scDarkChrome(uintptr_t handle, int dark) {
 		win.appearance = nil;
 	}
 }
+
+// scSetMenuTitle changes the title of every menu item whose title starts with prefix. Only the
+// words change: nothing is added, removed or rebuilt.
+static void scSetMenuTitle(const char *prefix, const char *title) {
+	NSString *p = [NSString stringWithUTF8String:prefix];
+	NSString *t = [NSString stringWithUTF8String:title];
+	void (^apply)(void) = ^{
+		for (NSMenuItem *top in [[NSApp mainMenu] itemArray]) {
+			for (NSMenuItem *it in [[top submenu] itemArray]) {
+				if ([[it title] hasPrefix:p] && ![[it title] isEqualToString:t]) {
+					[it setTitle:t];
+				}
+			}
+		}
+	};
+	if ([NSThread isMainThread]) apply(); else dispatch_async(dispatch_get_main_queue(), apply);
+}
 */
 import "C"
 
 import (
+	"unsafe"
+
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver"
 )
+
+// setMenuTitle changes the words of the menu bar items starting with prefix, in place.
+func setMenuTitle(prefix, title string) {
+	cp, ct := C.CString(prefix), C.CString(title)
+	defer C.free(unsafe.Pointer(cp))
+	defer C.free(unsafe.Pointer(ct))
+	C.scSetMenuTitle(cp, ct)
+}
 
 func nsWindow(w fyne.Window) uintptr {
 	var h uintptr

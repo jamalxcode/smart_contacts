@@ -70,7 +70,7 @@ type storeMeta struct {
 	Links  []Link      `json:"links,omitempty"`
 }
 
-// TrashItem is a deleted contact, kept for 30 days.
+// TrashItem is a card moved to the Trash, kept until the Trash is emptied.
 type TrashItem struct {
 	Contact *Contact  `json:"contact"`
 	Deleted time.Time `json:"deleted"`
@@ -123,7 +123,7 @@ func OpenStore(dir string) (*Store, error) {
 		return nil, fmt.Errorf("contacts.json is damaged (%v); the daily backups are in %s", err, filepath.Join(dir, "backups"))
 	}
 	s.Contacts, s.Trash, s.ExtraGroups, s.Links = f.Contacts, f.Trash, f.Groups, f.Links
-	s.purgeTrash(time.Now())
+	// trashed cards stay until the Trash is emptied (Card → Empty Trash)
 	order, js, meta := s.encode()
 	s.remember(order, js, meta)
 	s.saved = true

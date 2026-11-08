@@ -1,7 +1,6 @@
 package main
 
 import (
-	"image/color"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -233,13 +232,7 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 	case u.selectMode:
 		clip.Label = "Clip This Card Too"
 	}
-	del := fyne.NewMenuItem("Delete…", func() {
-		if u.selectMode && len(u.picked) > 0 {
-			u.bulkDelete(u.pickedContacts())
-		} else {
-			u.deleteContact(c)
-		}
-	})
+	del := fyne.NewMenuItem("Move to Trash", u.cmdTrash)
 	m := fyne.NewMenu("",
 		head,
 		fyne.NewMenuItemSeparator(),
@@ -259,7 +252,7 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 	)
 	icons := cardMenuIcons()
 	icons[clip.Label] = icons["Clip Cards"]
-	icons["Delete…"] = menuIcon{theme.DeleteIcon(), color.NRGBA{0x9A, 0x30, 0x28, 0xFF}}
+
 	iconize(m, icons)
 	return m
 }

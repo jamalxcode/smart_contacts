@@ -165,14 +165,9 @@ func (u *ui) bulkDelete(cs []*Contact) {
 		names = append(names, c.DisplayName())
 	}
 	what := fmt.Sprintf("%d %s", len(cs), pluralWords(len(cs), "card", "cards"))
-	// first warning
-	u.confirmCB("Delete "+what+"?", strings.Join(names, "\n"), "Delete…", true, func(ok bool) {
-		if !ok {
-			return
-		}
-		// second warning: say plainly what happens, and make the button name the number
-		u.confirmCB("Are you sure?", fmt.Sprintf("You're about to delete %s. They move to the Trash for 30 days "+
-			"(View → Trash), and ⌘Z undoes it right away.", what), "Yes, Delete "+what, true, func(ok bool) {
+	// one question, naming them: they go to the Trash, where Show Trash can put them back
+	u.confirmCB("Move "+what+" to the Trash?", strings.Join(names, "\n")+"\n\nThey stay in the Trash until you empty it, and Show Trash can put them back.",
+		"Move to Trash", false, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -184,9 +179,8 @@ func (u *ui) bulkDelete(cs []*Contact) {
 			u.store.Delete(ids...)
 			u.save()
 			u.updateBulkBar()
-			u.flash(fmt.Sprintf("Moved %s to the Trash (⌘Z to undo)", what))
+			u.flash(fmt.Sprintf("Moved %s to the Trash", what))
 		}, u.win)
-	}, u.win)
 }
 
 // bulkMenu is every command that works on several people at once: the selection bar's More

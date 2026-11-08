@@ -52,6 +52,8 @@ func inkIcon(res fyne.Resource, col color.NRGBA) fyne.Resource {
 	return r
 }
 
+var trashInk = color.NRGBA{0x6E, 0x68, 0x5E, 0xFF}
+
 type menuIcon struct {
 	res fyne.Resource
 	col color.NRGBA
@@ -72,6 +74,9 @@ func cardMenuIcons() map[string]menuIcon {
 		"Share":            {theme.UploadIcon(), deep(7)},
 		"Clip Cards":       {iconClipOutline, deep(8)},
 		"Check Messages…":  {iconMessage, deep(9)},
+		"Move to Trash":    {theme.DeleteIcon(), trashInk},
+		"Show Trash…":      {theme.DeleteIcon(), trashInk},
+		"Empty Trash…":     {theme.DeleteIcon(), color.NRGBA{0x9A, 0x30, 0x28, 0xFF}},
 	}
 }
 

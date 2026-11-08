@@ -98,6 +98,9 @@ func (u *ui) actionsRow(c *Contact) fyne.CanvasObject {
 	actions := container.NewGridWrap(fyne.NewSize(62, roundSize+22))
 	var more []*fyne.MenuItem
 	shown := 0
+	// the wastebasket sits right after message: for a card you don't need any more
+	trash := newRoundAction("trash", theme.DeleteIcon(), func() { u.deleteContact(c) })
+	trashed := false
 	for _, a := range c.Actions(u.cfg.CountryCode) {
 		a := a
 		if a.More || shown == 6 {
@@ -106,6 +109,13 @@ func (u *ui) actionsRow(c *Contact) fyne.CanvasObject {
 		}
 		actions.Add(newRoundAction(a.Title, actionIcon(a.Kind), func() { u.open(c, a.Link) }))
 		shown++
+		if a.Kind == "message" {
+			actions.Add(trash)
+			trashed = true
+		}
+	}
+	if !trashed { // no number to message: it goes first
+		actions.Objects = append([]fyne.CanvasObject{trash}, actions.Objects...)
 	}
 	if len(more) > 0 {
 		var mb *roundAction

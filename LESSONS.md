@@ -375,7 +375,14 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - The sticky note no longer has its own buttons. It counts the clips, says the tabs, the Card menu and right-click now act on them, and keeps Clip All / Unclip All / Take Clips Off.
 - Words that sat on the leather in cream are now black on small paper labels: the tab column's headings (TO TIDY, GROUPS…) and the status line (`statusLabel`, refitted with `fitStatus` whenever the text changes). Tab names went up from 12 to 13.5 points.
 
-## 29. Ideas not done yet
+## 29. A Trash that keeps cards until it's emptied
+
+- Cards moved to the Trash stay until Empty Trash. The 30-day purge is gone.
+- Moving one card to the Trash doesn't ask, as Finder doesn't: nothing is lost, and the banner has Undo. Moving several clipped cards asks once, naming them.
+- Move to Trash, Show Trash (with Put Back and Put Back All) and Empty Trash are in the Card menu, a grey Trash tab after Check Messages, and the right-click menu. A trash button sits on the card after message.
+- The Card menu shows the count ("Empty Trash (3)…") without rebuilding the menu. On a Mac, `setMenuTitle` changes just the NSMenuItem's title in place. Fyne's model keeps the plain title, so `refreshMenu`'s layout check still matches.
+
+## 30. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

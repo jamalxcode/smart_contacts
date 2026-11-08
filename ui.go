@@ -1207,8 +1207,10 @@ func (u *ui) statusText() string {
 	return s + "   ·   " + where
 }
 
+// deleteContact moves a card to the Trash straight away, as Finder does: nothing is lost (Show
+// Trash puts it back, and the banner's Undo does too), so there's no question to answer.
 func (u *ui) deleteContact(c *Contact) {
-	u.confirm("Delete “"+c.DisplayName()+"”?", "The card moves to the Trash for 30 days, and you can undo this with ⌘Z.", "Delete", true, func() {
+	func() {
 		i := u.indexOf(c.ID)
 		u.store.Delete(c.ID)
 		// show the neighbour, not the top of the list
@@ -1222,7 +1224,7 @@ func (u *ui) deleteContact(c *Contact) {
 		}
 		u.save()
 		u.flash("Moved " + c.DisplayName() + " to the Trash")
-	})
+	}()
 }
 
 // ---------- avatar ----------

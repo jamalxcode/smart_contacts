@@ -1,6 +1,7 @@
 package main
 
 import (
+	"fmt"
 	"image/color"
 
 	"fyne.io/fyne/v2"
@@ -211,7 +212,7 @@ func isSVG(res fyne.Resource) bool {
 type toolbarParts struct {
 	who                                           *canvas.Text
 	note, fav, keep, groups, conn, share, clipBtn *toolButton
-	today                                         *toolButton
+	today, trash                                  *toolButton
 }
 
 // buildToolbar makes the toolbar for the organiser.
@@ -234,6 +235,18 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	t.share = newToolButton(theme.UploadIcon(), "Share", func(b *toolButton) { popup(b, u.shareItems()) })
 	t.clipBtn = newToolButton(clipOn, "Clip Cards", func(*toolButton) { u.toggleSelectMode() })
 	check := newToolButton(iconMessage, "Check Messages", func(*toolButton) { u.cmdCheckMessages() })
+	// the wastebasket: move what's chosen into it, look inside to put cards back, or empty it
+	t.trash = newToolButton(theme.DeleteIcon(), "Trash", func(b *toolButton) {
+		ts := u.targets()
+		move := fyne.NewMenuItem("Move "+u.targetText(ts)+" to the Trash", u.cmdTrash)
+		move.Disabled = len(ts) == 0
+		n := len(u.store.Trash)
+		show := fyne.NewMenuItem(fmt.Sprintf("Show Trash (%d)…", n), u.trash)
+		empty := fyne.NewMenuItem(fmt.Sprintf("Empty Trash (%d)…", n), u.cmdEmptyTrash)
+		empty.Disabled = n == 0
+		popup(b, []*fyne.MenuItem{move, fyne.NewMenuItemSeparator(), show, empty})
+	})
+	t.trash.col = color.NRGBA{0xC8, 0xC2, 0xB6, 0xFF} // a grey card: the wastebasket
 
 	today.col = color.NRGBA{0xF6, 0xF0, 0xE0, 0xFF} // the diary page's cream
 	for i, b := range []*toolButton{t.note, t.fav, t.keep, t.groups, t.conn, tidy, dupes, t.share, t.clipBtn, check} {
@@ -264,6 +277,8 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 		t.clipBtn,
 		divider(),
 		check,
+		divider(),
+		t.trash,
 		layout.NewSpacer(),
 	)
 	u.tools = t
@@ -317,6 +332,12 @@ func (u *ui) refreshToolbar() {
 	} else {
 		t.fav.setIcon(iconStarOff)
 	}
+	if n := len(u.store.Trash); n > 0 { // how many cards are in it
+		t.trash.text = fmt.Sprintf("Trash (%d)", n)
+	} else {
+		t.trash.text = "Trash"
+	}
+	t.trash.Refresh()
 	// Clip Cards stays lit while cards are being clipped, as the menu item has its tick
 	t.clipBtn.on = u.selectMode
 	t.clipBtn.Refresh()

@@ -246,6 +246,14 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		clipToggle,
 		sep(),
 		item("Check Messages…", cmdShift(fyne.KeyU), u.cmdCheckMessages),
+		sep(),
+		onTargets("Move to Trash", nil, u.cmdTrash),
+		item("Show Trash…", nil, u.trash),
+		func() *fyne.MenuItem {
+			m := item("Empty Trash…", nil, u.cmdEmptyTrash)
+			m.Disabled = len(u.store.Trash) == 0
+			return m
+		}(),
 	}
 	card := fyne.NewMenu("Card", cardItems...)
 	iconize(card, cardMenuIcons()) // the same pictures as the toolbar's tabs
@@ -277,6 +285,7 @@ func (u *ui) refreshMenu() {
 		return
 	}
 	u.refreshToolbar() // the toolbar follows the same state as the menu
+	defer u.trashTitles()
 	m := u.mainMenu()
 	if u.menu == nil {
 		u.menu = m
@@ -930,48 +939,112 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 
 // ---------- trash ----------
 
+// trash is the Trash window (Card → Show Trash, View → Trash, the Trash tab): every card in it,
+// newest first, each with Put Back; and Put Back All and Empty Trash at the bottom.
 func (u *ui) trash() {
 	if len(u.store.Trash) == 0 {
-		showInfo("Trash is empty", "Deleted contacts stay here for 30 days.", u.win)
+		showInfo("The Trash is empty", "Cards you move to the Trash stay there until you empty it, so you can put them back.", u.win)
 		return
 	}
 	box := container.NewVBox()
 	var d *paperDialog
 	var fill func()
+	putBack := func(ids ...string) {
+		for _, id := range ids {
+			u.store.Restore(id)
+		}
+		if len(ids) == 1 {
+			u.selectedID = ids[0]
+		}
+		u.save()
+		u.flash(fmt.Sprintf("Put back %d %s from the Trash", len(ids), pluralWords(len(ids), "card", "cards")))
+		if len(u.store.Trash) == 0 {
+			d.Hide()
+			return
+		}
+		fill()
+	}
 	fill = func() {
 		box.Objects = nil
 		for i := len(u.store.Trash) - 1; i >= 0; i-- {
 			t := u.store.Trash[i]
-			left := 30 - int(time.Since(t.Deleted).Hours()/24)
-			lbl := widget.NewLabel(t.Contact.DisplayName())
-			when := caption(fmt.Sprintf("deleted %s · gone in %d days", Ago(t.Deleted, time.Now()), left))
-			restore := widget.NewButtonWithIcon("Restore", theme.ContentUndoIcon(), func() {
-				u.store.Restore(t.Contact.ID)
-				u.selectedID = t.Contact.ID
-				u.save()
-				if len(u.store.Trash) == 0 {
-					d.Hide()
-				}
-				fill()
-			})
-			box.Add(container.NewBorder(nil, nil, nil, restore, container.NewVBox(lbl, when)))
+			av := newAvatar(30)
+			av.set(t.Contact, nil)
+			lbl := widget.NewLabelWithStyle(t.Contact.DisplayName(), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+			lbl.Truncation = fyne.TextTruncateEllipsis
+			what := t.Contact.Subtitle()
+			when := caption(strings.Trim("trashed "+Ago(t.Deleted, time.Now())+" · "+what, " ·"))
+			when.Truncation = fyne.TextTruncateEllipsis
+			id := t.Contact.ID
+			back := widget.NewButtonWithIcon("Put Back", theme.ContentUndoIcon(), func() { putBack(id) })
+			back.Importance = widget.LowImportance
+			box.Add(container.NewBorder(nil, nil, container.NewCenter(av), back, container.New(&tightVBox{}, lbl, when)))
+		}
+		d.title = fmt.Sprintf("Trash — %d %s", len(u.store.Trash), pluralWords(len(u.store.Trash), "card", "cards"))
+		if d.sheet != nil {
+			d.sheet.title = d.title
+			d.sheet.Refresh()
 		}
 		box.Refresh()
 	}
+	all := newPaperButton("Put Back All", btnPlain, func() {
+		var ids []string
+		for _, t := range u.store.Trash {
+			ids = append(ids, t.Contact.ID)
+		}
+		putBack(ids...)
+	})
+	empty := newPaperButton("Empty Trash…", btnDanger, func() { d.Hide(); u.cmdEmptyTrash() })
+	closeB := newPaperButton("Close", btnPlain, func() { d.Hide() })
+	note := caption("Cards stay here until you empty the Trash.")
+	d = newCustomWithoutButtons("Trash", container.NewBorder(nil, note, nil, nil, container.NewVScroll(box)), u.win)
+	d.clipboard = true
+	d.SetButtons([]fyne.CanvasObject{all, empty, closeB})
 	fill()
-	empty := widget.NewButtonWithIcon("Empty Trash", theme.DeleteIcon(), func() {
-		u.confirmCB("Empty the Trash?", "These contacts will be gone for good.", "Empty Trash", true, func(ok bool) {
+	d.Resize(fyne.NewSize(560, 480))
+	d.Show()
+}
+
+// cmdEmptyTrash deletes everything in the Trash for good, after asking.
+func (u *ui) cmdEmptyTrash() {
+	n := len(u.store.Trash)
+	if n == 0 {
+		showInfo("The Trash is empty", "There's nothing to delete.", u.win)
+		return
+	}
+	what := fmt.Sprintf("%d %s", n, pluralWords(n, "card", "cards"))
+	u.confirmCB("Empty the Trash?", "The "+what+" in the Trash will be deleted for good, with their photos and business cards. This can't be undone.",
+		"Empty Trash", true, func(ok bool) {
 			if ok {
 				u.store.EmptyTrash()
 				u.save()
-				d.Hide()
+				u.flash("Emptied the Trash — " + what + " deleted for good")
 			}
 		}, u.win)
-	})
-	empty.Importance = widget.DangerImportance
-	d = newCustom("Trash", "Close", container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), empty), nil, nil, container.NewVScroll(box)), u.win)
-	d.Resize(fyne.NewSize(520, 460))
-	d.Show()
+}
+
+// cmdTrash moves what the commands act on (the open card, or the clipped cards) to the Trash.
+func (u *ui) cmdTrash() {
+	cs := u.targets()
+	switch len(cs) {
+	case 0:
+	case 1:
+		u.deleteContact(cs[0])
+	default:
+		u.bulkDelete(cs)
+	}
+}
+
+// trashTitles puts the number of cards in the Trash into the Card menu's Show Trash and Empty
+// Trash (on a Mac the titles are changed in place; the menu is never rebuilt — see refreshMenu).
+func (u *ui) trashTitles() {
+	n := len(u.store.Trash)
+	show, empty := "Show Trash…", "Empty Trash…"
+	if n > 0 {
+		show, empty = fmt.Sprintf("Show Trash (%d)…", n), fmt.Sprintf("Empty Trash (%d)…", n)
+	}
+	setMenuTitle("Show Trash", show)
+	setMenuTitle("Empty Trash", empty)
 }
 
 // ---------- groups ----------
@@ -1185,6 +1258,8 @@ func (u *ui) help() {
 
 **Today.** The first tab, Today (⌘0, also first in the Card menu and the toolbar), is the day's page: birthdays this week (call, message or WhatsApp them), people due a call from Keep in Touch (with Done to mark you've been in touch), people you met in the last two weeks from the calendar log (with Note), and cards waiting to be tidied (with Review). Click anyone to open their card. Typing a search shows the list again. Settings → Open at the first page now opens on Today.
 
+**Trash.** Move to Trash (Card menu, the Trash tab above the book, right-click, or the trash button on a card next to message) puts the open card, or the clipped cards, in the Trash straight away; the banner's Undo brings it back. Cards stay in the Trash until you empty it. Show Trash lists them with Put Back (or Put Back All); Empty Trash deletes them for good, after asking. The Card menu and the Trash tab show how many cards are in it.
+
 **Menus and the organiser match.** The View menu and the tabs down the left have the same sections, names and order: the lists, To Tidy, Saved Searches, Groups, then Sort and Also in the Book (Calendar Log, Trash). The tabs show each group and saved search by name; in the menu use Go to Group… (⌘G) and Go to Saved Search…. The Card menu and the toolbar above the book also match each other.
 
 **What a command acts on.** The Card menu and the toolbar above the organiser have the same ten commands, with the same names in the same order: Add Note, Favorite, Keep in Touch, Groups, Connections, Tidy Up, Find Duplicates, Share, Clip Cards and Check Messages (Messages, calls and Mail). They act on the clipped cards if any are clipped, otherwise on the open card. The toolbar says which at its left (“Acting on: Ali Hassan” or “3 clipped cards”). Tidy Up and Find Duplicates ask in their window, because they can also take the whole address book. Commands that can't act right now are dimmed. Connections with two cards clipped shows how those two are linked. Edit → Delete deletes the clipped cards if there are any, otherwise the open card, and always asks first, naming them.
@@ -1221,7 +1296,7 @@ func (u *ui) help() {
 
 **Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app goes online only for Cloud AI (if you switch it on) and Help → Check for Updates.
 
-**Safety.** Deleted cards stay in the Trash (View → Trash) for 30 days. A backup is kept for each of the last 30 days. File → Back Up To… saves everything to a drive you choose, encrypted if you give a password; File → Restore from Backup… brings one back. Undo history is kept when you quit.
+**Safety.** Cards you move to the Trash stay there until you empty it (Card → Show Trash puts them back; Card → Empty Trash deletes them for good). A backup is kept for each of the last 30 days. File → Back Up To… saves everything to a drive you choose, encrypted if you give a password; File → Restore from Backup… brings one back. Undo history is kept when you quit.
 
 **Keys:** ⌘N new card · ⇧⌘N new group · ⌥⌘N Smart Add · ⌘O import · ⌘F find · ⌘L type in the card · ⌘S save · ⌘⌫ delete · ⌘Z undo · ⇧⌘Z redo · ⌘A select all · ⌘1–4 lists · ⇧⌘F favorite · ⌘K connect · ⇧⌘K how connected · ⇧⌘D duplicates · ⇧⌘M merge · ⇧⌘L calendar · ⌘5 reach out · ⌘6 needs attention · ⌘J note · ⇧⌘U update last talked · ⇧⌘O quick find · ⌘, settings`
 	r := widget.NewRichTextFromMarkdown(text)
