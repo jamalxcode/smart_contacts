@@ -303,7 +303,7 @@ Opening one card and then another made the app vanish. Since 1.0.33 the Card men
 
 ## 19. The icon
 
-`Icon.png` is drawn in code by `TestMakeIcon` (`MAKE_ICON=Icon.png go test -run TestMakeIcon .`), with the same leather, brass and serif fonts as the cover, so it matches the closed organiser. After an update, `touch` and `lsregister` make Finder and the Dock show the new icon instead of a cached one.
+`Icon.png` is drawn in code by `TestMakeIcon` (`MAKE_ICON=Icon.png go test -run TestMakeIcon .`), with the same leather, brass and serif fonts as the cover, so it matches the closed organiser. macOS 26 puts any icon that doesn't fill Apple's rounded square onto a grey tile, so the icon fills the whole square (`squircle`): a fat organiser on dark felt, with cards out of the top, a deep page block and coloured tabs down the fore-edge. After an update, `touch` and `lsregister` make Finder and the Dock show the new icon instead of a cached one.
 
 ## 20. A card is read, then written on
 

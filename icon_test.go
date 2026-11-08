@@ -229,7 +229,7 @@ func shade(s int, top, bottom float64) *image.NRGBA {
 
 // appIcon draws the closed organiser on Apple's icon grid (the book stands within the
 // 824-point body of a 1024 canvas, with a soft shadow below).
-func appIcon(s int) image.Image {
+func appIconFlat(s int) image.Image {
 	k := float32(s) / 1024
 	out := image.NewNRGBA(image.Rect(0, 0, s, s))
 	// leather, drawn at half size and enlarged so the grain still reads when the icon is small
@@ -355,4 +355,176 @@ func drawTitle(out *image.NRGBA, k float32, cx, base float32) {
 	draw.Draw(out, r.Add(image.Pt(0, int(2*k))), uni(0x20, 0x0A, 0x00), image.Point{}, draw.Over)
 	draw.Draw(out, r, uni(0xE2, 0xBA, 0x66), image.Point{}, draw.Over)
 	write(ital, 54, "Address Book", base+214*k)
+}
+
+// squircle is Apple's icon shape (close to a superellipse), filling the 824-point body of the
+// 1024 canvas. macOS 26 puts any icon that doesn't fill this shape onto a grey tile.
+func squircle(s int) *image.Alpha {
+	k := float32(s) / 1024
+	r := vector.NewRasterizer(s, s)
+	c, a := 512*k, 412*k
+	const n = 5.0
+	for i := 0; i <= 720; i++ {
+		t := 2 * math.Pi * float64(i) / 720
+		ct, st := math.Cos(t), math.Sin(t)
+		x := c + a*float32(math.Copysign(math.Pow(math.Abs(ct), 2/n), ct))
+		y := c + a*float32(math.Copysign(math.Pow(math.Abs(st), 2/n), st))
+		if i == 0 {
+			r.MoveTo(x, y)
+		} else {
+			r.LineTo(x, y)
+		}
+	}
+	r.ClosePath()
+	m := image.NewAlpha(image.Rect(0, 0, s, s))
+	r.Draw(m, m.Bounds(), image.Opaque, image.Point{})
+	return m
+}
+
+// quadMask is a filled four-sided shape (for things set down at an angle).
+func quadMask(s int, pts [4][2]float32) *image.Alpha {
+	r := vector.NewRasterizer(s, s)
+	r.MoveTo(pts[0][0], pts[0][1])
+	for _, p := range pts[1:] {
+		r.LineTo(p[0], p[1])
+	}
+	r.ClosePath()
+	m := image.NewAlpha(image.Rect(0, 0, s, s))
+	r.Draw(m, m.Bounds(), image.Opaque, image.Point{})
+	return m
+}
+
+// tilted is a w×h rectangle centred on (cx, cy), turned by deg degrees.
+func tilted(cx, cy, w, h, deg float32) [4][2]float32 {
+	a := float64(deg) * math.Pi / 180
+	c, sn := float32(math.Cos(a)), float32(math.Sin(a))
+	var out [4][2]float32
+	for i, p := range [4][2]float32{{-w / 2, -h / 2}, {w / 2, -h / 2}, {w / 2, h / 2}, {-w / 2, h / 2}} {
+		out[i] = [2]float32{cx + p[0]*c - p[1]*sn, cy + p[0]*sn + p[1]*c}
+	}
+	return out
+}
+
+// appIcon is the organiser fat with cards, filling the icon's rounded square: the leather
+// cover with its gold title, stitching and strap; a deep block of pages down the fore-edge and
+// along the bottom; coloured index tabs and cards sticking out.
+func appIcon(s int) image.Image {
+	k := float32(s) / 1024
+	art := image.NewNRGBA(image.Rect(0, 0, s, s))
+	cover := scaled(leatherImage(s/2, s/2, [3]float64{0x8E, 0x48, 0x22}, 7), s)
+	back := scaled(leatherImage(s/2, s/2, [3]float64{0x55, 0x2A, 0x14}, 9), s)
+	strapLeather := scaled(leatherImage(s/3, s/3, [3]float64{0x7A, 0x3C, 0x1C}, 13), s)
+	shadowAt := func(m *image.Alpha, dx, dy, blur int, op float64) {
+		paint(art, uni(0, 0, 0), blurAlpha(shift(m, dx, dy), blur), op)
+	}
+
+	// the desk: dark felt, lit from the top
+	full := image.NewAlpha(art.Rect)
+	for i := range full.Pix {
+		full.Pix[i] = 255
+	}
+	paint(art, uni(0x2E, 0x2D, 0x30), full, 1)
+	paint(art, scaled(feltImage(), s), full, 0.5)
+	paint(art, shade(s, 0.10, -0.30), full, 1)
+
+	// cards tucked in the top, sticking out at angles
+	cards := []struct {
+		cx, cy, w, h, deg float32
+		col               *image.Uniform
+	}{
+		{300, 150, 230, 120, -7, uni(0xF6, 0xF1, 0xE4)},
+		{470, 135, 210, 110, 4, uni(0xFF, 0xFF, 0xFF)},
+		{640, 148, 220, 116, -3, uni(0xF3, 0xE6, 0xC4)},
+	}
+	for i, c := range cards {
+		m := quadMask(s, tilted(c.cx*k, c.cy*k, c.w*k, c.h*k, c.deg))
+		shadowAt(m, int(3*k), int(6*k), int(6*k), 0.45)
+		paint(art, c.col, m, 1)
+		// a printed name and a line or two
+		ink := uni(0x4A, 0x3E, 0x30)
+		for j, lw := range []float32{0.55, 0.38, 0.45} {
+			y := c.cy - c.h*0.30 + float32(j)*c.h*0.16
+			line := quadMask(s, tilted((c.cx-c.w*0.18+lw*c.w*0.5-c.w*0.25)*k, y*k, lw*c.w*k, float32(5+3*boolf(j == 0))*k, c.deg))
+			paint(art, ink, line, 0.55-0.15*float64(i%2))
+		}
+	}
+
+	// back cover, then the fat block of pages
+	bx0, by0, bx1, by1 := 128*k, 176*k, 900*k, 912*k
+	backM := rrMask(s, bx0, by0, bx1, by1, 44*k)
+	shadowAt(backM, int(6*k), int(16*k), int(18*k), 0.6)
+	paint(art, back, backM, 1)
+	pages := rrMask(s, 142*k, 186*k, 878*k, 884*k, 26*k)
+	paint(art, uni(0xF2, 0xEA, 0xD6), pages, 1)
+	// page edges: fine lines down the fore-edge and along the bottom
+	edges := image.NewNRGBA(art.Rect)
+	step := int(math.Max(2, float64(4*k)))
+	for y := 0; y < s; y++ {
+		for x := 0; x < s; x++ {
+			fx, fy := float32(x), float32(y)
+			on := (fx > 812*k && (x/step)%2 == 0) || (fy > 838*k && (y/step)%2 == 0)
+			if on {
+				i := y*edges.Stride + x*4
+				edges.Pix[i], edges.Pix[i+1], edges.Pix[i+2], edges.Pix[i+3] = 0xB4, 0xA2, 0x80, 0xA0
+			}
+		}
+	}
+	paint(art, edges, pages, 1)
+
+	// coloured index tabs out of the fore-edge
+	tabCols := [][3]uint8{{0xA8, 0x3A, 0x32}, {0xC2, 0x6E, 0x2C}, {0xC9, 0xA2, 0x3A}, {0x5E, 0x8A, 0x4A}, {0x2F, 0x7A, 0x76}, {0x36, 0x5F, 0x9A}, {0x62, 0x4C, 0x92}}
+	for i, c := range tabCols {
+		y0 := (232 + float32(i)*86) * k
+		m := rrMask(s, 820*k, y0, 914*k, y0+64*k, 12*k)
+		shadowAt(m, int(2*k), int(4*k), int(4*k), 0.4)
+		paint(art, uni(c[0], c[1], c[2]), m, 1)
+		paint(art, shade(s, 0.18, -0.12), m, 1)
+	}
+
+	// front cover
+	fx0, fy0, fx1, fy1 := 118*k, 166*k, 820*k, 846*k
+	front := rrMask(s, fx0, fy0, fx1, fy1, 46*k)
+	shadowAt(front, int(8*k), int(10*k), int(12*k), 0.55)
+	paint(art, cover, front, 1)
+	paint(art, shade(s, 0.12, -0.24), front, 1)
+	inner := blurAlpha(rrMask(s, fx0+14*k, fy0+14*k, fx1-14*k, fy1-14*k, 36*k), int(10*k))
+	paint(art, uni(0x2A, 0x10, 0x04), subtract(front, inner), 0.55)
+	spineX := fx0 + 58*k
+	fold := rrMask(s, spineX-3*k, fy0+6*k, spineX+3*k, fy1-6*k, 3*k)
+	paint(art, uni(0x2A, 0x10, 0x04), fold, 0.8)
+	paint(art, uni(0xD8, 0x9A, 0x62), shift(fold, int(5*k), 0), 0.35)
+	gold := uni(0xE6, 0xC2, 0x72)
+	st := stitches(s, fx0+24*k, fy0+24*k, fx1-24*k, fy1-24*k, 26*k, 22*k, 13*k, 6*k)
+	paint(art, uni(0x1E, 0x0A, 0x00), blurAlpha(shift(st, int(2*k), int(3*k)), int(2*k)), 0.7)
+	paint(art, gold, st, 1)
+	drawTitle(art, k, (spineX+fx1-20*k)/2, 330*k)
+
+	// the strap, stretched over the fat pages to its snap
+	sx0, sy0, sx1, sy1 := 640*k, 560*k, 900*k, 770*k
+	strap := rrMask(s, sx0, sy0, sx1, sy1, 36*k)
+	shadowAt(strap, int(4*k), int(12*k), int(12*k), 0.6)
+	paint(art, strapLeather, strap, 1)
+	paint(art, shade(s, 0.12, -0.25), strap, 1)
+	sst := stitches(s, sx0+16*k, sy0+16*k, sx1-16*k, sy1-16*k, 22*k, 16*k, 10*k, 5*k)
+	paint(art, uni(0x1E, 0x0A, 0x00), shift(sst, int(1*k), int(2*k)), 0.6)
+	paint(art, gold, sst, 0.9)
+	d := int(100 * k)
+	cx, cy := int((sx0+sx1)/2-10*k), int((sy0+sy1)/2)
+	dot := rrMask(s, float32(cx-d/2)+5*k, float32(cy-d/2)+9*k, float32(cx+d/2)+5*k, float32(cy+d/2)+9*k, float32(d)/2)
+	paint(art, uni(0, 0, 0), blurAlpha(dot, int(6*k)), 0.6)
+	draw.Draw(art, image.Rect(cx-d/2, cy-d/2, cx+d/2, cy+d/2), brassImage(d), image.Point{}, draw.Over)
+
+	// everything inside the rounded square, with a soft shadow under it
+	out := image.NewNRGBA(art.Rect)
+	sq := squircle(s)
+	paint(out, uni(0, 0, 0), blurAlpha(shift(sq, 0, int(10*k)), int(12*k)), 0.35)
+	paint(out, art, sq, 1)
+	return out
+}
+
+func boolf(b bool) float32 {
+	if b {
+		return 1
+	}
+	return 0
 }
