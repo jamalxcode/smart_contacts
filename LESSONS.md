@@ -361,7 +361,15 @@ Fourteen import choices on one sheet overwhelmed people. Import is now a wizard 
 - A 36 px, 144 dpi copy of the funnel is File → Import…'s menu icon. macOS sizes a menu image by its dpi, so a plain 256 px PNG would be huge.
 - A dialog made of choices has no text fields, so it's marked `clipboard` by hand.
 
-## 27. Ideas not done yet
+## 27. Menu icons match the tabs
+
+The Card and View menu items carry the same pictures as their toolbar tabs and side tabs (`menuicons.go`).
+
+- Fyne tints a *themed* menu icon with macOS's highlighted-text colour, which is white and vanishes in a light menu. So each icon is redrawn as a plain SVG in its tab's colour, deepened to read in both light and dark menus.
+- Fyne's built-in icons include an invisible `fill="none"` background box. Recolouring it turns the icon into a solid square, so it's left alone.
+- Icons are set once, with the menu bar. Favorite keeps its tick rather than a star that fills in.
+
+## 28. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

@@ -248,6 +248,8 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Check Messages…", cmdShift(fyne.KeyU), u.cmdCheckMessages),
 	}
 	card := fyne.NewMenu("Card", cardItems...)
+	iconize(card, cardMenuIcons()) // the same pictures as the toolbar's tabs
+	iconize(view, viewMenuIcons()) // and as the side tabs
 
 	help := fyne.NewMenu("Help",
 		item("Smart Contacts Help", cmdShift(fyne.KeySlash), u.help),
