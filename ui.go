@@ -72,6 +72,7 @@ type ui struct {
 	todayBox      *fyne.Container    // the Today page (today.go)
 	todayScroll   *container.Scroll
 	todaySet      map[string]bool // who is on today's page
+	statusPlate   *statusLabel    // the status line's paper label (organiser look)
 	modalLayer    *fyne.Container // where the clipboard and stamp windows go (paperdialog.go)
 	tools         *toolbarParts   // the organiser toolbar (nil in the plain look)
 	actThen       func()          // runs once after the next successful read of Messages, calls and Mail
@@ -427,7 +428,7 @@ func (u *ui) build() {
 	outer.Offset = 0.19
 	inkAvatars = !u.cfg.ClassicLook
 	if u.cfg.ClassicLook {
-		u.tools, u.modalLayer = nil, nil
+		u.tools, u.modalLayer, u.statusPlate = nil, nil, nil
 		u.tabBox, u.letterBox, u.letter = nil, nil, ""
 		u.app.Settings().SetTheme(newAppTheme())
 		panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
@@ -664,6 +665,7 @@ func (u *ui) refreshSidebar() {
 	}
 	u.selectSideKey(u.group)
 	u.status.SetText(u.statusText())
+	u.fitStatus()
 }
 
 func (u *ui) groupExists(key string) bool {
@@ -1156,11 +1158,13 @@ func (u *ui) flash(msg string) {
 	gen := u.flashGen
 	u.retitleToast(msg)
 	u.status.SetText(msg)
+	u.fitStatus()
 	go func() {
 		time.Sleep(3 * time.Second)
 		fyne.Do(func() {
 			if gen == u.flashGen { // a newer message is showing; let it finish
 				u.status.SetText(u.statusText())
+				u.fitStatus()
 			}
 		})
 	}()

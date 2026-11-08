@@ -246,6 +246,7 @@ func (u *ui) openLive(c *Contact) {
 
 func (u *ui) openEditorMode(c *Contact, prefill *Contact, banner string, card []byte, cardNote string, live bool) {
 	u.status.SetText(u.statusText()) // clear any "unsaved changes" note from the card before
+	u.fitStatus()
 	if c == nil && u.rightPage != nil {
 		u.rightPage.SetTitle("New Card") // the page heading follows what's on it
 	}

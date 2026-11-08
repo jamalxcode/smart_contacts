@@ -79,9 +79,11 @@ func (e *editor) watch() {
 				if d {
 					e.revertBtn.Show()
 					e.u.status.SetText("Unsaved changes to " + e.c.DisplayName() + " — Done saves them")
+					e.u.fitStatus()
 				} else {
 					e.revertBtn.Hide()
 					e.u.status.SetText(e.u.statusText())
+					e.u.fitStatus()
 				}
 			})
 			if stop {

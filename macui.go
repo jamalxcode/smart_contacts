@@ -1,6 +1,7 @@
 package main
 
 import (
+	"image/color"
 	"strings"
 
 	"fyne.io/fyne/v2"
@@ -196,43 +197,71 @@ func fieldLabel(s string) string {
 }
 
 // rowMenu is the right-click menu of a contact in the list.
+// rowMenu is the right-click menu on a person: the same commands, names and pictures as the
+// toolbar and the Card menu, acting on the same thing — the clipped cards if this card is one of
+// them, otherwise this card (which opens, as right-clicking a message in Mail selects it). Its
+// first line says which.
 func (u *ui) rowMenu(id string) *fyne.Menu {
 	c := u.store.Get(id)
 	if c == nil || u.busy() {
 		return nil
 	}
-	if u.selectMode && u.picked[id] { // right-click on the selection: commands for all of it
-		return u.bulkMenu(u.pickedContacts())
+	clipped := u.selectMode && u.picked[id]
+	if !u.selectMode && id != u.selectedID {
+		if i := u.indexOf(id); i >= 0 {
+			u.list.Select(i) // opens the card
+		}
+		if u.selectedID != id {
+			return nil
+		}
 	}
-	fav := "Add to Favorites"
-	if c.Favorite {
-		fav = "Remove from Favorites"
-	}
-	head := fyne.NewMenuItem(c.DisplayName(), nil) // says which card these commands act on
+	ts := u.targets()
+	head := fyne.NewMenuItem(u.targetText(ts), nil) // says what these commands act on
 	head.Disabled = true
-	return fyne.NewMenu("",
+	fav := fyne.NewMenuItem("Favorite", u.cmdFavorite)
+	fav.Checked = allFavorite(ts)
+	keep := fyne.NewMenuItem("Keep in Touch", nil)
+	keep.ChildMenu = fyne.NewMenu("", u.keepItems()...)
+	conn := fyne.NewMenuItem("Connections…", u.cmdConnections)
+	conn.Disabled = !u.connectionsEnabled(ts)
+	share := fyne.NewMenuItem("Share", nil)
+	share.ChildMenu = fyne.NewMenu("", u.shareItems()...)
+	clip := fyne.NewMenuItem("Clip This Card", func() { u.toggleClip(id) })
+	switch {
+	case clipped:
+		clip.Label = "Unclip This Card"
+	case u.selectMode:
+		clip.Label = "Clip This Card Too"
+	}
+	del := fyne.NewMenuItem("Delete…", func() {
+		if u.selectMode && len(u.picked) > 0 {
+			u.bulkDelete(u.pickedContacts())
+		} else {
+			u.deleteContact(c)
+		}
+	})
+	m := fyne.NewMenu("",
 		head,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(fav, func() { u.toggleFavorite(c) }),
-		fyne.NewMenuItem("Connect to…", func() { u.connectDialog(c) }),
+		fyne.NewMenuItem("Add Note…", u.cmdNote),
+		fav,
+		keep,
+		fyne.NewMenuItem("Groups…", u.cmdGroups),
+		conn,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Copy Card as Text", func() { u.copyCard(c) }),
-		fyne.NewMenuItem("Save as vCard…", func() { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
-		fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts([]*Contact{c}) }),
+		fyne.NewMenuItem("Tidy Up…", u.cmdTidy),
+		fyne.NewMenuItem("Find Duplicates…", u.cmdDuplicates),
+		share,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem(selectLabel(u, id), func() { u.toggleClip(id) }),
-		fyne.NewMenuItem("Clip All", u.selectAllCards),
+		clip,
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Clean Up This Card…", func() { u.cleanupFor([]*Contact{c}, "") }),
-		fyne.NewMenuItem("Delete "+c.DisplayName()+"…", func() { u.deleteContact(c) }),
+		del,
 	)
-}
-
-func selectLabel(u *ui, id string) string {
-	if u.selectMode {
-		return "Clip This Card Too"
-	}
-	return "Clip This Card"
+	icons := cardMenuIcons()
+	icons[clip.Label] = icons["Clip Cards"]
+	icons["Delete…"] = menuIcon{theme.DeleteIcon(), color.NRGBA{0x9A, 0x30, 0x28, 0xFF}}
+	iconize(m, icons)
+	return m
 }
 
 // confirmCB is confirm for callers that want the answer (the window argument is ignored; it

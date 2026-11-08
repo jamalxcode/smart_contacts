@@ -821,15 +821,20 @@ type tabRenderer struct {
 
 func (r *tabRenderer) MinSize() fyne.Size {
 	if r.t.header {
-		return fyne.NewSize(120, 20)
+		return fyne.NewSize(120, 28)
 	}
 	return fyne.NewSize(150, 31)
 }
 
 func (r *tabRenderer) Layout(s fyne.Size) {
-	if r.t.header {
+	if r.t.header { // a small paper label with the heading in black, easy to read on leather
 		r.title.Text = r.t.title
-		r.title.Move(fyne.NewPos(14, 4))
+		ts := r.title.MinSize()
+		r.card.Move(fyne.NewPos(10, 4))
+		r.card.Resize(fyne.NewSize(ts.Width+16, 20))
+		r.shadow.Move(fyne.NewPos(11, 6))
+		r.shadow.Resize(fyne.NewSize(ts.Width+16, 20))
+		r.title.Move(fyne.NewPos(18, 4+(20-ts.Height)/2))
 		return
 	}
 	// tabs come out of the page to the left; the chosen one sticks out furthest
@@ -852,8 +857,8 @@ func (r *tabRenderer) Layout(s fyne.Size) {
 	if r.t.count == "" {
 		avail = s.Width - 16 - (out + 9)
 	}
-	r.title.Text, r.title.TextSize = r.t.title, 12
-	for r.title.MinSize().Width > avail && r.title.TextSize > 10 {
+	r.title.Text, r.title.TextSize = r.t.title, 13.5
+	for r.title.MinSize().Width > avail && r.title.TextSize > 11 {
 		r.title.TextSize -= 0.5
 	}
 	for rs := []rune(r.t.title); r.title.MinSize().Width > avail && len(rs) > 4; {
@@ -871,8 +876,13 @@ func (r *tabRenderer) Refresh() {
 	r.card.FillColor = r.t.col
 	r.count.Text = r.t.count
 	if r.t.header {
-		r.title.Color = color.NRGBA{0xF0, 0xD8, 0xB8, 0xD0}
-		r.title.TextSize = 10
+		r.title.Color = color.NRGBA{0x14, 0x10, 0x0C, 0xFF}
+		r.title.TextSize = 11
+		r.card.FillColor = color.NRGBA{0xFB, 0xF7, 0xEC, 0xFF}
+		r.card.CornerRadius = 3
+		r.card.StrokeColor = color.NRGBA{0xC8, 0xBC, 0xA4, 0xFF}
+		r.card.StrokeWidth = 1
+		r.shadow.CornerRadius = 3
 	}
 	r.Layout(r.t.Size())
 	canvas.Refresh(r.t)
@@ -880,7 +890,7 @@ func (r *tabRenderer) Refresh() {
 
 func (r *tabRenderer) Objects() []fyne.CanvasObject {
 	if r.t.header {
-		return []fyne.CanvasObject{r.title}
+		return []fyne.CanvasObject{r.shadow, r.card, r.title}
 	}
 	return []fyne.CanvasObject{r.shadow, r.card, r.sheen, r.title, r.flag, r.count}
 }
@@ -1221,8 +1231,8 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	l.az.Move(fyne.NewPos(pagesRight, top+14))
 	l.az.Resize(fyne.NewSize(azW, h-28))
 	if l.status != nil { // the status line, small, on the leather under the pages
-		l.status.Move(fyne.NewPos(x-6, bottom+1))
-		l.status.Resize(fyne.NewSize(pagesRight-x, 15))
+		l.status.Move(fyne.NewPos(x-6, bottom+6))
+		l.status.Resize(fyne.NewSize(pagesRight-x, 24))
 	}
 	l.pagesPos = fyne.NewPos(x, top)
 	l.pagesSize = fyne.NewSize(pagesRight-x, h)
@@ -1271,7 +1281,8 @@ func (u *ui) filofaxLayout(listPane fyne.CanvasObject) fyne.CanvasObject {
 	u.rightPage = newPaperPage(u.right, true, false)
 	rings := newBinderRings()
 	az := u.letterStrip()
-	status := container.NewThemeOverride(u.status, &leatherTextTheme{&filofaxTheme{newAppTheme()}})
+	status := newStatusLabel(container.NewThemeOverride(u.status, &inkTextTheme{&filofaxTheme{newAppTheme()}}))
+	u.statusPlate = status
 	strap := newStrapHit(u)
 	lay := &organiserLayout{tabs: tabs, left: u.leftPage, rings: rings, right: u.rightPage, az: az, status: status, strap: strap}
 	cover := &leatherCover{pageArea: func() (fyne.Position, fyne.Size) { return lay.pagesPos, lay.pagesSize }}
@@ -1506,6 +1517,67 @@ func (u *ui) restorePage() {
 }
 
 // leatherTextTheme: light tan writing for text placed on the leather (the status line).
+// inkTextTheme: black print, for words on a paper label.
+type inkTextTheme struct{ fyne.Theme }
+
+func (t *inkTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	if n == theme.ColorNameForeground || n == theme.ColorNameDisabled {
+		return color.NRGBA{0x14, 0x10, 0x0C, 0xFF}
+	}
+	return t.Theme.Color(n, v)
+}
+
+// statusLabel is the status line printed in black on a paper label stuck to the leather under
+// the pages, as wide as its words.
+type statusLabel struct {
+	widget.BaseWidget
+	text fyne.CanvasObject
+}
+
+func newStatusLabel(text fyne.CanvasObject) *statusLabel {
+	l := &statusLabel{text: text}
+	l.ExtendBaseWidget(l)
+	return l
+}
+
+func (l *statusLabel) CreateRenderer() fyne.WidgetRenderer {
+	shadow := canvas.NewRectangle(color.NRGBA{0x10, 0x05, 0x00, 0x60})
+	shadow.CornerRadius = 3
+	paper := canvas.NewRectangle(color.NRGBA{0xFB, 0xF7, 0xEC, 0xFF})
+	paper.CornerRadius = 3
+	paper.StrokeColor = color.NRGBA{0xC8, 0xBC, 0xA4, 0xFF}
+	paper.StrokeWidth = 1
+	return &statusRenderer{l: l, shadow: shadow, paper: paper}
+}
+
+type statusRenderer struct {
+	l             *statusLabel
+	shadow, paper *canvas.Rectangle
+}
+
+func (r *statusRenderer) Layout(s fyne.Size) {
+	m := r.l.text.MinSize()
+	w := fyne.Min(m.Width+8, s.Width)
+	r.paper.Resize(fyne.NewSize(w, s.Height))
+	r.shadow.Move(fyne.NewPos(1, 2))
+	r.shadow.Resize(fyne.NewSize(w, s.Height))
+	r.l.text.Move(fyne.NewPos(4, (s.Height-m.Height)/2))
+	r.l.text.Resize(fyne.NewSize(w-8, m.Height))
+}
+func (r *statusRenderer) MinSize() fyne.Size { return fyne.NewSize(10, 24) }
+func (r *statusRenderer) Refresh()           { r.Layout(r.l.Size()); canvas.Refresh(r.l) }
+func (r *statusRenderer) Objects() []fyne.CanvasObject {
+	return []fyne.CanvasObject{r.shadow, r.paper, r.l.text}
+}
+func (r *statusRenderer) Destroy() {}
+
+// fitStatus resizes the status line's paper label to its words.
+func (u *ui) fitStatus() {
+	if u.statusPlate != nil {
+		u.statusPlate.Refresh()
+	}
+}
+
 type leatherTextTheme struct{ fyne.Theme }
 
 func (t *leatherTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {

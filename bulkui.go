@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/layout"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -60,38 +59,21 @@ func (u *ui) updateBulkBar() {
 		u.updateBulkBar()
 	})
 	done := widget.NewButton("Take Clips Off", u.toggleSelectMode)
-	done.Importance = widget.HighImportance
-	btn := func(label string, icon fyne.Resource, need int, f func([]*Contact)) *widget.Button {
-		b := widget.NewButtonWithIcon(label, icon, func() { f(u.pickedContacts()) })
-		if n < need {
-			b.Disable()
-		}
-		return b
-	}
-	var more *widget.Button
-	more = widget.NewButtonWithIcon("More…", theme.MoreHorizontalIcon(), func() {
-		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(more)
-		m := u.bulkMenu(u.pickedContacts())
-		widget.ShowPopUpMenuAtPosition(m, u.win.Canvas(), pos.Add(fyne.NewPos(0, -float32(len(m.Items))*30)))
-	})
-	if n == 0 {
-		more.Disable()
-	}
-	actions := container.NewGridWrap(fyne.NewSize(160, 36),
-		btn("Add to Group", iconLabel, 1, u.bulkAddGroup),
-		btn("Favorite", iconStar, 1, func(cs []*Contact) { u.bulkFavorite(cs, true) }),
-		btn("Clean Up", theme.ViewRefreshIcon(), 1, func(cs []*Contact) { u.cleanupFor(cs, "") }),
-		btn("Merge", iconMerge, 2, u.bulkMerge),
-		btn("Delete", theme.DeleteIcon(), 1, u.bulkDelete),
-		more,
-	)
-	hint := caption("Click a card (or its clip) to clip or unclip it · Shift-click clips a range · right-click for every command")
-	hint.Wrapping = fyne.TextWrapWord // don't widen the list
 	for _, o := range []*widget.Button{all, none, done} {
 		o.Importance = widget.LowImportance
 	}
+	// what to do with them is in one place: the card tabs above the book, the Card menu, or
+	// right-click — all acting on these cards while they're clipped
+	where := "The tabs above the book, the Card menu and right-click now act on these cards."
+	if n == 0 {
+		where = "Click a card, or its paper clip, to clip it."
+	}
+	how := caption(where)
+	how.Wrapping = fyne.TextWrapWord // don't widen the list
+	hint := caption("Shift-click clips a range · ⌘A clips everyone shown")
+	hint.Wrapping = fyne.TextWrapWord
 	u.bulkBar.Objects = []fyne.CanvasObject{stickyNote(container.NewVBox(
-		count, container.NewHBox(all, none, layout.NewSpacer(), done), actions, hint))}
+		count, how, container.NewHBox(all, none, layout.NewSpacer(), done), hint))}
 	u.bulkBar.Refresh()
 }
 

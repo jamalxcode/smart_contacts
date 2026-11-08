@@ -369,7 +369,13 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - Fyne's built-in icons include an invisible `fill="none"` background box. Recolouring it turns the icon into a solid square, so it's left alone.
 - Icons are set once, with the menu bar. Favorite keeps its tick rather than a star that fills in.
 
-## 28. Ideas not done yet
+## 28. One command list, and print you can read
+
+- The right-click menu on a person has the same commands, names and icons as the toolbar and Card menu (`rowMenu`). Right-clicking a card opens it, as Mail does. On a clipped card, it acts on all the clipped cards. Its first line says which.
+- The sticky note no longer has its own buttons. It counts the clips, says the tabs, the Card menu and right-click now act on them, and keeps Clip All / Unclip All / Take Clips Off.
+- Words that sat on the leather in cream are now black on small paper labels: the tab column's headings (TO TIDY, GROUPS…) and the status line (`statusLabel`, refitted with `fitStatus` whenever the text changes). Tab names went up from 12 to 13.5 points.
+
+## 29. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.
