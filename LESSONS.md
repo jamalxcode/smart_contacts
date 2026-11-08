@@ -176,7 +176,17 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
   is refreshed; Accordion in 2.6 has no open callback (custom fold headers remember their state);
   menu shortcuts fire before a focused text entry, so ⌘Z must hand off to the entry while editing.
 
-## 9. Ideas not done yet
+## 9. Updating from inside the app
+
+- The app downloads and unpacks the new build itself (with `ditto`, which keeps the signature)
+  *before* quitting, so a failed download leaves the running app alone. A detached helper
+  (`Setsid`) waits for the app's process to end, moves the old .app aside, moves the new one in,
+  restores the old one if that fails, and reopens it.
+- Downloads made by the app's own HTTP client aren't quarantined, like curl's, so no Gatekeeper
+  prompt. A translocated copy (opened from a quarantined zip) can't update itself.
+- The release notes carry the commit message so the update dialog can say what changed.
+
+## 10. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

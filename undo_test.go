@@ -194,3 +194,19 @@ func TestBackupZipLeavesKeyOut(t *testing.T) {
 		t.Errorf("zip contents %v", names)
 	}
 }
+
+func TestReleaseVersions(t *testing.T) {
+	r, err := parseRelease("Smart Contacts 1.0.19", "Undo/redo\n\nCo-Authored-By: X\nBuilt from abc", time.Time{})
+	if err != nil || r.Version != "1.0.19" || r.Build != 19 {
+		t.Fatalf("%+v %v", r, err)
+	}
+	if !r.NewerThan("1.0.18") || r.NewerThan("1.0.19") || r.NewerThan("1.0.20") || !r.NewerThan("") {
+		t.Error("version comparison")
+	}
+	if r2, _ := parseRelease("Smart Contacts 1.0.100", "", time.Time{}); !r2.NewerThan("1.0.99") {
+		t.Error("numeric, not text, comparison")
+	}
+	if n := releaseNotes(r.Notes); n != "Undo/redo" {
+		t.Errorf("notes %q", n)
+	}
+}

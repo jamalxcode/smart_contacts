@@ -26,6 +26,12 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 ([build workflow](.github/workflows/build.yml)) and published as the
 [latest release](https://github.com/jamalxcode/smart_contacts/releases/tag/latest).
 
+### Updating
+
+Once installed, choose **Help → Check for Updates…**. If there's a newer build it shows what
+changed, then downloads it, closes the app, swaps in the new version and reopens it. Your contacts
+are untouched. The app never checks by itself; running the install line again also updates.
+
 ## What it does
 
 **Bring Everything In (File menu, and the first screen).** A checklist walks through every source

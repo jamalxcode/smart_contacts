@@ -109,7 +109,11 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Show Data Folder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
 		item("Settings…", cmd(fyne.KeyComma), u.settings),
 	)
-	help := fyne.NewMenu("Help", fyne.NewMenuItem("Smart Contacts Help", u.help))
+	help := fyne.NewMenu("Help",
+		fyne.NewMenuItem("Smart Contacts Help", u.help),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Check for Updates…", u.checkForUpdates),
+		fyne.NewMenuItem("About Smart Contacts", u.about))
 	return fyne.NewMainMenu(file, edit, tools, help)
 }
 
@@ -923,6 +927,8 @@ func (u *ui) help() {
 
 **Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app never uses the network unless you switch on Cloud AI. Copying to Apple's Contacts app or saving into iCloud Drive/Dropbox warns you first, because those sync off the Mac.
 
+**Updates.** Help → Check for Updates looks for a newer version on GitHub and, if you agree, downloads it, closes the app, swaps it in and reopens it. Your contacts aren't touched. The app never checks on its own.
+
 **Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder. Tools → Back Up To… saves a .zip of everything to a drive you choose.
 
 **Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘Z undo · ⌘⇧Z redo · ⌘K connect · ⌘⇧K how connected · ⌘I import · ⌘⇧D deduplicate · ⌘⇧L calendar · ⌘, settings`
@@ -937,6 +943,7 @@ func (u *ui) help() {
 func privacyText(dir string) string {
 	return "Contacts, photos and 30 daily backups are stored only on this Mac, in\n" + dir +
 		"\n(only your user can open it; kept out of Spotlight; not in iCloud Drive).\n" +
-		"The app uses no network and no accounts unless Cloud AI is on.\n" +
+		"The app uses no network and no accounts unless Cloud AI is on, or you choose\n" +
+		"Check for Updates (which asks GitHub for the newest build and sends no contacts).\n" +
 		"FileVault (System Settings → Privacy & Security) encrypts it on disk."
 }
