@@ -395,6 +395,9 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - **Drawn textures** take about 0.15 s, so they aren't cached to disk.
 - **No real window on GitHub's Mac**: it has no OpenGL. `TestEveryWindowOpens` drives every flow and window with Fyne's test driver on every build instead. It catches Go-side crashes, not macOS menu bugs.
 
+- Every import guide has the same shape: what it does, numbered steps each with "You should see…", "Check before you continue", "If it doesn't work". A step without a visible result is a step people get lost on.
+- macOS refuses Bluetooth files until Bluetooth Sharing is on — the guide puts that first, not last.
+
 ## 31. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
