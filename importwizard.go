@@ -83,7 +83,17 @@ func (u *ui) importQuestions() *wizQuestion {
 			ask:  "How will you send the file to this Mac?",
 			note: made,
 			answers: []wizAnswer{
-				{label: "AirDrop", detail: "iPhone, or an Android with Quick Share to Mac", icon: theme.UploadIcon(), guide: &wizGuide{
+				{label: "Email it to myself", detail: "the surest way: email, WhatsApp, Google Drive…", icon: theme.MailSendIcon(), guide: &wizGuide{
+					title: "Send it to yourself",
+					steps: []string{
+						"On the phone, share the contacts file by email (or a chat you can open on this Mac).",
+						"On this Mac, open the message and save the attachment — it goes to Downloads.",
+						"Press Choose File below and pick it.",
+					},
+					expect: "A .vcf file in Downloads.",
+					finish: finishFile,
+				}},
+				{label: "AirDrop", detail: "iPhone, or an Android that can share to AirDrop", icon: theme.UploadIcon(), guide: &wizGuide{
 					title: "Send it with AirDrop",
 					steps: []string{
 						"On the phone, tap Share on the contacts file and choose AirDrop.",
@@ -94,26 +104,18 @@ func (u *ui) importQuestions() *wizQuestion {
 					expect: "A .vcf file (a vCard) in Downloads.",
 					finish: finishFile,
 				}},
-				{label: "Bluetooth", detail: "most Android phones", icon: theme.MediaFastForwardIcon(), guide: &wizGuide{
+				{label: "Bluetooth", detail: "needs one setting on this Mac first", icon: theme.MediaFastForwardIcon(), guide: &wizGuide{
 					title: "Send it over Bluetooth",
 					steps: []string{
-						"Make sure Bluetooth is on, on the phone and on this Mac, and that they're paired (System Settings → Bluetooth).",
-						"Press Start Waiting below. The app watches for the file to arrive.",
-						"On the phone, share the contacts file and choose Bluetooth, then this Mac.",
-						"When the Mac asks, accept the file. It opens here by itself.",
+						"Let this Mac receive files: System Settings → General → Sharing, click ⓘ next to Bluetooth Sharing and turn it on. (Open Sharing Settings below goes straight there.)",
+						"In the same place set When receiving items to Accept and Save (or Ask What to Do), and the folder to Downloads. Click Done.",
+						"Pair the phone with this Mac if it isn't already (System Settings → Bluetooth).",
+						"Press Start Waiting below. The app watches Downloads for the file.",
+						"On the phone, share the contacts file, choose Bluetooth, then this Mac. Accept it on the Mac if asked — it opens here by itself.",
 					},
-					expect: "The app finds the .vcf file as soon as it arrives.",
+					expect: "The app finds the .vcf file as soon as it lands in Downloads. If the phone says the Mac refused it, Bluetooth Sharing is still off.",
+					link:   "x-apple.systempreferences:com.apple.Sharing-Settings.extension", linkTo: "Open Sharing Settings",
 					finish: finishReceive,
-				}},
-				{label: "Email it to myself", detail: "or WhatsApp, Telegram, Google Drive…", icon: theme.MailSendIcon(), guide: &wizGuide{
-					title: "Send it to yourself",
-					steps: []string{
-						"On the phone, share the contacts file by email (or a chat you can open on this Mac).",
-						"On this Mac, open the message and save the attachment — it goes to Downloads.",
-						"Press Choose File below and pick it.",
-					},
-					expect: "A .vcf file in Downloads.",
-					finish: finishFile,
 				}},
 			},
 		}
@@ -148,7 +150,28 @@ func (u *ui) importQuestions() *wizQuestion {
 		},
 	}
 
-	android := sendAsk("First make the file: in the Contacts app, ☰ or ⋮ → Settings (or Manage contacts) → Export → Export to .vcf file. It saves to the phone's storage.")
+	google := &wizGuide{
+		title: "Export from Google Contacts",
+		steps: []string{
+			"Open contacts.google.com and sign in.",
+			"Click Export (on the left, or under ⋮ at the top).",
+			"Choose All contacts and the format Google CSV, then press Export.",
+			"The file goes to Downloads. Press Choose File below and pick it.",
+		},
+		expect: "A file called contacts.csv.",
+		link:   "https://contacts.google.com", linkTo: "Open Google Contacts",
+		finish: finishFile,
+	}
+	// Most Android phones keep their contacts in the Google account: then there's nothing to send
+	android := &wizQuestion{
+		ask:  "Does that phone keep its contacts in your Google account?",
+		note: "Most Android phones do. On the phone: Contacts → ☰ or your picture → the account shown is where they're saved.",
+		answers: []wizAnswer{
+			{label: "Yes, in Google", detail: "the easiest way — nothing to send", icon: theme.ConfirmIcon(), guide: google},
+			{label: "No, or I'm not sure", detail: "make a file on the phone and send it", icon: theme.QuestionIcon(),
+				next: sendAsk("First make the file: in the Contacts app, ☰ or ⋮ → Settings (or Manage contacts) → Export → Export to .vcf file. It saves to the phone's storage.")},
+		},
+	}
 
 	return &wizQuestion{
 		ask:  "Where are the contacts you want to bring in?",
@@ -156,18 +179,7 @@ func (u *ui) importQuestions() *wizQuestion {
 		answers: []wizAnswer{
 			{label: "iPhone", detail: "or this Mac's Contacts app", icon: iconPhone, next: iphone},
 			{label: "Android phone", detail: "Samsung, Pixel, Huawei, Xiaomi…", icon: iconPhone, next: android},
-			{label: "Gmail / Google", icon: theme.MailComposeIcon(), guide: &wizGuide{
-				title: "Export from Google Contacts",
-				steps: []string{
-					"Open contacts.google.com and sign in.",
-					"Click Export (on the left, or under ⋮ at the top).",
-					"Choose All contacts and the format Google CSV, then press Export.",
-					"The file goes to Downloads. Press Choose File below and pick it.",
-				},
-				expect: "A file called contacts.csv.",
-				link:   "https://contacts.google.com", linkTo: "Open Google Contacts",
-				finish: finishFile,
-			}},
+			{label: "Gmail / Google", icon: theme.MailComposeIcon(), guide: google},
 			{label: "Outlook / Hotmail", icon: theme.MailComposeIcon(), guide: &wizGuide{
 				title: "Export from Outlook",
 				steps: []string{

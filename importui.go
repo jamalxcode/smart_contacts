@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -428,13 +429,16 @@ func (u *ui) receiveFromPhone() {
 	home, _ := os.UserHomeDir()
 	dirs := []string{filepath.Join(home, "Downloads")}
 	start := time.Now()
-	how := widget.NewLabel("On this Mac: System Settings → General → Sharing → turn on Bluetooth Sharing (files go to Downloads). AirDrop also works.\n\n" +
+	how := widget.NewLabel("First, on this Mac: System Settings → General → Sharing → click ⓘ next to Bluetooth Sharing → turn it on, set When receiving items to Accept and Save, and the folder to Downloads. Without this the Mac turns the file away.\n\n" +
 		"Android: Contacts → select all (or ⋮ → Share) → Bluetooth → choose this Mac.\n" +
 		"iPhone: Contacts → a contact → Share Contact → AirDrop → this Mac (or share many from icloud.com as a vCard).\n" +
 		"Other phones: send the contacts as a .vcf file over Bluetooth.\n\nWaiting for the file…")
 	how.Wrapping = fyne.TextWrapWord
 	stop := make(chan struct{})
-	d := newCustom("Receive from a Phone", "Cancel", container.NewVBox(how, widget.NewProgressBarInfinite()), u.win)
+	settings := widget.NewButtonWithIcon("Open Sharing Settings", theme.SettingsIcon(), func() {
+		u.openLink("x-apple.systempreferences:com.apple.Sharing-Settings.extension")
+	})
+	d := newCustom("Receive from a Phone", "Cancel", container.NewVBox(how, container.NewHBox(settings), widget.NewProgressBarInfinite()), u.win)
 	d.SetOnClosed(func() {
 		select {
 		case <-stop:
