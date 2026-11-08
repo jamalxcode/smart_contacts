@@ -110,7 +110,8 @@ type contextArea struct {
 	content fyne.CanvasObject
 	data    string // what the row shows (a contact ID), for the menu
 	menu    func() *fyne.Menu
-	onTap   func() // Fyne gives every click to the widget that takes any click, so pass left clicks on
+	onTap   func()           // Fyne gives every click to the widget that takes any click, so pass left clicks on
+	mods    fyne.KeyModifier // keys held at the last mouse press (⌘ or Shift for selecting)
 	win     fyne.Window
 }
 
@@ -119,6 +120,9 @@ func newContextArea(content fyne.CanvasObject, win fyne.Window, menu func() *fyn
 	c.ExtendBaseWidget(c)
 	return c
 }
+
+func (c *contextArea) MouseDown(e *desktop.MouseEvent) { c.mods = e.Modifier }
+func (c *contextArea) MouseUp(*desktop.MouseEvent)     {}
 
 func (c *contextArea) Tapped(*fyne.PointEvent) {
 	if c.onTap != nil {
@@ -165,13 +169,15 @@ func (u *ui) confirm(title, message, verb string, destructive bool, do func()) {
 			do()
 		}
 	}, u.win)
+	ok := d.Confirm
 	if destructive {
 		d.SetConfirmImportance(widget.DangerImportance)
+		ok = d.Dismiss // Return never confirms a destructive action: it has to be clicked
 	} else {
 		d.SetConfirmImportance(widget.HighImportance)
 	}
 	d.Resize(fyne.NewSize(440, 0))
-	trackDialog(d, d.Confirm)
+	trackDialog(d, ok)
 	d.Show()
 }
 
@@ -195,6 +201,9 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 	if c == nil || u.busy() {
 		return nil
 	}
+	if u.selectMode && u.picked[id] { // right-click on the selection: commands for all of it
+		return u.bulkMenu(u.pickedContacts())
+	}
 	fav := "Add to Favorites"
 	if c.Favorite {
 		fav = "Remove from Favorites"
@@ -207,8 +216,18 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 		fyne.NewMenuItem("Save as vCard…", func() { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
 		fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts([]*Contact{c}) }),
 		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem(selectLabel(u, id), func() { u.clickWithKeys(id, fyne.KeyModifierShortcutDefault) }),
+		fyne.NewMenuItem("Select All", u.selectAllCards),
+		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Delete Card…", func() { u.deleteContact(c) }),
 	)
+}
+
+func selectLabel(u *ui, id string) string {
+	if u.selectMode {
+		return "Add to Selection"
+	}
+	return "Select"
 }
 
 // confirmCB is confirm for callers that want the answer (the window argument is ignored; it
@@ -217,13 +236,15 @@ func (u *ui) confirmCB(title, message, verb string, destructive bool, cb func(bo
 	l := widget.NewLabel(message)
 	l.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustomConfirm(title, verb, "Cancel", container.NewPadded(l), cb, u.win)
+	ok := d.Confirm
 	if destructive {
 		d.SetConfirmImportance(widget.DangerImportance)
+		ok = d.Dismiss // Return never confirms a destructive action: it has to be clicked
 	} else {
 		d.SetConfirmImportance(widget.HighImportance)
 	}
 	d.Resize(fyne.NewSize(460, 0))
-	trackDialog(d, d.Confirm)
+	trackDialog(d, ok)
 	d.Show()
 }
 

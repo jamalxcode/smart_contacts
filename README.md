@@ -154,8 +154,12 @@ with unsaved changes asks "Are you sure you want to update…?" — Save, Don't 
 delete — can be undone and redone. Edit → History lists this session's changes ("Undo back to
 here") and the saved restore points (before each import, clean-up and de-duplication, and daily).
 
-**Many at once.** The tick button above the list turns on Select mode: tick people, then add or
-remove a group, favorite, merge, export or delete them together.
+**Many at once.** ⌘-click to add people one by one, Shift-click for a range, or ⌘A for everyone shown
+(the tick button above the list does the same). Right-click the selection — or More… in the bar
+under the list — to Clean Up those cards, Tidy their notes with AI, Look for Duplicates among them,
+Merge, add or remove a group, Favorite, Keep in Touch, copy them as text, export, or delete.
+Deleting several cards asks twice ("Delete 5 cards?" then "Are you sure?"), and Return never
+confirms a delete — the red button has to be clicked.
 
 **Backups you control.** File → Back Up To… writes everything (contacts, photos, business cards,
 calendar log, history) to a drive or folder you pick, encrypted with AES-256 if you give a
@@ -232,7 +236,8 @@ The shortcuts follow Apple's Contacts app where there's an equivalent.
 | ⌘⌫ | delete card (to Trash) |
 | ⌘Z / ⇧⌘Z | undo / redo |
 | ⌘C | copy (the whole card as text when nothing is being typed) |
-| ⌘A | select all cards shown |
+| ⌘A / ⇧⌘A | select all cards shown / deselect all |
+| ⌘-click / Shift-click | add one to the selection / select a range |
 | ⇧⌘S | select cards |
 | ⇧⌘M | merge selected cards |
 | ⌘1 – ⌘4 | All Contacts, Favorites, Upcoming Birthdays, Recently Added |

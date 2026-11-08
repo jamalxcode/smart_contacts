@@ -98,8 +98,18 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		}),
 		item("Paste", cmd(fyne.KeyV), func() { pass(&fyne.ShortcutPaste{Clipboard: clip}) }),
 		item("Select All", cmd(fyne.KeyA), func() {
+			// in an empty search field (where the keyboard usually is) ⌘A means every card shown
+			if f := u.win.Canvas().Focused(); f == u.search && u.search.Text == "" {
+				u.selectAllCards()
+				return
+			}
 			if !pass(&fyne.ShortcutSelectAll{}) {
 				u.selectAllCards()
+			}
+		}),
+		item("Deselect All", cmdShift(fyne.KeyA), func() {
+			if u.selectMode {
+				u.selectNone()
 			}
 		}),
 		sep(),
@@ -509,8 +519,10 @@ func (u *ui) exportVCF(cs []*Contact, name string) {
 	d.Show()
 }
 
-func (u *ui) exportCSV() {
-	cs := u.filtered
+func (u *ui) exportCSV() { u.exportCSVFor(u.filtered) }
+
+// exportCSVFor saves some contacts as a spreadsheet.
+func (u *ui) exportCSVFor(cs []*Contact) {
 	if len(cs) == 0 {
 		return
 	}
@@ -527,7 +539,11 @@ func (u *ui) exportCSV() {
 			u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
 		})
 	}, u.win)
-	d.SetFileName(safeName(u.groupTitle()) + ".csv")
+	name := u.groupTitle()
+	if len(cs) != len(u.filtered) {
+		name = fmt.Sprintf("%d contacts", len(cs))
+	}
+	d.SetFileName(safeName(name) + ".csv")
 	d.Resize(fyne.NewSize(760, 520))
 	d.Show()
 }
@@ -553,9 +569,14 @@ func richness(c *Contact) int {
 func (u *ui) duplicates() {
 	u.cfg.LastDedupe = time.Now()
 	_ = u.cfg.Save(u.store.Dir())
-	groups := FindDuplicates(u.store.Contacts, u.cfg.CountryCode)
+	u.duplicatesFor(u.store.Contacts)
+}
+
+// duplicatesFor looks for duplicates among some contacts (everyone, or a selection).
+func (u *ui) duplicatesFor(cs []*Contact) {
+	groups := FindDuplicates(cs, u.cfg.CountryCode)
 	var inside []CleanupChange
-	for _, ch := range PlanCleanup(u.store.Contacts, u.cfg.CountryCode) {
+	for _, ch := range PlanCleanup(cs, u.cfg.CountryCode) {
 		if ch.Kind == ckDuplicate {
 			inside = append(inside, ch)
 		}
@@ -1088,7 +1109,7 @@ func (u *ui) help() {
 
 **Undo (⌘Z, ⇧⌘Z).** Every change can be undone: edits, imports, clean-ups, merges, deletes. Edit → History lists this session's changes and the saved restore points.
 
-**Many at once.** View → Select Cards (⇧⌘S), the tick button above the list, or ⌘A for everyone shown. Then group, favorite, merge (⇧⌘M), export or delete them together.
+**Many at once.** Select some people with ⌘-click (add or remove one) or Shift-click (a range), the tick button above the list, View → Select Cards (⇧⌘S), or ⌘A for everyone shown (⇧⌘A clears). Right-click the selection — or use More… in the bar under the list — for Clean Up Cards, Tidy Notes with AI, Look for Duplicates Among These, Merge, Add to / Remove from Group, Favorites, Keep in Touch, Copy as Text, Export, and Delete. Deleting several cards asks twice, and Return never confirms a delete: the red button has to be clicked.
 
 **Duplicates and clean-up.** Card → Look for Duplicates (⇧⌘D) merges the same person on several cards and removes repeats inside cards. Card → Clean Up writes every number the same way (+965 9999 8888), fixes emails and links, and tidies notes.
 

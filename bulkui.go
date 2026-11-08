@@ -67,16 +67,26 @@ func (u *ui) updateBulkBar() {
 		}
 		return b
 	}
+	var more *widget.Button
+	more = widget.NewButtonWithIcon("More…", theme.MoreHorizontalIcon(), func() {
+		pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(more)
+		m := u.bulkMenu(u.pickedContacts())
+		widget.ShowPopUpMenuAtPosition(m, u.win.Canvas(), pos.Add(fyne.NewPos(0, -float32(len(m.Items))*30)))
+	})
+	if n == 0 {
+		more.Disable()
+	}
 	actions := container.NewGridWrap(fyne.NewSize(160, 36),
 		btn("Add to Group", iconLabel, 1, u.bulkAddGroup),
-		btn("Remove Group", iconLabel, 1, u.bulkRemoveGroup),
 		btn("Favorite", iconStar, 1, func(cs []*Contact) { u.bulkFavorite(cs, true) }),
-		btn("Unfavorite", iconStarOff, 1, func(cs []*Contact) { u.bulkFavorite(cs, false) }),
+		btn("Clean Up", theme.ViewRefreshIcon(), 1, func(cs []*Contact) { u.cleanupFor(cs, "") }),
 		btn("Merge", iconMerge, 2, u.bulkMerge),
-		btn("Export vCard", theme.DocumentSaveIcon(), 1, func(cs []*Contact) { u.exportVCF(cs, fmt.Sprintf("%d contacts", len(cs))) }),
 		btn("Delete", theme.DeleteIcon(), 1, u.bulkDelete),
+		more,
 	)
-	u.bulkBar.Objects = []fyne.CanvasObject{widget.NewSeparator(), container.NewBorder(nil, nil, count, container.NewHBox(all, none, done)), actions}
+	hint := caption("⌘-click adds or removes one · Shift-click selects a range · right-click for every command")
+	hint.Wrapping = fyne.TextWrapWord // don't widen the list
+	u.bulkBar.Objects = []fyne.CanvasObject{widget.NewSeparator(), container.NewBorder(nil, nil, count, container.NewHBox(all, none, done)), actions, hint}
 	u.bulkBar.Refresh()
 }
 
@@ -156,17 +166,220 @@ func (u *ui) bulkMerge(cs []*Contact) {
 }
 
 func (u *ui) bulkDelete(cs []*Contact) {
-	u.confirmCB(fmt.Sprintf("Delete %d contacts?", len(cs)), "They go to the Trash for 30 days, and ⌘Z undoes it.", "Delete", true, func(ok bool) {
+	if len(cs) == 0 {
+		return
+	}
+	names := []string{}
+	for i, c := range cs {
+		if i == 8 {
+			names = append(names, fmt.Sprintf("…and %d more", len(cs)-8))
+			break
+		}
+		names = append(names, c.DisplayName())
+	}
+	what := fmt.Sprintf("%d %s", len(cs), pluralWords(len(cs), "card", "cards"))
+	// first warning
+	u.confirmCB("Delete "+what+"?", strings.Join(names, "\n"), "Delete…", true, func(ok bool) {
 		if !ok {
 			return
 		}
-		var ids []string
-		for _, c := range cs {
-			ids = append(ids, c.ID)
-		}
-		u.store.Delete(ids...)
-		u.picked = map[string]bool{}
-		u.save()
-		u.updateBulkBar()
+		// second warning: say plainly what happens, and make the button name the number
+		u.confirmCB("Are you sure?", fmt.Sprintf("You're about to delete %s. They move to the Trash for 30 days "+
+			"(View → Trash), and ⌘Z undoes it right away.", what), "Yes, Delete "+what, true, func(ok bool) {
+			if !ok {
+				return
+			}
+			ids := make([]string, len(cs))
+			for i, c := range cs {
+				ids[i] = c.ID
+				delete(u.picked, c.ID)
+			}
+			u.store.Delete(ids...)
+			u.save()
+			u.updateBulkBar()
+			u.flash(fmt.Sprintf("Moved %s to the Trash (⌘Z to undo)", what))
+		}, u.win)
 	}, u.win)
+}
+
+// bulkMenu is every command that works on several people at once: the selection bar's More
+// button and the right-click menu of a selection.
+func (u *ui) bulkMenu(cs []*Contact) *fyne.Menu {
+	n := len(cs)
+	what := fmt.Sprintf("%d %s", n, pluralWords(n, "card", "cards"))
+	head := fyne.NewMenuItem(what+" selected", nil)
+	head.Disabled = true
+
+	addG := fyne.NewMenuItem("Add to Group", nil)
+	var gItems []*fyne.MenuItem
+	for _, g := range u.store.Groups() {
+		g := g
+		gItems = append(gItems, fyne.NewMenuItem(g, func() { u.bulkSetGroup(cs, g, true) }))
+	}
+	if len(gItems) > 0 {
+		gItems = append(gItems, fyne.NewMenuItemSeparator())
+	}
+	gItems = append(gItems, fyne.NewMenuItem("New Group…", func() { u.bulkAddGroup(cs) }))
+	addG.ChildMenu = fyne.NewMenu("", gItems...)
+
+	var rItems []*fyne.MenuItem
+	seen := map[string]bool{}
+	for _, c := range cs {
+		for _, g := range c.Groups {
+			if !seen[strings.ToLower(g)] {
+				seen[strings.ToLower(g)] = true
+				g := g
+				rItems = append(rItems, fyne.NewMenuItem(g, func() { u.bulkSetGroup(cs, g, false) }))
+			}
+		}
+	}
+	remG := fyne.NewMenuItem("Remove from Group", nil)
+	if len(rItems) == 0 {
+		remG.Disabled = true
+	} else {
+		remG.ChildMenu = fyne.NewMenu("", rItems...)
+	}
+
+	keep := fyne.NewMenuItem("Keep in Touch", nil)
+	var kItems []*fyne.MenuItem
+	for _, k := range keepChoices {
+		k := k
+		kItems = append(kItems, fyne.NewMenuItem(k.Label, func() { u.bulkKeep(cs, k.Days) }))
+	}
+	kItems = append(kItems, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("No Reminder", func() { u.bulkKeep(cs, 0) }))
+	keep.ChildMenu = fyne.NewMenu("", kItems...)
+
+	export := fyne.NewMenuItem("Export", nil)
+	export.ChildMenu = fyne.NewMenu("",
+		fyne.NewMenuItem("vCard…", func() { u.exportVCF(cs, what) }),
+		fyne.NewMenuItem("Spreadsheet (CSV)…", func() { u.exportCSVFor(cs) }),
+		fyne.NewMenuItem("Copy to Apple Contacts…", func() { u.sendToMacContacts(cs) }),
+	)
+	merge := fyne.NewMenuItem("Merge…", func() { u.bulkMerge(cs) })
+	merge.Disabled = n < 2
+	dupes := fyne.NewMenuItem("Look for Duplicates Among These…", func() { u.duplicatesFor(cs) })
+	dupes.Disabled = n < 2
+
+	return fyne.NewMenu("",
+		head,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Clean Up Cards…", func() { u.cleanupFor(cs, "") }),
+		fyne.NewMenuItem("Tidy Notes with AI…", func() { u.tidyNotesAI(cs, false) }),
+		dupes,
+		merge,
+		fyne.NewMenuItemSeparator(),
+		addG, remG,
+		fyne.NewMenuItem("Add to Favorites", func() { u.bulkFavorite(cs, true) }),
+		fyne.NewMenuItem("Remove from Favorites", func() { u.bulkFavorite(cs, false) }),
+		keep,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Copy Cards as Text", func() { u.copyCards(cs) }),
+		export,
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Select All", u.selectAllCards),
+		fyne.NewMenuItem("Select None", u.selectNone),
+		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Delete "+what+"…", func() { u.bulkDelete(cs) }),
+	)
+}
+
+func (u *ui) bulkSetGroup(cs []*Contact, g string, add bool) {
+	for _, c := range cs {
+		if add {
+			if !c.HasGroup(g) {
+				c.Groups = append(c.Groups, g)
+			}
+		} else {
+			keep := c.Groups[:0]
+			for _, x := range c.Groups {
+				if !strings.EqualFold(x, g) {
+					keep = append(keep, x)
+				}
+			}
+			c.Groups = keep
+		}
+		u.store.Put(c)
+	}
+	u.save()
+	if add {
+		u.flash(fmt.Sprintf("Added %d people to %s", len(cs), g))
+	} else {
+		u.flash(fmt.Sprintf("Removed %d people from %s", len(cs), g))
+	}
+}
+
+func (u *ui) bulkKeep(cs []*Contact, days int) {
+	for _, c := range cs {
+		c.KeepInTouch = days
+		u.store.Put(c)
+	}
+	u.save()
+	if days > 0 {
+		u.flash(fmt.Sprintf("Keep in touch %s with %d people", keepText(days), len(cs)))
+	} else {
+		u.flash(fmt.Sprintf("Reminders turned off for %d people", len(cs)))
+	}
+}
+
+func (u *ui) copyCards(cs []*Contact) {
+	parts := make([]string, len(cs))
+	for i, c := range cs {
+		parts[i] = cardText(c)
+	}
+	u.app.Clipboard().SetContent(strings.Join(parts, "\n\n"))
+	u.flash(fmt.Sprintf("Copied %d cards", len(cs)))
+}
+
+// selectNone clears the ticks (and leaves Select mode on).
+func (u *ui) selectNone() {
+	u.picked = map[string]bool{}
+	u.list.Refresh()
+	u.updateBulkBar()
+}
+
+// clickWithKeys handles ⌘-click (add or remove one) and Shift-click (a range), as in Finder.
+// It reports whether it handled the click.
+func (u *ui) clickWithKeys(id string, mods fyne.KeyModifier) bool {
+	cmd := mods&fyne.KeyModifierShortcutDefault != 0
+	shift := mods&fyne.KeyModifierShift != 0
+	if !cmd && !shift {
+		if u.selectMode {
+			u.selAnchor = id
+		}
+		return false
+	}
+	if u.busy() {
+		return true
+	}
+	if !u.selectMode {
+		prev := u.selectedID
+		u.toggleSelectMode()
+		if prev != "" && prev != id {
+			u.picked[prev] = true // the card that was showing joins the selection
+			if u.selAnchor == "" {
+				u.selAnchor = prev
+			}
+		}
+	}
+	if shift && u.selAnchor != "" {
+		a, b := u.indexOf(u.selAnchor), u.indexOf(id)
+		if a >= 0 && b >= 0 {
+			if a > b {
+				a, b = b, a
+			}
+			for i := a; i <= b; i++ {
+				u.picked[u.filtered[i].ID] = true
+			}
+		}
+	} else {
+		if u.picked[id] {
+			delete(u.picked, id)
+		} else {
+			u.picked[id] = true
+		}
+		u.selAnchor = id
+	}
+	u.list.Refresh()
+	u.updateBulkBar()
+	return true
 }

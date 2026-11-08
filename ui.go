@@ -70,19 +70,30 @@ type ui struct {
 	attention   map[string]int // clean-up suggestions per contact (worked out in the background)
 	qf          *quickFind     // the menu bar's Quick Find window
 	trayMenuSig string
+	selAnchor   string // where a Shift-click range starts
 	attnGen     int
 }
 
 // searchEntry passes arrow keys, Return and Escape to the list so you can search and pick without the mouse.
 type searchEntry struct {
 	widget.Entry
-	onKey func(*fyne.KeyEvent) bool
+	onKey       func(*fyne.KeyEvent) bool
+	onSelectAll func()
 }
 
 func newSearchEntry() *searchEntry {
 	e := &searchEntry{}
 	e.ExtendBaseWidget(e)
 	return e
+}
+
+// TypedShortcut: ⌘A in the empty search field selects every card shown.
+func (e *searchEntry) TypedShortcut(sc fyne.Shortcut) {
+	if _, all := sc.(*fyne.ShortcutSelectAll); all && e.Text == "" && e.onSelectAll != nil {
+		e.onSelectAll()
+		return
+	}
+	e.Entry.TypedShortcut(sc)
 }
 
 func (e *searchEntry) TypedKey(k *fyne.KeyEvent) {
@@ -199,6 +210,7 @@ func (u *ui) build() {
 	u.search.ActionItem = widget.NewIcon(theme.SearchIcon())
 	u.search.OnChanged = func(string) { u.refreshList() }
 	u.search.onKey = u.searchKey
+	u.search.onSelectAll = u.selectAllCards
 	u.list = widget.NewList(
 		func() int { return len(u.filtered) },
 		func() fyne.CanvasObject {
@@ -216,6 +228,9 @@ func (u *ui) build() {
 			var ca *contextArea
 			ca = newContextArea(row, u.win, func() *fyne.Menu { return u.rowMenu(ca.data) })
 			ca.onTap = func() {
+				if u.clickWithKeys(ca.data, ca.mods) {
+					return
+				}
 				if i := u.indexOf(ca.data); i >= 0 {
 					if u.selectMode { // ticking: toggle even if the row is already highlighted
 						u.list.Unselect(i)
