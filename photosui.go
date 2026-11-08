@@ -95,7 +95,7 @@ func (u *ui) showCardImage(c *Contact, ci CardImage) {
 	img := canvas.NewImageFromFile(u.store.CardImagePath(ci.File))
 	img.FillMode = canvas.ImageFillContain
 	img.SetMinSize(fyne.NewSize(760, 480))
-	d := dialog.NewCustom(c.DisplayName()+" — business card", "Close", img, u.win)
+	d := newCustom(c.DisplayName()+" — business card", "Close", img, u.win)
 	d.Resize(fyne.NewSize(820, 600))
 	d.Show()
 }

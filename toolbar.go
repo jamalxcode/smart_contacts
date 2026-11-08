@@ -12,8 +12,8 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The organiser's toolbar: the Card menu's commands as icons on the desk above the book, in the
-// same order and groups. At its left it says what they'll act on — the open card, or the
+// The organiser's toolbar: the Card menu's commands as coloured card tabs standing up out of
+// the top of the book, in the same order and groups. At its left it says what they'll act on — the open card, or the
 // clipped cards — so there's never a doubt.
 
 var (
@@ -24,17 +24,30 @@ var (
 	iconClock  = svgIcon("clock", "M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z")
 )
 
-// deskTheme draws the toolbar's icons in cream on the dark desk.
+// tabInk is the print on the card tabs.
+var (
+	tabInk    = color.NRGBA{0x33, 0x29, 0x1E, 0xFF}
+	tabInkDim = color.NRGBA{0x33, 0x29, 0x1E, 0x55}
+)
+
+// deskTheme draws the tabs' icons in ink on the coloured card.
 type deskTheme struct{ fyne.Theme }
 
 func (t *deskTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
 	switch n {
 	case theme.ColorNameForeground:
-		return deskInk
+		return tabInk
 	case theme.ColorNameDisabled:
-		return deskInkDim
+		return tabInkDim
 	}
 	return t.Theme.Color(n, v)
+}
+
+// tabCards are the toolbar tabs' card colours, pastel like divider tabs.
+var tabCards = []color.NRGBA{
+	{0xF2, 0xE6, 0xC8, 0xFF}, {0xEE, 0xD6, 0x7E, 0xFF}, {0xA9, 0xB6, 0xE0, 0xFF}, {0xE6, 0x9C, 0xC4, 0xFF},
+	{0xA6, 0xD4, 0xB0, 0xFF}, {0xF2, 0xB6, 0x86, 0xFF}, {0x9E, 0xCC, 0xE2, 0xFF}, {0xE6, 0x9E, 0x8E, 0xFF},
+	{0xC4, 0xD2, 0x9E, 0xFF}, {0xD8, 0xC2, 0xE8, 0xFF},
 }
 
 // toolButton is an icon with its name under it.
@@ -46,10 +59,13 @@ type toolButton struct {
 	disabled bool
 	on       bool // a toggle that's on (lit, like a menu item's tick)
 	hover    bool
+	col      color.NRGBA // the card's colour
 	icon     *widget.Icon
 	img      *canvas.Image // for a picture that isn't a themed icon (the paper clip)
 	label    *canvas.Text
-	bg       *canvas.Rectangle
+	bg       *canvas.Rectangle // the card tab
+	shine    *canvas.Rectangle // light along its top edge
+	shadow   *canvas.Rectangle
 }
 
 func newToolButton(res fyne.Resource, text string, onTap func(*toolButton)) *toolButton {
@@ -86,12 +102,17 @@ func (b *toolButton) MouseMoved(*desktop.MouseEvent) {}
 func (b *toolButton) MouseOut()                      { b.hover = false; b.Refresh() }
 
 func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
-	b.bg = canvas.NewRectangle(color.Transparent)
-	b.bg.CornerRadius = 6
+	b.bg = canvas.NewRectangle(b.col)
+	b.bg.CornerRadius = 9
+	b.bg.StrokeWidth = 1
+	b.shine = canvas.NewRectangle(color.NRGBA{0xFF, 0xFF, 0xFF, 0x50})
+	b.shine.CornerRadius = 8
+	b.shadow = canvas.NewRectangle(color.NRGBA{0x10, 0x05, 0x00, 0x70})
+	b.shadow.CornerRadius = 9
 	b.icon = widget.NewIcon(nil)
 	b.img = canvas.NewImageFromResource(nil)
 	b.img.FillMode = canvas.ImageFillContain
-	b.label = canvas.NewText(b.text, deskInk)
+	b.label = canvas.NewText(b.text, tabInk)
 	b.label.TextSize = 10
 	b.label.Alignment = fyne.TextAlignCenter
 	r := &toolRenderer{b: b}
@@ -101,21 +122,40 @@ func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
 
 type toolRenderer struct{ b *toolButton }
 
+// lift is how far the tab stands up out of the book: a little more under the pointer, and
+// all the way when it's a toggle that's on.
+func (r *toolRenderer) lift() float32 {
+	switch {
+	case r.b.on:
+		return 0
+	case r.b.hover && !r.b.disabled:
+		return 2
+	}
+	return 6
+}
+
 func (r *toolRenderer) Layout(s fyne.Size) {
 	b := r.b
-	b.bg.Resize(s)
-	const is = 22
-	at := fyne.NewPos((s.Width-is)/2, 5)
-	b.icon.Move(at)
+	top := r.lift()
+	// the card runs down behind the book's top edge, so it reads as a tab sticking out of it
+	h := s.Height - top + 18
+	b.shadow.Move(fyne.NewPos(2, top+2))
+	b.shadow.Resize(fyne.NewSize(s.Width, h))
+	b.bg.Move(fyne.NewPos(0, top))
+	b.bg.Resize(fyne.NewSize(s.Width, h))
+	b.shine.Move(fyne.NewPos(2, top+1))
+	b.shine.Resize(fyne.NewSize(s.Width-4, 8))
+	const is = 20
+	b.icon.Move(fyne.NewPos((s.Width-is)/2, top+6))
 	b.icon.Resize(fyne.NewSize(is, is))
-	b.img.Move(fyne.NewPos((s.Width-10)/2, 3))
-	b.img.Resize(fyne.NewSize(10, 26))
-	b.label.Move(fyne.NewPos(0, 31))
+	b.img.Move(fyne.NewPos((s.Width-9)/2, top+3))
+	b.img.Resize(fyne.NewSize(9, 24))
+	b.label.Move(fyne.NewPos(0, top+28))
 	b.label.Resize(fyne.NewSize(s.Width, 14))
 }
 
 func (r *toolRenderer) MinSize() fyne.Size {
-	return fyne.NewSize(fyne.Max(58, r.b.label.MinSize().Width+12), 48)
+	return fyne.NewSize(fyne.Max(62, r.b.label.MinSize().Width+16), 50)
 }
 
 func (r *toolRenderer) Refresh() {
@@ -140,24 +180,25 @@ func (r *toolRenderer) Refresh() {
 		b.img.Refresh()
 		b.icon.Hide()
 	}
-	b.label.Color = deskInk
-	if b.disabled {
-		b.label.Color = deskInkDim
+	b.label.Text = b.text
+	b.label.Color = tabInk
+	col := b.col
+	if b.disabled { // faded card
+		b.label.Color = tabInkDim
+		col = color.NRGBA{uint8((int(col.R) + 2*0xB8) / 3), uint8((int(col.G) + 2*0xB0) / 3), uint8((int(col.B) + 2*0xA6) / 3), 0xFF}
+	} else if b.on || b.hover {
+		col = color.NRGBA{clamp8(float64(col.R) * 1.05), clamp8(float64(col.G) * 1.05), clamp8(float64(col.B) * 1.05), 0xFF}
 	}
+	b.bg.FillColor = col
+	b.bg.StrokeColor = color.NRGBA{uint8(int(col.R) * 6 / 10), uint8(int(col.G) * 6 / 10), uint8(int(col.B) * 6 / 10), 0xFF}
 	b.label.Refresh()
-	if b.on {
-		b.bg.FillColor = color.NRGBA{0xFF, 0xF0, 0xD0, 0x40}
-	} else if b.hover && !b.disabled {
-		b.bg.FillColor = color.NRGBA{0xFF, 0xF0, 0xD0, 0x22}
-	} else {
-		b.bg.FillColor = color.Transparent
-	}
 	b.bg.Refresh()
+	b.shine.Refresh()
 	r.Layout(b.Size())
 }
 
 func (r *toolRenderer) Objects() []fyne.CanvasObject {
-	return []fyne.CanvasObject{r.b.bg, r.b.icon, r.b.img, r.b.label}
+	return []fyne.CanvasObject{r.b.shadow, r.b.bg, r.b.shine, r.b.icon, r.b.img, r.b.label}
 }
 func (r *toolRenderer) Destroy() {}
 
@@ -191,10 +232,13 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	t.clipBtn = newToolButton(clipOn, "Clip Cards", func(*toolButton) { u.toggleSelectMode() })
 	check := newToolButton(iconMessage, "Check Messages", func(*toolButton) { u.cmdCheckMessages() })
 
-	divider := func() fyne.CanvasObject {
-		l := canvas.NewRectangle(color.NRGBA{0xEC, 0xE0, 0xC8, 0x30})
-		l.SetMinSize(fyne.NewSize(1, 34))
-		return container.NewCenter(l)
+	for i, b := range []*toolButton{t.note, t.fav, t.keep, t.groups, t.conn, tidy, dupes, t.share, t.clipBtn, check} {
+		b.col = tabCards[i%len(tabCards)]
+	}
+	divider := func() fyne.CanvasObject { // a gap between the groups of tabs
+		g := canvas.NewRectangle(color.Transparent)
+		g.SetMinSize(fyne.NewSize(14, 1))
+		return g
 	}
 	actingOn := canvas.NewText("ACTING ON", deskInkDim)
 	actingOn.TextSize = 9
@@ -226,10 +270,11 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 type toolbarLayout struct{}
 
 func (toolbarLayout) MinSize(objs []fyne.CanvasObject) fyne.Size {
-	return objs[0].MinSize().Add(fyne.NewSize(56, 10))
+	return objs[0].MinSize().Add(fyne.NewSize(56, 8))
 }
 func (toolbarLayout) Layout(objs []fyne.CanvasObject, s fyne.Size) {
-	objs[0].Move(fyne.NewPos(28, 6))
+	// the tabs' bottoms meet the book; their cards carry on behind its edge
+	objs[0].Move(fyne.NewPos(28, 8))
 	objs[0].Resize(fyne.NewSize(s.Width-56, s.Height-8))
 }
 

@@ -57,7 +57,7 @@ func (u *ui) goToDialog(prefix string) {
 		d.Hide()
 		u.showGroup(prefix + names[i])
 	}
-	d = dialog.NewCustom(title, "Cancel", l, u.win)
+	d = newCustom(title, "Cancel", l, u.win)
 	d.Resize(fyne.NewSize(360, fyne.Min(460, float32(len(names))*38+110)))
 	d.Show()
 }

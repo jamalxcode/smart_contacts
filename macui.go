@@ -164,7 +164,7 @@ func sidebarBackground(a fyne.App) *canvas.Rectangle {
 func (u *ui) confirm(title, message, verb string, destructive bool, do func()) {
 	l := widget.NewLabel(message)
 	l.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(title, verb, "Cancel", container.NewPadded(l), func(ok bool) {
+	d := newConfirm(title, verb, "Cancel", container.NewPadded(l), func(ok bool) {
 		if ok {
 			do()
 		}
@@ -240,7 +240,7 @@ func selectLabel(u *ui, id string) string {
 func (u *ui) confirmCB(title, message, verb string, destructive bool, cb func(bool), _ fyne.Window) {
 	l := widget.NewLabel(message)
 	l.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(title, verb, "Cancel", container.NewPadded(l), cb, u.win)
+	d := newConfirm(title, verb, "Cancel", container.NewPadded(l), cb, u.win)
 	ok := d.Confirm
 	if destructive {
 		d.SetConfirmImportance(widget.DangerImportance)
@@ -299,13 +299,13 @@ func dialogKey(k *fyne.KeyEvent) bool {
 
 // showInfo and showErr are dialog.ShowInformation and dialog.ShowError that close with Esc or Return.
 func showInfo(title, message string, w fyne.Window) {
-	d := dialog.NewInformation(title, message, w)
+	d := newInformation(title, message, w)
 	trackDialog(d, nil)
 	d.Show()
 }
 
 func showErr(err error, w fyne.Window) {
-	d := dialog.NewError(err, w)
+	d := newError(err, w)
 	trackDialog(d, nil)
 	d.Show()
 }

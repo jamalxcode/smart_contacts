@@ -360,7 +360,7 @@ func (u *ui) showChanges(title string, changes []CardChange) {
 	}
 	head := widget.NewLabel("Grey is how it was, bold is how it is now. Click a name to open the card. Edit → Undo (⌘Z) puts it all back.")
 	head.Wrapping = fyne.TextWrapWord
-	cd := dialog.NewCustom(title, "Done", container.NewBorder(head, nil, nil, nil, container.NewVScroll(box)), u.win)
+	cd := newCustom(title, "Done", container.NewBorder(head, nil, nil, nil, container.NewVScroll(box)), u.win)
 	d = cd
 	cd.Resize(fyne.NewSize(820, 620))
 	trackDialog(cd, nil)

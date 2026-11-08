@@ -325,7 +325,7 @@ func (u *ui) smartAdd() {
 	note.Wrapping = fyne.TextWrapWord
 	progress := widget.NewProgressBarInfinite()
 	progress.Hide()
-	var d *dialog.ConfirmDialog
+	var d *paperDialog
 	cardBtn := widget.NewButtonWithIcon("Business Card Image…", theme.FileImageIcon(), func() {
 		d.Hide()
 		u.chooseCardImage()
@@ -333,7 +333,7 @@ func (u *ui) smartAdd() {
 	cardNote := caption("…or read a photo or screenshot of a business card (the text is read on this Mac; the image is kept with the contact). You can also drag a card image onto the window.")
 	cardNote.Wrapping = fyne.TextWrapWord
 	content := container.NewBorder(nil, container.NewVBox(note, progress, widget.NewSeparator(), container.NewBorder(nil, nil, nil, cardBtn, cardNote)), nil, nil, in)
-	d = dialog.NewCustomConfirm("Smart Add", "Read It", "Cancel", content, func(ok bool) {
+	d = newConfirm("Smart Add", "Read It", "Cancel", content, func(ok bool) {
 		text := strings.TrimSpace(in.Text)
 		if !ok || text == "" {
 			return
@@ -355,7 +355,7 @@ func (u *ui) runSmartAddCard(text string, card []byte) {
 		u.finishSmartAddCard(ParseLocal(text, cc), "Read privately on this Mac — check the details, then Save.", card)
 		return
 	}
-	prog := dialog.NewCustomWithoutButtons("Reading…", container.NewVBox(widget.NewLabel("Asking "+u.cfg.AIModel+"…"), widget.NewProgressBarInfinite()), u.win)
+	prog := newCustomWithoutButtons("Reading…", container.NewVBox(widget.NewLabel("Asking "+u.cfg.AIModel+"…"), widget.NewProgressBarInfinite()), u.win)
 	prog.Show()
 	go func() {
 		c, confident, err := ParseAI(context.Background(), u.cfg.OpenRouterKey, u.cfg.AIModel, text, cc)
@@ -400,7 +400,7 @@ func (u *ui) finishSmartAddCard(c *Contact, banner string, card []byte) {
 	}
 	msg := widget.NewLabel(fmt.Sprintf("This looks like %s, who is already in your contacts.\n\nUpdating adds: %s.", x.DisplayName(), what))
 	msg.Wrapping = fyne.TextWrapWord
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	update := widget.NewButton("Update "+x.DisplayName(), func() {
 		d.Hide()
 		u.leaveEditor(func() {
@@ -415,7 +415,7 @@ func (u *ui) finishSmartAddCard(c *Contact, banner string, card []byte) {
 		u.leaveEditor(func() { u.openEditorCard(nil, c, banner, card, "added this contact") }, nil)
 	})
 	cancel := widget.NewButton("Cancel", func() { d.Hide() })
-	d = dialog.NewCustomWithoutButtons("Already in your contacts?", container.NewVBox(msg, update, add, cancel), u.win)
+	d = newCustomWithoutButtons("Already in your contacts?", container.NewVBox(msg, update, add, cancel), u.win)
 	d.Resize(fyne.NewSize(520, 300))
 	d.Show()
 }
@@ -446,7 +446,7 @@ func (u *ui) readCardImage(name string, data []byte) {
 		showErr(err, u.win)
 		return
 	}
-	prog := dialog.NewCustomWithoutButtons("Reading the business card…", container.NewVBox(
+	prog := newCustomWithoutButtons("Reading the business card…", container.NewVBox(
 		widget.NewLabel("Recognising the text on this Mac."), widget.NewProgressBarInfinite()), u.win)
 	prog.Show()
 	go func() {
@@ -465,7 +465,7 @@ func (u *ui) readCardImage(name string, data []byte) {
 // ---------- import ----------
 
 func (u *ui) importMac() {
-	prog := dialog.NewCustomWithoutButtons("Reading Mac Contacts…", container.NewVBox(
+	prog := newCustomWithoutButtons("Reading Mac Contacts…", container.NewVBox(
 		widget.NewLabel("If macOS asks, allow Smart Contacts to use Contacts."), widget.NewProgressBarInfinite()), u.win)
 	prog.Show()
 	go func() {
@@ -495,7 +495,7 @@ func (u *ui) sendToMacContacts(cs []*Contact) {
 		"If iCloud Contacts is turned on (System Settings → your name → iCloud → Contacts),\n" +
 		"Apple will sync the copy to iCloud and your other devices — it will no longer be only on this Mac.\n\n" +
 		"Smart Contacts itself keeps everything on this Mac either way.")
-	dialog.ShowCustomConfirm("Copy to Apple Contacts?", "Copy Anyway", "Cancel", msg, func(ok bool) {
+	showCustomConfirm("Copy to Apple Contacts?", "Copy Anyway", "Cancel", msg, func(ok bool) {
 		if ok {
 			if err := OpenInMacContacts(u.store, cs); err != nil {
 				showErr(err, u.win)
@@ -510,7 +510,7 @@ func (u *ui) confirmExportPlace(w fyne.URIWriteCloser, write func()) {
 		write()
 		return
 	}
-	dialog.ShowCustomConfirm("This folder syncs to the cloud", "Save There Anyway", "Cancel",
+	showCustomConfirm("This folder syncs to the cloud", "Save There Anyway", "Cancel",
 		widget.NewLabel("“"+w.URI().Name()+"” is going into a cloud-synced folder (iCloud Drive, Dropbox, Google Drive…),\n"+
 			"so the contacts would leave this Mac. Choose a folder like Documents or Desktop to keep them private."),
 		func(ok bool) {
@@ -671,7 +671,7 @@ func (u *ui) duplicatesFor(cs []*Contact) {
 	if len(groups) > 0 {
 		box.Add(widget.NewLabelWithStyle(fmt.Sprintf("Same person on several cards (%d)", len(groups)), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
 	}
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	merge := func(g DupeGroup) bool {
 		var cs []*Contact // only cards still in the address book (not merged away already)
 		for _, c := range g.Contacts {
@@ -779,7 +779,7 @@ func (u *ui) duplicatesFor(cs []*Contact) {
 	}
 	content := container.NewBorder(note, container.NewHBox(layout.NewSpacer(), mergeAll), nil, nil, container.NewVScroll(box))
 	title := "Look for Duplicates"
-	d = dialog.NewCustom(title, "Close", content, u.win)
+	d = newCustom(title, "Close", content, u.win)
 	d.Resize(fyne.NewSize(640, 520))
 	d.Show()
 }
@@ -877,7 +877,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 	}
 	note := caption(top)
 	note.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(fmt.Sprintf("Clean Up %s — %d %s", scope, len(changes), pluralWords(len(changes), "suggestion", "suggestions")), "Apply", "Skip",
+	d := newConfirm(fmt.Sprintf("Clean Up %s — %d %s", scope, len(changes), pluralWords(len(changes), "suggestion", "suggestions")), "Apply", "Skip",
 		container.NewBorder(note, nil, nil, nil, container.NewVScroll(box)), func(ok bool) {
 			if !ok {
 				return
@@ -923,7 +923,7 @@ func (u *ui) trash() {
 		return
 	}
 	box := container.NewVBox()
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	var fill func()
 	fill = func() {
 		box.Objects = nil
@@ -956,7 +956,7 @@ func (u *ui) trash() {
 		}, u.win)
 	})
 	empty.Importance = widget.DangerImportance
-	d = dialog.NewCustom("Trash", "Close", container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), empty), nil, nil, container.NewVScroll(box)), u.win)
+	d = newCustom("Trash", "Close", container.NewBorder(nil, container.NewHBox(layout.NewSpacer(), empty), nil, nil, container.NewVScroll(box)), u.win)
 	d.Resize(fyne.NewSize(520, 460))
 	d.Show()
 }
@@ -966,7 +966,7 @@ func (u *ui) trash() {
 func (u *ui) newGroupDialog() {
 	e := widget.NewEntry()
 	e.SetPlaceHolder("Family, Work, Clients…")
-	dialog.ShowForm("New Group", "Create", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
+	showForm("New Group", "Create", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
 		name := strings.TrimSpace(e.Text)
 		if !ok || name == "" {
 			return
@@ -1006,7 +1006,7 @@ func (u *ui) groupMenu(anchor fyne.CanvasObject) {
 			fyne.NewMenuItem("Rename “"+g+"”…", func() {
 				e := widget.NewEntry()
 				e.SetText(g)
-				dialog.ShowForm("Rename Group", "Rename", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
+				showForm("Rename Group", "Rename", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
 					n := strings.TrimSpace(e.Text)
 					if ok && n != "" && n != g {
 						u.store.RenameGroup(g, n)
@@ -1117,7 +1117,7 @@ func (u *ui) settings() {
 		section("Privacy",
 			widget.NewFormItem("", container.NewVBox(privacy, container.NewHBox(folder, layout.NewSpacer())))),
 	)
-	d := dialog.NewCustomConfirm("Settings", "Save", "Cancel", container.NewVScroll(container.NewPadded(content)), func(ok bool) {
+	d := newConfirm("Settings", "Save", "Cancel", container.NewVScroll(container.NewPadded(content)), func(ok bool) {
 		if !ok {
 			return
 		}
@@ -1211,7 +1211,7 @@ func (u *ui) help() {
 **Keys:** ⌘N new card · ⇧⌘N new group · ⌥⌘N Smart Add · ⌘O import · ⌘F find · ⌘L type in the card · ⌘S save · ⌘⌫ delete · ⌘Z undo · ⇧⌘Z redo · ⌘A select all · ⌘1–4 lists · ⇧⌘F favorite · ⌘K connect · ⇧⌘K how connected · ⇧⌘D duplicates · ⇧⌘M merge · ⇧⌘L calendar · ⌘5 reach out · ⌘6 needs attention · ⌘J note · ⇧⌘U update last talked · ⇧⌘O quick find · ⌘, settings`
 	r := widget.NewRichTextFromMarkdown(text)
 	r.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)
+	d := newCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)
 	d.Resize(fyne.NewSize(640, 560))
 	d.Show()
 }

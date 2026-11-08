@@ -609,7 +609,7 @@ func (u *ui) leaveEditor(next func(), stay func()) {
 	}
 	msg := widget.NewLabel("Are you sure you want to update " + name + "? Your changes haven't been saved yet.")
 	msg.Wrapping = fyne.TextWrapWord
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	saveB := widget.NewButton("Save", func() {
 		d.Hide()
 		ed.save()
@@ -634,7 +634,7 @@ func (u *ui) leaveEditor(next func(), stay func()) {
 			stay()
 		}
 	})
-	d = dialog.NewCustomWithoutButtons("Save changes?", container.NewVBox(msg,
+	d = newCustomWithoutButtons("Save changes?", container.NewVBox(msg,
 		container.NewHBox(dont, layout.NewSpacer(), cancel, saveB)), u.win)
 	d.Resize(fyne.NewSize(460, 0))
 	trackDialog(d, saveB.OnTapped)

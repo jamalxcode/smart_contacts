@@ -30,7 +30,7 @@ func (u *ui) bringEverythingIn() {
 		}
 		return false
 	}
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	type step struct {
 		title, how string
 		done       bool
@@ -70,7 +70,7 @@ func (u *ui) bringEverythingIn() {
 	}
 	intro := widget.NewLabel(fmt.Sprintf("Bring all your contacts into one place, one source at a time — %d of %d done. Skip any you don't use. People you already have are matched and updated, never duplicated, and every step can be undone.", done, len(steps)))
 	intro.Wrapping = fyne.TextWrapWord
-	d = dialog.NewCustom("Bring Everything In", "Close", container.NewBorder(intro, nil, nil, nil, container.NewVScroll(box)), u.win)
+	d = newCustom("Bring Everything In", "Close", container.NewBorder(intro, nil, nil, nil, container.NewVScroll(box)), u.win)
 	d.Resize(fyne.NewSize(720, 640))
 	d.Show()
 }
@@ -84,7 +84,7 @@ func (u *ui) backupTo() {
 	info := caption("With a password the backup is encrypted (AES-256): safe on a USB stick or another drive. " +
 		"Without the password it can't be opened — keep it somewhere safe; it isn't stored anywhere.")
 	info.Wrapping = fyne.TextWrapWord
-	form := dialog.NewForm("Back Up To…", "Choose Folder…", "Cancel", []*widget.FormItem{
+	form := newForm("Back Up To…", "Choose Folder…", "Cancel", []*widget.FormItem{
 		widget.NewFormItem("Password", pw1),
 		widget.NewFormItem("Confirm", pw2),
 		widget.NewFormItem("", info),
@@ -158,7 +158,7 @@ func (u *ui) restoreBackup() {
 		}
 		if IsEncryptedBackup(data) {
 			pw := widget.NewPasswordEntry()
-			f := dialog.NewForm("Encrypted Backup", "Open", "Cancel", []*widget.FormItem{widget.NewFormItem("Password", pw)}, func(ok bool) {
+			f := newForm("Encrypted Backup", "Open", "Cancel", []*widget.FormItem{widget.NewFormItem("Password", pw)}, func(ok bool) {
 				if !ok {
 					return
 				}

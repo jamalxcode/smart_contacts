@@ -330,7 +330,15 @@ Twenty-five Card commands came down to ten by having one rule for what they act 
 - The **View menu** and the **sidebar** (the organiser's tabs, or the plain look's list) have the same sections: the lists, To Tidy, Saved Searches, Groups, Sort, Also in the Book. The sidebar names each group and saved search. The menu can't, because its titles never change (section 18), so it uses Go to Group… and Go to Saved Search…. A list that isn't in the sidebar right now (no one missing a phone, say) is dimmed in the menu.
 - When renaming anything, rename it in both places. "Upcoming Birthdays" is "Birthdays" everywhere.
 
-## 23. Ideas not done yet
+## 23. Windows are things on the desk
+
+- A window that wants something filled in is a **clipboard**: a wooden board, a steel clip, and a cream sheet whose fields are ruled lines. One that only tells you something or asks you to confirm is a **postage stamp**: perforated edges, an engraved skyline, a postmark with today's date. The toolbar's buttons are **coloured card tabs** standing up out of the book.
+- Every window goes through `paperdialog.go`. Its `newConfirm`, `newCustom`, `newForm`, `newInformation` and `newError` have the same shape as Fyne's dialog functions. It picks clipboard or stamp by looking for inputs in the content (`hasInput`). In the plain look, or while the book is closed, it falls back to Fyne's own windows.
+- The windows live on `u.modalLayer`, the top of the organiser's stack, with a dimmed desk under them that swallows clicks. Esc and Return work through the same `trackDialog` as before. A destructive confirm never answers Return.
+- The paper hides input borders so fields read as ruled lines. Fyne draws tick boxes and radio buttons with that same colour, so `inkChoices` gives them back an ink outline.
+- File pickers (open, save, choose folder) stay Fyne's own.
+
+## 24. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

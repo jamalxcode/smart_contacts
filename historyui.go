@@ -9,7 +9,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -58,7 +57,7 @@ func (u *ui) afterRestore() {
 // historyDialog lists this session's changes (each can be undone back to) and the saved
 // restore points (backups before imports, clean-ups and de-duplication, and daily backups).
 func (u *ui) historyDialog() {
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	box := container.NewVBox()
 	steps := u.store.History()
 	box.Add(widget.NewLabelWithStyle("Changes this session", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
@@ -123,7 +122,7 @@ func (u *ui) historyDialog() {
 		btn.Importance = widget.LowImportance
 		box.Add(container.NewBorder(nil, nil, nil, btn, container.NewVBox(widget.NewLabel(restoreName(p)), caption(when))))
 	}
-	d = dialog.NewCustom("History", "Close", container.NewVScroll(box), u.win)
+	d = newCustom("History", "Close", container.NewVScroll(box), u.win)
 	d.Resize(fyne.NewSize(620, 600))
 	d.Show()
 }

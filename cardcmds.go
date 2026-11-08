@@ -6,7 +6,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 )
@@ -182,7 +181,7 @@ func (u *ui) cmdGroups() {
 	}
 	items = append(items, newG)
 	who := u.scopeName(cs)
-	d := dialog.NewCustomConfirm("Groups — "+who, "Done", "Cancel", container.NewBorder(nil, container.NewVBox(items[1:]...), nil, nil, items[0]), func(ok bool) {
+	d := newConfirm("Groups — "+who, "Done", "Cancel", container.NewBorder(nil, container.NewVBox(items[1:]...), nil, nil, items[0]), func(ok bool) {
 		if !ok {
 			return
 		}
@@ -249,12 +248,12 @@ func (u *ui) cmdConnections() {
 	} else {
 		body = container.NewVScroll(container.NewVBox(rows...))
 	}
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	connect := widget.NewButton("Connect to…", func() { d.Hide(); u.connectDialog(c) })
 	how := widget.NewButton("How Are They Connected?…", func() { d.Hide(); u.pathDialog(c, nil) })
 	closeB := widget.NewButton("Close", func() { d.Hide() })
 	connect.Importance = widget.HighImportance
-	d = dialog.NewCustomWithoutButtons("Connections — "+c.DisplayName(),
+	d = newCustomWithoutButtons("Connections — "+c.DisplayName(),
 		container.NewBorder(nil, container.NewHBox(how, layoutSpacer(), closeB, connect), nil, nil, body), u.win)
 	d.Resize(fyne.NewSize(520, 420))
 	trackDialog(d, connect.OnTapped)
@@ -319,7 +318,7 @@ func (u *ui) cmdTidy() {
 	}
 	form := container.NewVBox(boldLabel("Tidy"), scope, widget.NewSeparator(), boldLabel("What"), what, aiNote,
 		caption("You'll see every change before it's made, and Undo puts it back."))
-	d := dialog.NewCustomConfirm("Tidy Up", "Look", "Cancel", form, func(ok bool) {
+	d := newConfirm("Tidy Up", "Look", "Cancel", form, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -357,7 +356,7 @@ func (u *ui) cmdDuplicates() {
 	}
 	r := radioOf(opts, 0)
 	form := container.NewVBox(r, caption("Nothing is merged until you choose which details to keep."))
-	d := dialog.NewCustomConfirm("Find Duplicates", "Go", "Cancel", form, func(ok bool) {
+	d := newConfirm("Find Duplicates", "Go", "Cancel", form, func(ok bool) {
 		if !ok {
 			return
 		}

@@ -8,7 +8,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -19,7 +18,7 @@ func (u *ui) appVersion() string {
 
 // checkForUpdates looks for a newer build and, if there is one, offers to install it.
 func (u *ui) checkForUpdates() {
-	wait := dialog.NewCustomWithoutButtons("Checking for updates…", widget.NewProgressBarInfinite(), u.win)
+	wait := newCustomWithoutButtons("Checking for updates…", widget.NewProgressBarInfinite(), u.win)
 	wait.Show()
 	go func() {
 		r, err := FetchLatest()
@@ -48,7 +47,7 @@ func (u *ui) offerUpdate(r *Release, cur string) {
 	info := caption("Your contacts aren't touched: they stay in their own folder. The app closes, updates and reopens by itself.")
 	info.Wrapping = fyne.TextWrapWord
 	body := container.NewBorder(head, info, nil, nil, container.NewVScroll(what))
-	d := dialog.NewCustomConfirm("Update Available", "Update Now", "Later", body, func(ok bool) {
+	d := newConfirm("Update Available", "Update Now", "Later", body, func(ok bool) {
 		if ok {
 			u.leaveEditor(func() { u.installUpdate(r) }, nil)
 		}
@@ -92,7 +91,7 @@ func (u *ui) installUpdate(r *Release) {
 	bar := widget.NewProgressBar()
 	status := widget.NewLabel("Downloading " + r.Version + "…")
 	ctx, cancel := context.WithCancel(context.Background())
-	prog := dialog.NewCustom("Updating Smart Contacts", "Cancel", container.NewVBox(status, bar), u.win)
+	prog := newCustom("Updating Smart Contacts", "Cancel", container.NewVBox(status, bar), u.win)
 	prog.SetOnClosed(cancel)
 	prog.Resize(fyne.NewSize(460, 160))
 	prog.Show()
@@ -129,7 +128,7 @@ func (u *ui) about() {
 	md := fyne.CurrentApp().Metadata()
 	msg := fmt.Sprintf("Smart Contacts %s (build %d)\n\nA private address book — contacts stay on this Mac.\nData folder: %s",
 		md.Version, md.Build, u.store.Dir())
-	dialog.ShowCustomConfirm("About Smart Contacts", "Check for Updates…", "Close", widget.NewLabel(msg), func(ok bool) {
+	showCustomConfirm("About Smart Contacts", "Check for Updates…", "Close", widget.NewLabel(msg), func(ok bool) {
 		if ok {
 			u.checkForUpdates()
 		}

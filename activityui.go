@@ -11,7 +11,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -104,7 +103,7 @@ func (u *ui) askFullDiskAccess() {
 		"3. Quit and reopen Smart Contacts, then choose Card → Check Messages….\n\n" +
 		"WhatsApp can't be read this way: export a chat (in the chat, ⋯ → Export Chat) and drop the file on the window.")
 	msg.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm("Allow reading your history", "Open Privacy Settings", "Not Now", msg, func(ok bool) {
+	d := newConfirm("Allow reading your history", "Open Privacy Settings", "Not Now", msg, func(ok bool) {
 		if ok {
 			p, _ := url.Parse("x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles")
 			_ = u.app.OpenURL(p)
@@ -183,7 +182,7 @@ func (u *ui) unknownPeople() {
 		return
 	}
 	list := container.NewVBox()
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	var fill func()
 	fill = func() {
 		list.Objects = nil
@@ -218,7 +217,7 @@ func (u *ui) unknownPeople() {
 	fill()
 	intro := widget.NewLabel("People you've written to or called several times who aren't in your contacts (from Messages, calls and Mail on this Mac).")
 	intro.Wrapping = fyne.TextWrapWord
-	d = dialog.NewCustom("People Not in Contacts", "Close", container.NewBorder(intro, nil, nil, nil, container.NewVScroll(list)), u.win)
+	d = newCustom("People Not in Contacts", "Close", container.NewBorder(intro, nil, nil, nil, container.NewVScroll(list)), u.win)
 	d.Resize(fyne.NewSize(640, 560))
 	trackDialog(d, nil)
 	d.Show()
@@ -296,7 +295,7 @@ func (u *ui) addNoteTo(cs []*Contact) {
 	when := widget.NewEntry()
 	when.SetText(time.Now().Format("2 Jan 2006"))
 	form := container.NewBorder(nil, container.NewBorder(nil, nil, widget.NewLabel("Date"), nil, when), nil, nil, e)
-	d := dialog.NewCustomConfirm("Add a Note — "+u.scopeName(cs), "Add", "Cancel", form, func(ok bool) {
+	d := newConfirm("Add a Note — "+u.scopeName(cs), "Add", "Cancel", form, func(ok bool) {
 		text := strings.TrimSpace(e.Text)
 		if !ok || text == "" {
 			return
@@ -408,7 +407,7 @@ func (u *ui) saveSmartGroup() {
 	}
 	name := widget.NewEntry()
 	name.SetText(q)
-	d := dialog.NewForm("Save as Smart Group", "Save", "Cancel", []*widget.FormItem{
+	d := newForm("Save as Smart Group", "Save", "Cancel", []*widget.FormItem{
 		widget.NewFormItem("Name", name),
 		widget.NewFormItem("Search", widget.NewLabel(q)),
 	}, func(ok bool) {

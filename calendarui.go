@@ -7,7 +7,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -19,7 +18,7 @@ func (u *ui) calendarDialog() {
 	period := widget.NewSelect([]string{"Last year", "Last 2 years", "Last 5 years", "Last 10 years"}, nil)
 	period.SetSelected("Last 2 years")
 	years := map[string]int{"Last year": 1, "Last 2 years": 2, "Last 5 years": 5, "Last 10 years": 10}
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	readMac := widget.NewButtonWithIcon("Read Mac Calendar", theme.DownloadIcon(), func() {
 		d.Hide()
 		u.readMacCalendar(years[period.Selected] * 365)
@@ -42,7 +41,7 @@ func (u *ui) calendarDialog() {
 	content := container.NewVBox(status, how, widget.NewSeparator(),
 		container.NewBorder(nil, nil, widget.NewLabel("Period"), readMac, period),
 		container.NewHBox(ics), widget.NewSeparator(), container.NewHBox(forget))
-	d = dialog.NewCustom("Calendar Log", "Close", content, u.win)
+	d = newCustom("Calendar Log", "Close", content, u.win)
 	d.Resize(fyne.NewSize(620, 420))
 	d.Show()
 }
@@ -55,7 +54,7 @@ func (u *ui) calendarStatus() string {
 }
 
 func (u *ui) readMacCalendar(daysBack int) {
-	prog := dialog.NewCustomWithoutButtons("Reading the Calendar app…", container.NewVBox(
+	prog := newCustomWithoutButtons("Reading the Calendar app…", container.NewVBox(
 		widget.NewLabel("If macOS asks, allow Smart Contacts to use Calendar. Large calendars can take a minute."),
 		widget.NewProgressBarInfinite()), u.win)
 	prog.Show()
@@ -159,7 +158,7 @@ func (u *ui) calendarSection(c *Contact) []fyne.CanvasObject {
 			for _, m := range append(upcoming, past...) {
 				box.Add(row(m))
 			}
-			d := dialog.NewCustom(c.DisplayName()+" — calendar", "Close", container.NewVScroll(box), u.win)
+			d := newCustom(c.DisplayName()+" — calendar", "Close", container.NewVScroll(box), u.win)
 			d.Resize(fyne.NewSize(720, 560))
 			d.Show()
 		})

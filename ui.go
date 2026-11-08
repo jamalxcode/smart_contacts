@@ -69,6 +69,7 @@ type ui struct {
 	sortFirst     *sortPill // the sort switch in the organiser's tab column
 	sortLast      *sortPill
 	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
+	modalLayer    *fyne.Container // where the clipboard and stamp windows go (paperdialog.go)
 	tools         *toolbarParts      // the organiser toolbar (nil in the plain look)
 	actThen       func()             // runs once after the next successful read of Messages, calls and Mail
 	saveSearch    *widget.Button     // "Save as Smart Group", shown while searching
@@ -130,6 +131,7 @@ func (e *searchEntry) TypedKey(k *fyne.KeyEvent) {
 
 func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	u := &ui{app: a, store: s, cfg: cfg, group: grpAll, photoCache: map[string]fyne.Resource{}, cal: LoadCalendar(s.Dir())}
+	paperUI = u
 	if cfg.LastGroup != "" {
 		u.group = cfg.LastGroup
 	}
@@ -419,7 +421,7 @@ func (u *ui) build() {
 	outer.Offset = 0.19
 	inkAvatars = !u.cfg.ClassicLook
 	if u.cfg.ClassicLook {
-		u.tools = nil
+		u.tools, u.modalLayer = nil, nil
 		u.tabBox, u.letterBox, u.letter = nil, nil, ""
 		u.app.Settings().SetTheme(newAppTheme())
 		panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
@@ -431,7 +433,8 @@ func (u *ui) build() {
 		u.flipLayer = container.NewWithoutLayout()
 		u.tools = nil
 		toolbar := u.buildToolbar()
-		u.bookContent = container.NewStack(onGrey(container.NewBorder(toolbar, nil, nil, nil, u.filofaxLayout(listPane))), u.flipLayer, u.toast.box)
+		u.modalLayer = container.NewStack()
+		u.bookContent = container.NewStack(onGrey(container.NewBorder(toolbar, nil, nil, nil, u.filofaxLayout(listPane))), u.flipLayer, u.toast.box, u.modalLayer)
 		u.win.SetContent(u.bookContent)
 	}
 	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)

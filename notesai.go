@@ -9,7 +9,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/widget"
 )
 
@@ -179,7 +178,7 @@ func (u *ui) runNoteJobs(jobs []*noteJob) {
 	bar := widget.NewProgressBar()
 	status := widget.NewLabel("Rewriting notes…")
 	ctx, cancel := context.WithCancel(context.Background())
-	prog := dialog.NewCustom("Tidying Notes", "Stop", container.NewVBox(status, bar), u.win)
+	prog := newCustom("Tidying Notes", "Stop", container.NewVBox(status, bar), u.win)
 	prog.SetOnClosed(cancel)
 	prog.Resize(fyne.NewSize(420, 150))
 	prog.Show()
@@ -274,7 +273,7 @@ func (u *ui) reviewNoteJobs(jobs []*noteJob) {
 		head.SetText(head.Text + fmt.Sprintf(" %d couldn't be rewritten (%v).", failed, firstErr(jobs)))
 	}
 	head.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm("Review Tidied Notes", "Apply", "Cancel", container.NewBorder(head, nil, nil, nil, container.NewVScroll(box)), func(ok bool) {
+	d := newConfirm("Review Tidied Notes", "Apply", "Cancel", container.NewBorder(head, nil, nil, nil, container.NewVScroll(box)), func(ok bool) {
 		if !ok {
 			return
 		}

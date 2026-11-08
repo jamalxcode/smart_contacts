@@ -7,7 +7,6 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 )
@@ -181,8 +180,8 @@ func (u *ui) connectDialog(c *Contact) {
 		container.NewBorder(nil, nil, widget.NewLabel("as"), nil, rel),
 		info,
 	)
-	var d *dialog.ConfirmDialog
-	d = dialog.NewCustomConfirm("Connect", "Connect", "Cancel", content, func(ok bool) {
+	var d *paperDialog
+	d = newConfirm("Connect", "Connect", "Cancel", content, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -255,7 +254,7 @@ func (u *ui) pathDialog(a, b *Contact) {
 	}
 	pickers := container.NewGridWithColumns(2, from.obj, to.obj)
 	content := container.NewBorder(container.NewVBox(pickers, useCo, widget.NewSeparator()), nil, nil, nil, container.NewVScroll(result))
-	d := dialog.NewCustom("How are they connected?", "Close", content, u.win)
+	d := newCustom("How are they connected?", "Close", content, u.win)
 	d.Resize(fyne.NewSize(900, 640))
 	d.Show()
 	if a == nil {

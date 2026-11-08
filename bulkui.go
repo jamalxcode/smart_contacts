@@ -6,7 +6,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
-	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -99,7 +98,7 @@ func (u *ui) updateBulkBar() {
 func (u *ui) bulkAddGroup(cs []*Contact) {
 	e := widget.NewSelectEntry(u.store.Groups())
 	e.SetPlaceHolder("Group name")
-	dialog.ShowForm(fmt.Sprintf("Add %d people to a group", len(cs)), "Add", "Cancel", []*widget.FormItem{widget.NewFormItem("Group", e)}, func(ok bool) {
+	showForm(fmt.Sprintf("Add %d people to a group", len(cs)), "Add", "Cancel", []*widget.FormItem{widget.NewFormItem("Group", e)}, func(ok bool) {
 		g := strings.TrimSpace(e.Text)
 		if !ok || g == "" {
 			return
@@ -135,7 +134,7 @@ func (u *ui) bulkRemoveGroup(cs []*Contact) {
 	}
 	sel := widget.NewSelect(groups, nil)
 	sel.SetSelectedIndex(0)
-	dialog.ShowForm("Remove from a group", "Remove", "Cancel", []*widget.FormItem{widget.NewFormItem("Group", sel)}, func(ok bool) {
+	showForm("Remove from a group", "Remove", "Cancel", []*widget.FormItem{widget.NewFormItem("Group", sel)}, func(ok bool) {
 		if !ok {
 			return
 		}

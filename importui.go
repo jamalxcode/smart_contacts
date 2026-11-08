@@ -38,7 +38,7 @@ var importSources = []struct {
 // importHub is the one place to bring contacts in from anywhere.
 func (u *ui) importHub() {
 	box := container.NewVBox()
-	var d *dialog.CustomDialog
+	var d *paperDialog
 	for _, src := range importSources {
 		src := src
 		title := widget.NewLabelWithStyle(src.title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -73,7 +73,7 @@ func (u *ui) importHub() {
 	privacy := caption("Everything is read on this Mac. People you already have are recognised (by number, email, profile link or name — in Arabic or English) and their cards are updated instead of duplicated. A backup is saved before each import.")
 	privacy.Wrapping = fyne.TextWrapWord
 	content := container.NewBorder(privacy, container.NewVBox(widget.NewSeparator(), container.NewBorder(nil, nil, nil, paste, social)), nil, nil, container.NewVScroll(box))
-	d = dialog.NewCustom("Import Contacts", "Close", content, u.win)
+	d = newCustom("Import Contacts", "Close", content, u.win)
 	d.Resize(fyne.NewSize(780, 640))
 	d.Show()
 }
@@ -136,7 +136,7 @@ func (u *ui) pasteImport() {
 	in.Wrapping = fyne.TextWrapWord
 	in.SetMinRowsVisible(12)
 	in.SetPlaceHolder("Ali Hassan 6555 1212\nSara Ali 9999 0000\n\nDr. Yousef Al-Kandari\nDentist, Dar Al Shifa\nT: 1802555")
-	d := dialog.NewCustomConfirm("Paste People", "Read", "Cancel", in, func(ok bool) {
+	d := newConfirm("Paste People", "Read", "Cancel", in, func(ok bool) {
 		if ok && strings.TrimSpace(in.Text) != "" {
 			u.previewImport(NotesBatch(in.Text, u.cfg.CountryCode))
 		}
@@ -296,7 +296,7 @@ func (u *ui) previewImport(b *Batch) {
 	}
 	replan()
 
-	d := dialog.NewCustomConfirm("Import from "+b.Source, "Import", "Cancel",
+	d := newConfirm("Import from "+b.Source, "Import", "Cancel",
 		container.NewBorder(top, nil, nil, nil, container.NewVScroll(lists)), func(ok bool) {
 			if !ok {
 				return
@@ -477,7 +477,7 @@ func (u *ui) receiveFromPhone() {
 		"Other phones: send the contacts as a .vcf file over Bluetooth.\n\nWaiting for the file…")
 	how.Wrapping = fyne.TextWrapWord
 	stop := make(chan struct{})
-	d := dialog.NewCustom("Receive from a Phone", "Cancel", container.NewVBox(how, widget.NewProgressBarInfinite()), u.win)
+	d := newCustom("Receive from a Phone", "Cancel", container.NewVBox(how, widget.NewProgressBarInfinite()), u.win)
 	d.SetOnClosed(func() {
 		select {
 		case <-stop:
