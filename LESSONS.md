@@ -316,7 +316,15 @@ A form showing every empty field hides the few lines that matter. A card that is
 - One way to do each thing in the organiser: the pen makes a new card, the pocket takes business cards, and the funnel in the search field opens the filter. Sources are in the filter form and `from:` searches, not tabs.
 - Hints go away once you've used the thing they explain (`cfg.Learned`). The status line then shows counts instead: contacts, cards to tidy, people to reach out to.
 
-## 21. Ideas not done yet
+## 21. Eleven commands and one rule
+
+Twenty-five Card commands came down to eleven by having one rule for what they act on: the clipped cards if any are clipped, otherwise the open card (`targets()` in `cardcmds.go`). Edit → Delete already worked that way.
+
+- Commands that did the same job at three scopes became one command. Tidy Up and Find Duplicates ask for the scope in their window (this card, the clipped cards, or everyone).
+- Pairs became one window: Groups (add and remove), Connections (connect, and how they're connected), Check Messages, Calls & Mail (update "last talked", then list the people not in your contacts).
+- The toolbar above the organiser (`toolbar.go`) has the same commands in the same groups. Its left side says what they'll act on. It's refreshed with the menu (`refreshMenu` → `refreshToolbar`).
+
+## 22. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

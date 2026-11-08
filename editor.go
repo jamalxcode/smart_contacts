@@ -572,7 +572,7 @@ func (e *editor) save() {
 	if isNew {
 		e.u.flash("Added " + c.DisplayName())
 		if dupes := e.u.lookalikes(c); len(dupes) > 0 {
-			e.u.flash(fmt.Sprintf("Added %s — looks like %s, already in your contacts (Card → Look for Duplicates)", c.DisplayName(), dupes[0].DisplayName()))
+			e.u.flash(fmt.Sprintf("Added %s — looks like %s, already in your contacts (Card → Find Duplicates)", c.DisplayName(), dupes[0].DisplayName()))
 		}
 	}
 }

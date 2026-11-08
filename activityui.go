@@ -70,12 +70,16 @@ func (u *ui) readActivity(interactive bool) {
 			if interactive {
 				msg := fmt.Sprintf("Found history for %d people", len(u.act.People))
 				if n := len(u.act.Unknown); n > 0 {
-					msg += fmt.Sprintf(" · %d people you talk to aren't in your contacts (Card → People Not in Contacts)", n)
+					msg += fmt.Sprintf(" · %d people you talk to aren't in your contacts", n)
 				}
 				u.flash(msg)
 				if len(problems) > 0 {
 					showInfo("Some history couldn't be read", strings.Join(problems, "\n"), u.win)
 				}
+			}
+			if then := u.actThen; then != nil {
+				u.actThen = nil
+				then()
 			}
 		})
 	}()
@@ -97,7 +101,7 @@ func (u *ui) askFullDiskAccess() {
 		"databases on this Mac. Nothing leaves the Mac.\n\nmacOS keeps these private until you allow it:\n" +
 		"1. Open System Settings → Privacy & Security → Full Disk Access.\n" +
 		"2. Turn on Smart Contacts (use + to add it from Applications if it isn't listed).\n" +
-		"3. Quit and reopen Smart Contacts, then choose Card → Update Last Talked.\n\n" +
+		"3. Quit and reopen Smart Contacts, then choose Card → Check Messages, Calls & Mail.\n\n" +
 		"WhatsApp can't be read this way: export a chat (in the chat, ⋯ → Export Chat) and drop the file on the window.")
 	msg.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustomConfirm("Allow reading your history", "Open Privacy Settings", "Not Now", msg, func(ok bool) {
@@ -281,7 +285,10 @@ func (u *ui) setKeepInTouch(c *Contact, days int) {
 }
 
 // addNote writes a dated note on c's timeline ("Lunch at the Avenues, talked about the move").
-func (u *ui) addNote(c *Contact) {
+func (u *ui) addNote(c *Contact) { u.addNoteTo([]*Contact{c}) }
+
+// addNoteTo writes the same note on each card in cs (one card, or the clipped ones).
+func (u *ui) addNoteTo(cs []*Contact) {
 	e := widget.NewMultiLineEntry()
 	e.SetPlaceHolder("What happened, what you talked about, what to follow up…")
 	e.Wrapping = fyne.TextWrapWord
@@ -289,7 +296,7 @@ func (u *ui) addNote(c *Contact) {
 	when := widget.NewEntry()
 	when.SetText(time.Now().Format("2 Jan 2006"))
 	form := container.NewBorder(nil, container.NewBorder(nil, nil, widget.NewLabel("Date"), nil, when), nil, nil, e)
-	d := dialog.NewCustomConfirm("Add a Note — "+c.DisplayName(), "Add", "Cancel", form, func(ok bool) {
+	d := dialog.NewCustomConfirm("Add a Note — "+u.scopeName(cs), "Add", "Cancel", form, func(ok bool) {
 		text := strings.TrimSpace(e.Text)
 		if !ok || text == "" {
 			return
@@ -298,12 +305,14 @@ func (u *ui) addNote(c *Contact) {
 		if t, ok := parseLooseDate(when.Text); ok {
 			at = time.Date(t.Year(), t.Month(), t.Day(), at.Hour(), at.Minute(), 0, 0, time.Local)
 		}
-		c.AddEvent(at, text, "You")
-		if at.After(c.LastContacted) && at.Before(time.Now().Add(time.Minute)) {
-			c.LastContacted = at // a note about meeting counts as being in touch
+		for _, c := range cs {
+			c.AddEvent(at, text, "You")
+			if at.After(c.LastContacted) && at.Before(time.Now().Add(time.Minute)) {
+				c.LastContacted = at // a note about meeting counts as being in touch
+			}
+			u.store.Put(c)
 		}
 		u.openSec["Timeline"] = true
-		u.store.Put(c)
 		u.save()
 	}, u.win)
 	d.Resize(fyne.NewSize(520, 0))

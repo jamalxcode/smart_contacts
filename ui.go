@@ -66,6 +66,8 @@ type ui struct {
 	sideBusy      bool
 	act           *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
 	actBusy       bool
+	tools         *toolbarParts  // the organiser toolbar (nil in the plain look)
+	actThen       func()         // runs once after the next successful read of Messages, calls and Mail
 	saveSearch    *widget.Button // "Save as Smart Group", shown while searching
 	attention     map[string]int // clean-up suggestions per contact (worked out in the background)
 	qf            *quickFind     // the menu bar's Quick Find window
@@ -414,6 +416,7 @@ func (u *ui) build() {
 	outer.Offset = 0.19
 	inkAvatars = !u.cfg.ClassicLook
 	if u.cfg.ClassicLook {
+		u.tools = nil
 		u.tabBox, u.letterBox, u.letter = nil, nil, ""
 		u.app.Settings().SetTheme(newAppTheme())
 		panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
@@ -423,7 +426,9 @@ func (u *ui) build() {
 		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
 		u.toast = u.newToast()
 		u.flipLayer = container.NewWithoutLayout()
-		u.bookContent = container.NewStack(onGrey(u.filofaxLayout(listPane)), u.flipLayer, u.toast.box)
+		u.tools = nil
+		toolbar := u.buildToolbar()
+		u.bookContent = container.NewStack(onGrey(container.NewBorder(toolbar, nil, nil, nil, u.filofaxLayout(listPane))), u.flipLayer, u.toast.box)
 		u.win.SetContent(u.bookContent)
 	}
 	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)

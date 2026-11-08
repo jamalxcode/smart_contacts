@@ -157,12 +157,12 @@ func (u *ui) tidyNotesAI(cs []*Contact, force bool) {
 		}
 	}
 	if len(jobs) == 0 {
-		showInfo("Notes look fine", "No jumbled notes found. (Card → Tidy This Note with AI rewrites one card's note on request.)", u.win)
+		showInfo("Notes look fine", "No jumbled notes found. (Card → Tidy Up rewrites one card's note on request: choose that card and “Jumbled notes”.)", u.win)
 		return
 	}
 	if !u.cloudAI() {
 		showInfo("Cloud AI is off", fmt.Sprintf("%d %s jumbled. Tidying them with AI sends the note text to OpenRouter, so it's off unless you allow it: "+
-			"Settings → Cloud AI, add your OpenRouter key and tick “Allow…”.\n\nWithout AI, Card → Clean Up already removes repeats, web code and blank lines on this Mac.",
+			"Settings → Cloud AI, add your OpenRouter key and tick “Allow…”.\n\nWithout AI, Card → Tidy Up already removes repeats, web code and blank lines on this Mac.",
 			len(jobs), pluralWords(len(jobs), "note looks", "notes look")), u.win)
 		return
 	}
