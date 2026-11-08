@@ -101,7 +101,7 @@ func (u *ui) askFullDiskAccess() {
 		"databases on this Mac. Nothing leaves the Mac.\n\nmacOS keeps these private until you allow it:\n" +
 		"1. Open System Settings → Privacy & Security → Full Disk Access.\n" +
 		"2. Turn on Smart Contacts (use + to add it from Applications if it isn't listed).\n" +
-		"3. Quit and reopen Smart Contacts, then choose Card → Check Messages, Calls & Mail.\n\n" +
+		"3. Quit and reopen Smart Contacts, then choose Card → Check Messages….\n\n" +
 		"WhatsApp can't be read this way: export a chat (in the chat, ⋯ → Export Chat) and drop the file on the window.")
 	msg.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustomConfirm("Allow reading your history", "Open Privacy Settings", "Not Now", msg, func(ok bool) {

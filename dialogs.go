@@ -144,39 +144,60 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("History…", u.historyDialog),
 	)
 
-	// View — which list to show and how to sort it.
-	byFirst := fyne.NewMenuItem("Sort by First Name", nil)
-	byLast := fyne.NewMenuItem("Sort by Last Name", nil)
-	setSort := func(last bool) {
-		u.cfg.SortByLast = last
-		_ = u.cfg.Save(u.store.Dir())
-		byFirst.Checked, byLast.Checked = !last, last
-		u.refreshMenu()
-		u.refreshList()
+	// View — the same sections, names and order as the tabs down the left of the organiser
+	// (and the sidebar in the plain look): the lists, To Tidy, Saved Searches, Groups, Sort, and
+	// what else is in the book. Groups and saved searches change, and the menu can't (see
+	// refreshMenu), so the menu goes to them through a chooser.
+	header := func(s string) *fyne.MenuItem {
+		h := fyne.NewMenuItem(s, nil)
+		h.Disabled = true
+		return h
 	}
-	byFirst.Action, byLast.Action = func() { setSort(false) }, func() { setSort(true) }
+	list := func(label string, sc fyne.Shortcut, key string) *fyne.MenuItem {
+		m := item(label, sc, func() { u.showGroup(key) })
+		m.Disabled = !u.groupExists(key)
+		m.Checked = u.group == key
+		return m
+	}
+	byFirst := item("Sort by First Name", nil, func() { u.setSort(false) })
+	byLast := item("Sort by Last Name", nil, func() { u.setSort(true) })
 	byFirst.Checked, byLast.Checked = !u.cfg.SortByLast, u.cfg.SortByLast
+	goSaved := fyne.NewMenuItem("Go to Saved Search…", func() { u.goToDialog("q:") })
+	goSaved.Disabled = len(u.cfg.SmartGroups) == 0
+	goGroup := item("Go to Group…", cmd(fyne.KeyG), func() { u.goToDialog("g:") })
+	goGroup.Disabled = len(u.store.Groups()) == 0
 	filofaxItem := fyne.NewMenuItem("Filofax Look", u.toggleLook)
 	filofaxItem.Checked = !u.cfg.ClassicLook
 	view := fyne.NewMenu("View",
-		item("All Contacts", cmd(fyne.Key1), func() { u.showGroup(grpAll) }),
-		item("Favorites", cmd(fyne.Key2), func() { u.showGroup(grpFavorites) }),
-		item("Upcoming Birthdays", cmd(fyne.Key3), func() { u.showGroup(grpBirthdays) }),
-		item("Recently Added", cmd(fyne.Key4), func() { u.showGroup(grpRecent) }),
-		item("Reach Out", cmd(fyne.Key5), func() { u.showGroup(grpReachOut) }),
-		item("Needs Attention", cmd(fyne.Key6), func() { u.showGroup(grpAttention) }),
-		fyne.NewMenuItem("Save Search as Smart Group…", u.saveSmartGroup),
+		list("All Contacts", cmd(fyne.Key1), grpAll),
+		list("Favorites", cmd(fyne.Key2), grpFavorites),
+		list("Birthdays", cmd(fyne.Key3), grpBirthdays),
+		list("Recently Added", cmd(fyne.Key4), grpRecent),
+		list("Reach Out", cmd(fyne.Key5), grpReachOut),
 		sep(),
+		header("To Tidy"),
+		list("Needs Attention", cmd(fyne.Key6), grpAttention),
+		list("Missing Phone or Email", cmd(fyne.Key7), grpIncomplete),
+		sep(),
+		header("Saved Searches"),
+		goSaved,
+		fyne.NewMenuItem("Save This Search…", u.saveSmartGroup),
+		sep(),
+		header("Groups"),
+		goGroup,
+		sep(),
+		header("Sort"),
 		byFirst, byLast,
+		sep(),
+		header("Also in the Book"),
+		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
+		fyne.NewMenuItem("Trash…", u.trash),
 		sep(),
 		filofaxItem,
 		item("Close Organiser", cmdShift(fyne.KeyW), u.showCover),
-		sep(),
-		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
-		fyne.NewMenuItem("Trash", u.trash),
 	)
 
-	// Card — eleven commands, all acting on the clipped cards if any are clipped, otherwise on the
+	// Card — ten commands, all acting on the clipped cards if any are clipped, otherwise on the
 	// open card (cardcmds.go). Tidy Up and Find Duplicates ask in their window, since they can
 	// also take the whole book. Dimmed when there's nothing for them to act on.
 	ts := u.targets()
@@ -200,7 +221,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	share := fyne.NewMenuItem("Share", nil)
 	share.ChildMenu = fyne.NewMenu("", u.shareItems()...)
 	share.Disabled = none
-	clipToggle := item("Clip Cards Together", cmdShift(fyne.KeyS), u.toggleSelectMode)
+	clipToggle := item("Clip Cards", cmdShift(fyne.KeyS), u.toggleSelectMode)
 	clipToggle.Checked = u.selectMode
 	dupes := item("Find Duplicates…", cmdShift(fyne.KeyD), u.cmdDuplicates)
 	dupes.Disabled = len(u.store.Contacts) < 2
@@ -217,7 +238,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		sep(),
 		clipToggle,
 		sep(),
-		item("Check Messages, Calls & Mail…", cmdShift(fyne.KeyU), u.cmdCheckMessages),
+		item("Check Messages…", cmdShift(fyne.KeyU), u.cmdCheckMessages),
 	}
 	card := fyne.NewMenu("Card", cardItems...)
 
@@ -1139,7 +1160,7 @@ func (u *ui) help() {
 
 **Editing.** Every card is editable where it is: click any field and type (⌘L or Return jumps to the first field). Save and Revert appear at the bottom once something changes, ⌘S saves, and if you move to another person, close the window or quit with unsaved changes, you're asked whether to update the card (Save, Don't Save or Cancel). Right-click a person in the list for Favorites, Connect, Share and Delete. Share (the arrow button) copies the card as text, saves a vCard or copies it to Apple Contacts.
 
-**Last talked.** Card → Check Messages, Calls & Mail (⇧⌘U) reads Messages, call history and Mail on this Mac (it needs Full Disk Access, which it asks for) and shows on each card when you were last in touch and how. For WhatsApp, export a chat (⋯ → Export Chat) and drop it on the window. Then it lists the people you write to or call often who aren't in your contacts. Nothing leaves the Mac.
+**Last talked.** Card → Check Messages… (⇧⌘U) reads Messages, call history and Mail on this Mac (it needs Full Disk Access, which it asks for) and shows on each card when you were last in touch and how. For WhatsApp, export a chat (⋯ → Export Chat) and drop it on the window. Then it lists the people you write to or call often who aren't in your contacts. Nothing leaves the Mac.
 
 **Keeping in touch.** Keep in Touch at the bottom of a card sets a reminder (every week … every year). View → Reach Out (⌘5) lists who's due, longest first, and a notification reminds you once a day, along with birthdays. Note (⌘J) adds a dated note to the card's timeline; "How we met" is on the Edit page.
 
@@ -1149,7 +1170,9 @@ func (u *ui) help() {
 
 **The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. A card shows only what's written on it. Click a line for what it's for (call, message, email, open, copy). Double-click a line, or press Write, to write on the card: every field opens, and the one you clicked is ready to type in. Done or Esc puts the pen down and saves. Turn Over shows the back of the card: notes, how you met, keeping in touch and the history. On a card with several numbers, the star marks the main one; × crosses a line out. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
-**What a command acts on.** The Card menu and the toolbar above the organiser have the same eleven commands: Add Note, Favorite, Keep in Touch, Groups, Connections, Tidy Up, Find Duplicates, Share, Clip Cards Together and Check Messages, Calls & Mail. They act on the clipped cards if any are clipped, otherwise on the open card. The toolbar says which at its left (“Acting on: Ali Hassan” or “3 clipped cards”). Tidy Up and Find Duplicates ask in their window, because they can also take the whole address book. Commands that can't act right now are dimmed. Connections with two cards clipped shows how those two are linked. Edit → Delete deletes the clipped cards if there are any, otherwise the open card, and always asks first, naming them.
+**Menus and the organiser match.** The View menu and the tabs down the left have the same sections, names and order: the lists, To Tidy, Saved Searches, Groups, then Sort and Also in the Book (Calendar Log, Trash). The tabs show each group and saved search by name; in the menu use Go to Group… (⌘G) and Go to Saved Search…. The Card menu and the toolbar above the book also match each other.
+
+**What a command acts on.** The Card menu and the toolbar above the organiser have the same ten commands, with the same names in the same order: Add Note, Favorite, Keep in Touch, Groups, Connections, Tidy Up, Find Duplicates, Share, Clip Cards and Check Messages (Messages, calls and Mail). They act on the clipped cards if any are clipped, otherwise on the open card. The toolbar says which at its left (“Acting on: Ali Hassan” or “3 clipped cards”). Tidy Up and Find Duplicates ask in their window, because they can also take the whole address book. Commands that can't act right now are dimmed. Connections with two cards clipped shows how those two are linked. Edit → Delete deletes the clipped cards if there are any, otherwise the open card, and always asks first, naming them.
 
 **Seeing what changed.** After any change a banner at the bottom says what was done (“Clean Up applied to 3 Clipped Cards — 1 fix”), with *Show Changes* (each card, how it was in grey and how it is now in bold) and *Undo*. Cards that just changed have a blue dot in the list for a short while.
 
@@ -1167,7 +1190,7 @@ func (u *ui) help() {
 
 **Undo (⌘Z, ⇧⌘Z).** Every change can be undone: edits, imports, clean-ups, merges, deletes. Edit → History lists this session's changes and the saved restore points.
 
-**Many at once: paper clips.** Every card in the list has a paper clip at its left edge. Click it to clip that card; clip more and they gather under a yellow sticky note. ⌘-click and Shift-click (a range) work too, as do ⌘A for everyone shown (⇧⌘A unclips all) and Card → Clip Cards Together (⇧⌘S). While cards are clipped, every Card command and toolbar button acts on them. Take Clips Off ends it. Deleting several cards asks twice, and Return never confirms a delete: the red button has to be clicked.
+**Many at once: paper clips.** Every card in the list has a paper clip at its left edge. Click it to clip that card; clip more and they gather under a yellow sticky note. ⌘-click and Shift-click (a range) work too, as do ⌘A for everyone shown (⇧⌘A unclips all) and Card → Clip Cards (⇧⌘S). While cards are clipped, every Card command and toolbar button acts on them. Take Clips Off ends it. Deleting several cards asks twice, and Return never confirms a delete: the red button has to be clicked.
 
 **Duplicates and tidying.** Find Duplicates (⇧⌘D) merges the same person on several cards and removes repeats inside cards. Tidy Up writes every number the same way (+965 9999 8888), fixes names, emails and links, or, if you choose “Jumbled notes”, rewrites messy notes with Cloud AI. You see every change before it's made.
 

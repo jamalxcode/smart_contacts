@@ -66,11 +66,14 @@ type ui struct {
 	sideBusy      bool
 	act           *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
 	actBusy       bool
-	tools         *toolbarParts  // the organiser toolbar (nil in the plain look)
-	actThen       func()         // runs once after the next successful read of Messages, calls and Mail
-	saveSearch    *widget.Button // "Save as Smart Group", shown while searching
-	attention     map[string]int // clean-up suggestions per contact (worked out in the background)
-	qf            *quickFind     // the menu bar's Quick Find window
+	sortFirst     *sortPill // the sort switch in the organiser's tab column
+	sortLast      *sortPill
+	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
+	tools         *toolbarParts      // the organiser toolbar (nil in the plain look)
+	actThen       func()             // runs once after the next successful read of Messages, calls and Mail
+	saveSearch    *widget.Button     // "Save as Smart Group", shown while searching
+	attention     map[string]int     // clean-up suggestions per contact (worked out in the background)
+	qf            *quickFind         // the menu bar's Quick Find window
 	trayMenuSig   string
 	selAnchor     string          // where a Shift-click range starts
 	tabBox        *fyne.Container // Filofax look: the coloured index tabs
@@ -250,7 +253,7 @@ func (u *ui) build() {
 	groupMenu.Importance = widget.LowImportance
 	groupMenu.OnTapped = func() { u.groupMenu(groupMenu) }
 	sidebar := container.NewStack(sidebarBackground(u.app),
-		container.NewBorder(nil, container.NewHBox(addGroup, layout.NewSpacer(), groupMenu), nil, nil, u.side))
+		container.NewBorder(nil, container.NewVBox(u.classicFooter(), container.NewHBox(addGroup, layout.NewSpacer(), groupMenu)), nil, nil, u.side))
 
 	// --- list ---
 	u.search = newSearchEntry()

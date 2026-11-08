@@ -316,15 +316,21 @@ A form showing every empty field hides the few lines that matter. A card that is
 - One way to do each thing in the organiser: the pen makes a new card, the pocket takes business cards, and the funnel in the search field opens the filter. Sources are in the filter form and `from:` searches, not tabs.
 - Hints go away once you've used the thing they explain (`cfg.Learned`). The status line then shows counts instead: contacts, cards to tidy, people to reach out to.
 
-## 21. Eleven commands and one rule
+## 21. Ten commands and one rule
 
-Twenty-five Card commands came down to eleven by having one rule for what they act on: the clipped cards if any are clipped, otherwise the open card (`targets()` in `cardcmds.go`). Edit → Delete already worked that way.
+Twenty-five Card commands came down to ten by having one rule for what they act on: the clipped cards if any are clipped, otherwise the open card (`targets()` in `cardcmds.go`). Edit → Delete already worked that way.
 
 - Commands that did the same job at three scopes became one command. Tidy Up and Find Duplicates ask for the scope in their window (this card, the clipped cards, or everyone).
 - Pairs became one window: Groups (add and remove), Connections (connect, and how they're connected), Check Messages, Calls & Mail (update "last talked", then list the people not in your contacts).
 - The toolbar above the organiser (`toolbar.go`) has the same commands in the same groups. Its left side says what they'll act on. It's refreshed with the menu (`refreshMenu` → `refreshToolbar`).
 
-## 22. Ideas not done yet
+## 22. Menus and bars are the same thing twice
+
+- The **Card menu** and the **toolbar** have the same ten commands in the same order and groups, with identical names. The menu adds "…" where a window opens. Toggles look the same in both: a tick in the menu, a lit button in the toolbar (Favorite, Clip Cards).
+- The **View menu** and the **sidebar** (the organiser's tabs, or the plain look's list) have the same sections: the lists, To Tidy, Saved Searches, Groups, Sort, Also in the Book. The sidebar names each group and saved search. The menu can't, because its titles never change (section 18), so it uses Go to Group… and Go to Saved Search…. A list that isn't in the sidebar right now (no one missing a phone, say) is dimmed in the menu.
+- When renaming anything, rename it in both places. "Upcoming Birthdays" is "Birthdays" everywhere.
+
+## 23. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

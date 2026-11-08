@@ -888,7 +888,8 @@ func (r *tabRenderer) Destroy() {}
 
 func (u *ui) filofaxTabs() fyne.CanvasObject {
 	u.tabBox = container.NewVBox()
-	return container.NewVScroll(u.tabBox)
+	// the lists and groups scroll; Sort and Also in the Book stay at the bottom (as in View)
+	return container.NewBorder(nil, u.organiserFooter(), nil, nil, container.NewVScroll(u.tabBox))
 }
 
 func (u *ui) refreshTabs() {

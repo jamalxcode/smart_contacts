@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// The Card commands, shared by the Card menu and the organiser's toolbar. There are eleven, and
+// The Card commands, shared by the Card menu and the organiser's toolbar. There are ten, and
 // one rule for what they act on: the clipped cards if any are clipped, otherwise the card that's
 // open. (The toolbar says which, at its left.) Tidy Up and Find Duplicates ask in their window,
 // because they can also take the whole address book.

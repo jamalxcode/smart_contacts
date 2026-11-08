@@ -44,6 +44,7 @@ type toolButton struct {
 	text     string
 	onTap    func(b *toolButton)
 	disabled bool
+	on       bool // a toggle that's on (lit, like a menu item's tick)
 	hover    bool
 	icon     *widget.Icon
 	img      *canvas.Image // for a picture that isn't a themed icon (the paper clip)
@@ -144,7 +145,9 @@ func (r *toolRenderer) Refresh() {
 		b.label.Color = deskInkDim
 	}
 	b.label.Refresh()
-	if b.hover && !b.disabled {
+	if b.on {
+		b.bg.FillColor = color.NRGBA{0xFF, 0xF0, 0xD0, 0x40}
+	} else if b.hover && !b.disabled {
 		b.bg.FillColor = color.NRGBA{0xFF, 0xF0, 0xD0, 0x22}
 	} else {
 		b.bg.FillColor = color.Transparent
@@ -183,7 +186,7 @@ func (u *ui) buildToolbar() fyne.CanvasObject {
 	t.groups = newToolButton(iconLabel, "Groups", func(*toolButton) { u.cmdGroups() })
 	t.conn = newToolButton(iconPeople, "Connections", func(*toolButton) { u.cmdConnections() })
 	tidy := newToolButton(iconBroom, "Tidy Up", func(*toolButton) { u.cmdTidy() })
-	dupes := newToolButton(theme.ContentCopyIcon(), "Duplicates", func(*toolButton) { u.cmdDuplicates() })
+	dupes := newToolButton(theme.ContentCopyIcon(), "Find Duplicates", func(*toolButton) { u.cmdDuplicates() })
 	t.share = newToolButton(theme.UploadIcon(), "Share", func(b *toolButton) { popup(b, u.shareItems()) })
 	t.clipBtn = newToolButton(clipOn, "Clip Cards", func(*toolButton) { u.toggleSelectMode() })
 	check := newToolButton(iconMessage, "Check Messages", func(*toolButton) { u.cmdCheckMessages() })
@@ -259,13 +262,7 @@ func (u *ui) refreshToolbar() {
 	} else {
 		t.fav.setIcon(iconStarOff)
 	}
-	if u.selectMode {
-		t.clipBtn.text = "Take Clips Off"
-	} else {
-		t.clipBtn.text = "Clip Cards"
-	}
-	if t.clipBtn.label != nil {
-		t.clipBtn.label.Text = t.clipBtn.text
-	}
+	// Clip Cards stays lit while cards are being clipped, as the menu item has its tick
+	t.clipBtn.on = u.selectMode
 	t.clipBtn.Refresh()
 }
