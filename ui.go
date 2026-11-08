@@ -249,7 +249,7 @@ func (u *ui) build() {
 			sub.Importance = widget.LowImportance
 			sub.SizeName = theme.SizeNameCaptionText
 			star := widget.NewIcon(iconStar)
-			fl := newFlag() // shown when the second line is a phone number
+			fl := newFlag() // the country of the main phone number
 			fl.SetMinSize(fyne.NewSize(18, 13))
 			texts := container.New(&tightVBox{}, name, container.NewBorder(nil, nil, container.NewCenter(fl), nil, sub))
 			tick := widget.NewIcon(theme.CheckButtonIcon()) // shown in Select mode
@@ -284,8 +284,9 @@ func (u *ui) build() {
 			st := u.subtitleFor(c)
 			line.Objects[0].(*widget.Label).SetText(st)
 			fl := line.Objects[1].(*fyne.Container).Objects[0].(*canvas.Image)
-			if len(c.Phones) > 0 && st == c.Phones[0].Value {
-				setFlag(fl, st, u.cfg.CountryCode)
+			// the flag is the main number's country, even when the line shows the job or company
+			if p := bestPhone(c, u.cfg.CountryCode); p != "" && u.group != grpReachOut && u.group != grpBirthdays {
+				setFlag(fl, p, u.cfg.CountryCode)
 			} else {
 				fl.Hide()
 			}
