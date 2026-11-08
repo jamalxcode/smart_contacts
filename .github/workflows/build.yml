@@ -60,6 +60,19 @@ jobs:
       # GitHub's Mac runners are VMs without OpenGL, so a Fyne window can't open there
       # ("NSGL: Failed to find a suitable pixel format"). This step records what happens
       # (log + screenshot artifact) but only fails for other crashes.
+      - name: Check the macOS scripts and the card reader
+        run: |
+          BIN="$(ls "Smart Contacts.app/Contents/MacOS/"* | head -1)"
+          D="$RUNNER_TEMP/scripts"
+          "$BIN" --dump-scripts "$D"
+          osacompile -o "$D/contacts.scpt" "$D/contacts.applescript"
+          osacompile -o "$D/calendar.scpt" "$D/calendar.applescript"
+          osacompile -l JavaScript -o "$D/ocr.scpt" "$D/ocr.js"
+          echo "All three scripts compile."
+          "$BIN" --read-card testdata/business-card.png | tee "$RUNNER_TEMP/card.txt"
+          grep -q "Khalid" "$RUNNER_TEMP/card.txt"
+          grep -q "khalid.m@example.com" "$RUNNER_TEMP/card.txt"
+
       - name: Launch test (informational)
         run: |
           export SMART_CONTACTS_DIR="$RUNNER_TEMP/sc-gui"

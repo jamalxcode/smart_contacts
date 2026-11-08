@@ -12,20 +12,23 @@ import (
 	"time"
 )
 
-// ReadMacContacts asks the built-in Contacts app for every card as vCard text.
-// The first time, macOS asks the user to allow Smart Contacts to control Contacts.
-func ReadMacContacts() ([]Card, error) {
-	if runtime.GOOS != "darwin" {
-		return nil, errors.New("this only works on a Mac")
-	}
-	// AppleScript gives up on a slow app after 2 minutes; big address books with photos need longer.
-	script := `with timeout of 900 seconds
+// macContactsScript reads every card from the Contacts app as vCard text. AppleScript gives up
+// on a slow app after 2 minutes; big address books with photos need longer.
+const macContactsScript = `with timeout of 900 seconds
 	tell application "Contacts"
 		set cards to vcard of every person
 	end tell
 end timeout
 set AppleScript's text item delimiters to linefeed
 return cards as text`
+
+// ReadMacContacts asks the built-in Contacts app for every card as vCard text.
+// The first time, macOS asks the user to allow Smart Contacts to control Contacts.
+func ReadMacContacts() ([]Card, error) {
+	if runtime.GOOS != "darwin" {
+		return nil, errors.New("this only works on a Mac")
+	}
+	script := macContactsScript
 	cmd := exec.Command("osascript", "-e", script)
 	var out, errb bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &out, &errb

@@ -207,7 +207,31 @@ func ReadMacCalendar(daysBack, daysAhead int) ([]CalEvent, error) {
 	if runtime.GOOS != "darwin" {
 		return nil, errors.New("this only works on a Mac")
 	}
-	script := fmt.Sprintf(`on clean(v)
+	script := calendarScript(daysBack, daysAhead)
+	cmd := exec.Command("osascript", "-e", script)
+	var out, errb bytes.Buffer
+	cmd.Stdout, cmd.Stderr = &out, &errb
+	if err := cmd.Run(); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		switch {
+		case strings.Contains(msg, "-1743") || strings.Contains(strings.ToLower(msg), "not authorized"):
+			return nil, errors.New("macOS blocked access to Calendar. Open System Settings → Privacy & Security → Automation, " +
+				"turn on Calendar under Smart Contacts, then try again")
+		case strings.Contains(msg, "-1712"):
+			return nil, errors.New("the Calendar app took too long; try a shorter period")
+		}
+		if msg == "" {
+			msg = err.Error()
+		}
+		return nil, fmt.Errorf("couldn't read the Calendar app: %s", msg)
+	}
+	return parseCalendarOutput(out.String()), nil
+}
+
+// calendarScript builds the AppleScript that reads events in bulk (one request per property per
+// calendar, then a local loop: per-event requests take minutes on a busy calendar).
+func calendarScript(daysBack, daysAhead int) string {
+	return fmt.Sprintf(`on clean(v)
 	if v is missing value then return ""
 	try
 		return v as text
@@ -261,24 +285,6 @@ with timeout of 1800 seconds
 end timeout
 set AppleScript's text item delimiters to RS
 return out as text`, daysBack, daysAhead)
-	cmd := exec.Command("osascript", "-e", script)
-	var out, errb bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &out, &errb
-	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errb.String())
-		switch {
-		case strings.Contains(msg, "-1743") || strings.Contains(strings.ToLower(msg), "not authorized"):
-			return nil, errors.New("macOS blocked access to Calendar. Open System Settings → Privacy & Security → Automation, " +
-				"turn on Calendar under Smart Contacts, then try again")
-		case strings.Contains(msg, "-1712"):
-			return nil, errors.New("the Calendar app took too long; try a shorter period")
-		}
-		if msg == "" {
-			msg = err.Error()
-		}
-		return nil, fmt.Errorf("couldn't read the Calendar app: %s", msg)
-	}
-	return parseCalendarOutput(out.String()), nil
 }
 
 // parseCalendarOutput reads the AppleScript output (fields split by 0x1f, events by 0x1e).
