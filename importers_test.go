@@ -56,7 +56,8 @@ func TestReadLinkedIn(t *testing.T) {
 		t.Fatalf("%q %d", b.Source, len(b.Cards))
 	}
 	k := b.Cards[0].Contact
-	if k.Last != "Al Mutairi" || k.URLs[0].Label != "LinkedIn" || !strings.Contains(k.Notes, "LinkedIn connection since 12 Mar 2021") {
+	if k.Last != "Al Mutairi" || k.URLs[0].Label != "LinkedIn" || k.Notes != "" || len(k.Timeline) != 1 ||
+		k.Timeline[0].Text != "Connected on LinkedIn" || k.Timeline[0].At.Year() != 2021 {
 		t.Errorf("%+v", k)
 	}
 }
@@ -152,13 +153,15 @@ func TestPlanAndApplyImport(t *testing.T) {
 	}
 	// Khalid (Arabic card, name match across languages) → merge; Layla → up to date (only "since" note is new → merge);
 	// New Person → new; Mohammed Ali (two of them) → ask; repeated New Person → folded into the first
-	want := []int{piMerge, piMerge, piNew, piAsk, piInFile}
+	// Khalid matched by name only (another language) is a pre-selected suggestion, not a silent merge
+	want := []int{piAsk, piMerge, piNew, piAsk, piInFile}
 	for i := range want {
 		if kinds[i] != want[i] {
 			t.Fatalf("plan kinds %v, want %v\n%+v", kinds, want, items)
 		}
 	}
-	if items[0].Why != "same name in another language" || !strings.Contains(strings.Join(items[0].Adds, ","), "LinkedIn link") {
+	if items[0].Why != "same name in another language" || items[0].Confidence != "likely" || items[0].Default != "merge:"+khalid.ID ||
+		!strings.Contains(strings.Join(items[0].Adds, ","), "LinkedIn link") {
 		t.Errorf("khalid: %+v", items[0])
 	}
 	touched := ApplyImport(s, items, map[int]string{3: "merge:" + mo1.ID}, "965")
@@ -200,7 +203,7 @@ func TestSocialExports(t *testing.T) {
 	if err != nil || b.Source != "Telegram" || len(b.Cards) != 1 || b.Skipped != 1 || b.MatchOnly {
 		t.Fatalf("%v %+v", err, b)
 	}
-	if c := b.Cards[0].Contact; c.Last != "Al-Ali" || len(c.Phones) != 1 || c.Notes != "Telegram contact since 4 Mar 2021" {
+	if c := b.Cards[0].Contact; c.Last != "Al-Ali" || len(c.Phones) != 1 || c.Notes != "" || c.Timeline[0].Text != "Added on Telegram" || c.Timeline[0].At.Day() != 4 {
 		t.Errorf("%+v", c)
 	}
 	// Facebook writes UTF-8 bytes as Latin-1 characters
@@ -233,18 +236,25 @@ func TestImportNotesDifferences(t *testing.T) {
 	b, _ := ReadImport("Connections.csv", []byte("First Name,Last Name,URL,Email Address,Company,Position,Connected On\nFatima,Al-Sabah,https://www.linkedin.com/in/fatimas,,KIB,Regional Director,03 Feb 2022\n"), "965")
 	items := PlanImport(s, b.Cards, "LinkedIn", "965")
 	ApplyImport(s, items, nil, "965")
-	if f.Company != "KIB" || f.Title != "Regional Director" || !strings.Contains(f.Notes, "Previously: Branch Manager at Gulf Bank") ||
-		!strings.Contains(f.Notes, "LinkedIn connection since 03 Feb 2022") {
+	tl := func() string {
+		var s []string
+		for _, e := range f.Timeline {
+			s = append(s, e.Text)
+		}
+		return strings.Join(s, " | ")
+	}
+	if f.Company != "KIB" || f.Title != "Regional Director" || !strings.Contains(tl(), "Job changed: was Branch Manager at Gulf Bank, now Regional Director at KIB") ||
+		!strings.Contains(tl(), "Connected on LinkedIn") || f.Notes != "" {
 		t.Errorf("LinkedIn job should be current, old job noted: %+v", f)
 	}
 	g, _ := ReadImport("google.csv", []byte("Name,Mobile,Company\nFatima Al-Sabah,99991234,Some Other Co\n"), "965")
 	ApplyImport(s, PlanImport(s, g.Cards, "Google Contacts", "965"), nil, "965")
-	if f.Company != "KIB" || !strings.Contains(f.Notes, "Google Contacts: Some Other Co") {
+	if f.Company != "KIB" || !strings.Contains(tl(), "Google Contacts lists Some Other Co") {
 		t.Errorf("other sources keep the card's value and note theirs: %+v", f)
 	}
 	// importing the same thing again adds no repeated notes
 	ApplyImport(s, PlanImport(s, g.Cards, "Google Contacts", "965"), nil, "965")
-	if strings.Count(f.Notes, "Some Other Co") != 1 {
-		t.Errorf("repeated note: %q", f.Notes)
+	if strings.Count(tl(), "Some Other Co") != 1 {
+		t.Errorf("repeated timeline entry: %q", tl())
 	}
 }

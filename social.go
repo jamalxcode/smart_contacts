@@ -121,7 +121,7 @@ func queryValue(raw, key string) string {
 // Action is one way to reach a contact: a button (or a More-menu item) that opens a link.
 type Action struct {
 	Title string
-	Kind  string // icon: "call", "message", "chat", "video", "email", "profile"
+	Kind  string // icon: "call", "message", "whatsapp", "chat", "video", "email", "profile"
 	Link  string
 	More  bool // offered in the More menu (it may not work: we can't know they use that app)
 }
@@ -130,9 +130,19 @@ type Action struct {
 func (c *Contact) Actions(cc string) []Action {
 	var out []Action
 	// the best phone: a mobile one first
-	var phone *Field
+	var phone *Field // the best number to call or message: a real mobile, else one labelled Mobile, else the first
+	score := func(f Field) int {
+		s := 0
+		if PhoneType(NormalizePhone(f.Value, cc)) == "mobile" {
+			s += 2
+		}
+		if strings.EqualFold(f.Label, "mobile") {
+			s++
+		}
+		return s
+	}
 	for i := range c.Phones {
-		if phone == nil || strings.EqualFold(c.Phones[i].Label, "mobile") && !strings.EqualFold(phone.Label, "mobile") {
+		if phone == nil || score(c.Phones[i]) > score(*phone) {
 			phone = &c.Phones[i]
 		}
 	}
@@ -141,7 +151,7 @@ func (c *Contact) Actions(cc string) []Action {
 		n := NormalizePhone(phone.Value, cc)
 		out = append(out, Action{"Call", "call", "tel:" + n, false}, Action{"Message", "message", "sms:" + n, false})
 		if CanWhatsApp(phone.Value, cc) {
-			out = append(out, Action{"WhatsApp", "chat", "whatsapp://send?phone=" + WhatsAppNumber(phone.Value, cc), false})
+			out = append(out, Action{"WhatsApp", "whatsapp", "whatsapp://send?phone=" + WhatsAppNumber(phone.Value, cc), false})
 			whatsapp = true
 		}
 	}
@@ -188,7 +198,7 @@ func (c *Contact) Actions(cc string) []Action {
 			out = append(out, Action{"Skype", "video", "skype:" + p.Handle + "?chat", false})
 		case "WhatsApp":
 			if !whatsapp {
-				out = append(out, Action{"WhatsApp", "chat", p.URL, false})
+				out = append(out, Action{"WhatsApp", "whatsapp", p.URL, false})
 			}
 		}
 	}

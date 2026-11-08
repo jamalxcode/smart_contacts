@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // Config is the one settings file: <data dir>/config.json (readable, permission 0600).
@@ -18,9 +19,11 @@ type Config struct {
 	OpenRouterKey string  `json:"openRouterKey,omitempty"`
 	// AllowCloudAI lets Smart Add send pasted text to OpenRouter. Off by default: with it off,
 	// nothing about any contact ever leaves this Mac.
-	AllowCloudAI bool   `json:"allowCloudAI,omitempty"`
-	AIModel      string `json:"aiModel,omitempty"`
-	LastGroup    string `json:"lastGroup,omitempty"`
+	AllowCloudAI bool      `json:"allowCloudAI,omitempty"`
+	AIModel      string    `json:"aiModel,omitempty"`
+	LastGroup    string    `json:"lastGroup,omitempty"`
+	LastCleanup  time.Time `json:"lastCleanup,omitempty"`
+	LastDedupe   time.Time `json:"lastDedupe,omitempty"`
 }
 
 const layoutVersion = 1

@@ -27,7 +27,21 @@ type Store struct {
 	ExtraGroups []string
 	// Links are the relationships the user recorded between two contacts.
 	Links []Link
+
+	// Undo: every save pushes the state before it (with a description of what changed).
+	lastSaved []byte
+	undo      []undoStep
+	redo      []undoStep
 }
+
+// undoStep is the whole address book as it was before one change.
+type undoStep struct {
+	Label string
+	Time  time.Time
+	Data  []byte
+}
+
+const maxUndo = 100
 
 // TrashItem is a deleted contact, kept for 30 days.
 type TrashItem struct {
@@ -70,6 +84,7 @@ func OpenStore(dir string) (*Store, error) {
 	lockDown(dir)
 	b, err := os.ReadFile(s.file())
 	if errors.Is(err, os.ErrNotExist) {
+		s.lastSaved, _ = json.MarshalIndent(storeFile{Version: 1}, "", "  ") // so the first change can be undone
 		return s, nil
 	}
 	if err != nil {
@@ -81,6 +96,7 @@ func OpenStore(dir string) (*Store, error) {
 	}
 	s.Contacts, s.Trash, s.ExtraGroups, s.Links = f.Contacts, f.Trash, f.Groups, f.Links
 	s.purgeTrash(time.Now())
+	s.lastSaved = b
 	return s, nil
 }
 
@@ -119,7 +135,9 @@ func InCloudFolder(path string) bool {
 func (s *Store) Dir() string { return s.dir }
 
 // Save writes atomically (temp file + rename) and makes the day's backup first.
-func (s *Store) Save() error {
+func (s *Store) Save() error { return s.save(true) }
+
+func (s *Store) save(record bool) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.backupLocked(time.Now())
@@ -128,7 +146,182 @@ func (s *Store) Save() error {
 	if err != nil {
 		return err
 	}
-	return writeFileAtomic(s.file(), b, 0o600)
+	if err := writeFileAtomic(s.file(), b, 0o600); err != nil {
+		return err
+	}
+	if record && s.lastSaved != nil {
+		if label := describeChange(s.lastSaved, b); label != "" {
+			s.undo = append(s.undo, undoStep{Label: label, Time: time.Now(), Data: s.lastSaved})
+			if len(s.undo) > maxUndo {
+				s.undo = s.undo[len(s.undo)-maxUndo:]
+			}
+			s.redo = nil
+		}
+	}
+	s.lastSaved = b
+	return nil
+}
+
+// CanUndo / CanRedo name the change that Undo or Redo would reverse ("" if none).
+func (s *Store) CanUndo() string {
+	if len(s.undo) == 0 {
+		return ""
+	}
+	return s.undo[len(s.undo)-1].Label
+}
+
+func (s *Store) CanRedo() string {
+	if len(s.redo) == 0 {
+		return ""
+	}
+	return s.redo[len(s.redo)-1].Label
+}
+
+// Undo puts the address book back as it was before the last change.
+func (s *Store) Undo() (string, error) {
+	if len(s.undo) == 0 {
+		return "", errors.New("nothing to undo")
+	}
+	step := s.undo[len(s.undo)-1]
+	s.undo = s.undo[:len(s.undo)-1]
+	s.redo = append(s.redo, undoStep{Label: step.Label, Time: time.Now(), Data: s.lastSaved})
+	return step.Label, s.restoreData(step.Data)
+}
+
+// Redo re-applies the last undone change.
+func (s *Store) Redo() (string, error) {
+	if len(s.redo) == 0 {
+		return "", errors.New("nothing to redo")
+	}
+	step := s.redo[len(s.redo)-1]
+	s.redo = s.redo[:len(s.redo)-1]
+	s.undo = append(s.undo, undoStep{Label: step.Label, Time: time.Now(), Data: s.lastSaved})
+	return step.Label, s.restoreData(step.Data)
+}
+
+// History lists this session's changes, newest first.
+func (s *Store) History() []undoStep {
+	out := make([]undoStep, len(s.undo))
+	for i := range s.undo {
+		out[len(s.undo)-1-i] = s.undo[i]
+	}
+	return out
+}
+
+// UndoTo undoes every change back to and including history entry n (0 = the latest).
+func (s *Store) UndoTo(n int) error {
+	for i := 0; i <= n; i++ {
+		if _, err := s.Undo(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// RestoreFile replaces the address book with a backup file (the change itself can be undone).
+func (s *Store) RestoreFile(path string) error {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	var f storeFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return fmt.Errorf("that backup is damaged: %v", err)
+	}
+	_, _ = s.SnapshotBackup("before-restore")
+	s.Contacts, s.Trash, s.ExtraGroups, s.Links = f.Contacts, f.Trash, f.Groups, f.Links
+	return s.Save()
+}
+
+func (s *Store) restoreData(b []byte) error {
+	var f storeFile
+	if err := json.Unmarshal(b, &f); err != nil {
+		return err
+	}
+	s.Contacts, s.Trash, s.ExtraGroups, s.Links = f.Contacts, f.Trash, f.Groups, f.Links
+	return s.save(false)
+}
+
+// RestorePoints lists the backup files, newest first.
+func (s *Store) RestorePoints() []string {
+	files, _ := filepath.Glob(filepath.Join(s.dir, "backups", "*.json"))
+	sort.Slice(files, func(i, j int) bool {
+		a, _ := os.Stat(files[i])
+		b, _ := os.Stat(files[j])
+		return a != nil && b != nil && a.ModTime().After(b.ModTime())
+	})
+	return files
+}
+
+// describeChange names what changed between two saved states, ignoring "last contacted" and
+// timestamps alone ("" means nothing worth an undo step).
+func describeChange(before, after []byte) string {
+	var a, b storeFile
+	if json.Unmarshal(before, &a) != nil || json.Unmarshal(after, &b) != nil {
+		return "Change"
+	}
+	strip := func(c *Contact) string {
+		x := *c
+		x.Updated, x.LastContacted, x.Created = time.Time{}, time.Time{}, time.Time{}
+		j, _ := json.Marshal(&x)
+		return string(j)
+	}
+	old := map[string]*Contact{}
+	for _, c := range a.Contacts {
+		old[c.ID] = c
+	}
+	var added, changed []string
+	removed := 0
+	seen := map[string]bool{}
+	for _, c := range b.Contacts {
+		seen[c.ID] = true
+		o, ok := old[c.ID]
+		switch {
+		case !ok:
+			added = append(added, c.DisplayName())
+		case strip(o) != strip(c):
+			changed = append(changed, c.DisplayName())
+		}
+	}
+	var removedNames []string
+	for _, c := range a.Contacts {
+		if !seen[c.ID] {
+			removed++
+			removedNames = append(removedNames, c.DisplayName())
+		}
+	}
+	linksChanged := len(a.Links) != len(b.Links)
+	groupsChanged := strings.Join(a.Groups, "|") != strings.Join(b.Groups, "|")
+	trashChanged := len(a.Trash) != len(b.Trash)
+	name := func(verb string, names []string) string {
+		if len(names) == 1 {
+			return verb + " " + names[0]
+		}
+		return fmt.Sprintf("%s %d people", verb, len(names))
+	}
+	var parts []string
+	if len(added) > 0 {
+		parts = append(parts, name("Added", added))
+	}
+	if len(changed) > 0 {
+		parts = append(parts, name("Changed", changed))
+	}
+	if removed > 0 {
+		parts = append(parts, name("Deleted", removedNames))
+	}
+	if len(parts) == 0 {
+		switch {
+		case linksChanged:
+			parts = append(parts, "Changed connections")
+		case groupsChanged:
+			parts = append(parts, "Changed groups")
+		case trashChanged:
+			parts = append(parts, "Changed the Trash")
+		default:
+			return ""
+		}
+	}
+	return strings.Join(parts, ", ")
 }
 
 func writeFileAtomic(path string, b []byte, perm os.FileMode) error {
@@ -260,6 +453,7 @@ func (s *Store) EmptyTrash() {
 	defer s.dropDeadLinks()
 	for _, t := range s.Trash {
 		os.Remove(s.PhotoPath(t.Contact.ID))
+		os.Remove(s.PhotoPath(t.Contact.ID) + ".removed")
 		s.removeCardFiles(t.Contact)
 	}
 	s.Trash = nil
@@ -367,11 +561,12 @@ func (s *Store) PhotoPath(id string) string { return filepath.Join(s.dir, "photo
 
 // SetPhoto stores (or with nil, removes) a contact's photo.
 func (s *Store) SetPhoto(c *Contact, img []byte) error {
-	if len(img) == 0 {
-		os.Remove(s.PhotoPath(c.ID))
+	if len(img) == 0 { // kept aside (not deleted) so Undo can bring it back
+		_ = os.Rename(s.PhotoPath(c.ID), s.PhotoPath(c.ID)+".removed")
 		c.HasPhoto = false
 		return nil
 	}
+	os.Remove(s.PhotoPath(c.ID) + ".removed")
 	if err := writeFileAtomic(s.PhotoPath(c.ID), img, 0o600); err != nil {
 		return err
 	}
@@ -386,7 +581,10 @@ func (s *Store) Photo(c *Contact) []byte {
 	}
 	b, err := os.ReadFile(s.PhotoPath(c.ID))
 	if err != nil {
-		return nil
+		b, err = os.ReadFile(s.PhotoPath(c.ID) + ".removed") // a removal that was undone
+		if err != nil {
+			return nil
+		}
 	}
 	return b
 }

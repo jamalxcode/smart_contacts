@@ -169,7 +169,7 @@ func (u *ui) previewImport(b *Batch) {
 		if b.MatchOnly {
 			newWord = "not matched"
 		}
-		summary.SetText(fmt.Sprintf("%s · %d people: %d %s, %d will update cards you have, %d already up to date, %d need your decision, %d repeated in the file.%s",
+		summary.SetText(fmt.Sprintf("%s · %d people: %d %s, %d will update cards you have, %d already up to date, %d matched by name only (check), %d repeated in the file.%s",
 			b.Format, len(items), count[piNew], newWord, count[piMerge], count[piUpToDate], count[piAsk], count[piInFile], skippedText(b.Skipped)))
 		acc := widget.NewAccordion()
 		section := func(kind int, title string, build func(i int, it ImportItem) fyne.CanvasObject) {
@@ -201,7 +201,7 @@ func (u *ui) previewImport(b *Batch) {
 			ticks[i] = c
 			return c
 		}
-		section(piAsk, "Need your decision", func(i int, it ImportItem) fyne.CanvasObject {
+		section(piAsk, "Matched by name only — check these (the suggestion is pre-selected)", func(i int, it ImportItem) fyne.CanvasObject {
 			opts := []string{"Add as a new person", "Skip"}
 			keys := []string{"new", "skip"}
 			for _, c := range it.Candidates {
@@ -213,7 +213,10 @@ func (u *ui) previewImport(b *Batch) {
 				keys = append(keys, "merge:"+c.ID)
 			}
 			sel := widget.NewSelect(opts, nil)
-			cur := choice[i]
+			cur, picked := choice[i]
+			if !picked {
+				cur = it.Default
+			}
 			idx := 0
 			for k, key := range keys {
 				if key == cur {
@@ -224,7 +227,17 @@ func (u *ui) previewImport(b *Batch) {
 			choice[i] = keys[idx]
 			sel.OnChanged = func(string) { choice[i] = keys[sel.SelectedIndex()] }
 			who := widget.NewLabelWithStyle(incomingLabel(it.Card.Contact), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
-			return container.NewVBox(who, container.NewBorder(nil, nil, caption(it.Why+" →"), nil, sel))
+			conf := it.Confidence
+			if conf != "" {
+				conf = " (" + conf + ")"
+			}
+			hint := it.Why + conf
+			if len(it.Adds) > 0 && strings.HasPrefix(it.Default, "merge:") {
+				hint += " · would add " + strings.Join(it.Adds, ", ")
+			}
+			h := caption(hint)
+			h.Wrapping = fyne.TextWrapWord
+			return container.NewVBox(who, sel, h)
 		})
 		section(piMerge, "Will update cards you have", func(i int, it ImportItem) fyne.CanvasObject {
 			c := tick(i, it.Match.DisplayName()) // separate labels: mixed Arabic/English in one line gets reordered

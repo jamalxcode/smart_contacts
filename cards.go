@@ -21,9 +21,15 @@ type CardImage struct {
 
 func (s *Store) cardsDir() string { return filepath.Join(s.dir, "cards") }
 
-// CardImagePath is where a card image is stored.
+// CardImagePath is where a card image is stored (or kept aside after a removal that was undone).
 func (s *Store) CardImagePath(file string) string {
-	return filepath.Join(s.cardsDir(), filepath.Base(file))
+	p := filepath.Join(s.cardsDir(), filepath.Base(file))
+	if _, err := os.Stat(p); err != nil {
+		if _, err2 := os.Stat(p + ".removed"); err2 == nil {
+			return p + ".removed"
+		}
+	}
+	return p
 }
 
 // AddCardImage stores an image (JPEG or PNG; convert HEIC first) with the contact.
@@ -47,8 +53,8 @@ func (s *Store) AddCardImage(c *Contact, img []byte, note string) error {
 func (s *Store) RemoveCardImage(c *Contact, file string) {
 	keep := c.CardImages[:0]
 	for _, ci := range c.CardImages {
-		if ci.File == file {
-			os.Remove(s.CardImagePath(file))
+		if ci.File == file { // kept aside so Undo can bring it back
+			_ = os.Rename(s.CardImagePath(file), s.CardImagePath(file)+".removed")
 			continue
 		}
 		keep = append(keep, ci)

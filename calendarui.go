@@ -29,6 +29,7 @@ func (u *ui) calendarDialog() {
 	forget := widget.NewButtonWithIcon("Forget Calendar Data", theme.DeleteIcon(), func() {
 		ForgetCalendar(u.store.Dir())
 		u.cal = LoadCalendar(u.store.Dir())
+		u.calCache = nil
 		status.SetText(u.calendarStatus())
 		u.showDetail()
 	})
@@ -82,6 +83,7 @@ func (u *ui) importICS(name string, data []byte) {
 
 func (u *ui) saveEvents(evs []CalEvent, from string) {
 	u.cal.Merge(evs, from)
+	u.calCache = nil
 	if err := u.cal.Save(u.store.Dir()); err != nil {
 		dialog.ShowError(err, u.win)
 		return
@@ -99,7 +101,7 @@ func (u *ui) saveEvents(evs []CalEvent, from string) {
 
 // calendarSection lists a contact's meetings for the card: upcoming first, then the latest past ones.
 func (u *ui) calendarSection(c *Contact) []fyne.CanvasObject {
-	ms := u.cal.EventsFor(c)
+	ms := u.eventsFor(c)
 	if len(ms) == 0 {
 		return nil
 	}

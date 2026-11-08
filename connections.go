@@ -97,7 +97,7 @@ func (p *contactPicker) set(c *Contact) {
 
 // connectionsSection lists c's relationships and network size for the detail view.
 func (u *ui) connectionsSection(c *Contact) []fyne.CanvasObject {
-	g := NewGraph(u.store, true)
+	g := u.graphNow()
 	var rows []fyne.CanvasObject
 	for _, l := range u.store.LinksOf(c.ID) {
 		o := u.store.Get(l.other(c.ID))

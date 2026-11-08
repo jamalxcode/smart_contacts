@@ -156,12 +156,31 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Rebuild before screenshotting: one round of screenshots showed a stale binary without the new
   sections.
 
-## 8. Ideas not done yet
+## 8. Trust: undo, origins, timeline (2026-11-08)
+
+- **Undo at the store, not per screen:** every `Store.Save` pushes the previous state with a label
+  worked out by comparing (`describeChange`), so imports, clean-ups, merges and bulk actions are all
+  undoable without each knowing about undo. Files that undo needs (photos, card images) are renamed
+  to `.removed` rather than deleted. The first change to an empty book was lost until `lastSaved`
+  was set on open.
+- **Phone keys must survive formatting:** origins keyed on the last 9 digits broke between
+  "6000 1234" and "+965 6000 1234"; the last 8 work for Kuwait and are distinct enough elsewhere.
+- **Automatic text doesn't belong in notes:** import facts went into Notes and drowned what the user
+  wrote. A separate timeline fixed it; Clean Up moves the old automatic lines across. A batch whose
+  only news was a timeline entry was classed "up to date" and dropped — new entries count as changes.
+- **Name-only matches are never silent:** they go into their own review list with a default and a
+  confidence, so a wrong merge is a choice the user saw.
+- **Clean-up can make things worse:** "add https://" turned "@khalid_kw" into "https://@khalid_kw".
+  Links now go through `fixLink`, which turns a handle into its profile page and repairs the damage.
+- **Fyne layout:** hiding a container inside a Border doesn't give its space back until the parent
+  is refreshed; Accordion in 2.6 has no open callback (custom fold headers remember their state);
+  menu shortcuts fire before a focused text entry, so ⌘Z must hand off to the entry while editing.
+
+## 9. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.
 - Birthday reminders as Mac notifications.
-- Editing several contacts at once (add a group to many people).
-- Encrypted private backup of `contacts.json` (never to this public repo).
+- Encrypted backups (Back Up To… writes a plain .zip).
 - Two-way sync with Mac Contacts (today: import, and "Copy to Apple Contacts" with a warning).
 - Notarised signing (Apple Developer ID) so a downloaded zip opens with a double-click.

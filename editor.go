@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
@@ -18,14 +19,15 @@ import (
 
 // editor edits a copy of a contact; nothing touches the store until Save.
 type editor struct {
-	u        *ui
-	orig     *Contact // nil for a new contact
-	c        *Contact // the working copy
-	start    string   // JSON of the copy when editing began, to detect changes
-	photo    []byte   // new photo chosen in this session
-	card     []byte   // a business card image to keep with the contact on Save
-	cardNote string   // "added this contact" / "updated this contact"
-	photoSet bool     // photo was changed (set or removed)
+	u            *ui
+	orig         *Contact // nil for a new contact
+	c            *Contact // the working copy
+	start        string   // JSON of the copy when editing began, to detect changes
+	photo        []byte   // new photo chosen in this session
+	card         []byte   // a business card image to keep with the contact on Save
+	fromSmartAdd bool     // the details were read by Smart Add
+	cardNote     string   // "added this contact" / "updated this contact"
+	photoSet     bool     // photo was changed (set or removed)
 
 	first, last, nick, company, title, birthday *widget.Entry
 	alt                                         *widget.Entry
@@ -178,7 +180,7 @@ func (u *ui) openEditor(c *Contact, prefill *Contact, banner string) {
 // openEditorCard is openEditor with a business card image to keep on Save. With both c and
 // prefill set, it edits c starting from prefill (c with new details merged in).
 func (u *ui) openEditorCard(c *Contact, prefill *Contact, banner string, card []byte, cardNote string) {
-	e := &editor{u: u, orig: c, card: card, cardNote: cardNote}
+	e := &editor{u: u, orig: c, card: card, cardNote: cardNote, fromSmartAdd: prefill != nil}
 	switch {
 	case c != nil && prefill != nil:
 		e.c = prefill
@@ -428,7 +430,19 @@ func (e *editor) save() {
 		}
 		delete(e.u.photoCache, c.ID)
 	}
+	src := "You"
 	if e.card != nil {
+		src = "Business card"
+	} else if e.fromSmartAdd {
+		src = "Smart Add"
+	}
+	if e.orig != nil {
+		StampChanges(e.orig, c, src, time.Now())
+	} else {
+		StampNew(c, src, time.Now())
+	}
+	if e.card != nil {
+		c.AddEvent(time.Now(), "Business card scanned ("+e.cardNote+")", "Business card")
 		if err := e.u.store.AddCardImage(c, e.card, e.cardNote); err != nil {
 			dialog.ShowError(err, e.u.win)
 		}

@@ -2,7 +2,10 @@ package main
 
 import (
 	"regexp"
+	"strconv"
 	"strings"
+
+	"github.com/nyaruka/phonenumbers"
 )
 
 // country describes how numbers are written in one country.
@@ -63,21 +66,73 @@ func splitCC(d string) (string, string) {
 			}
 		}
 	}
-	for _, code := range knownCountryCodes {
-		if strings.HasPrefix(d, code) {
-			return code, d[len(code):]
+	// any other country libphonenumber knows (country codes are prefix-free, so the first match is it)
+	for _, n := range []int{1, 2, 3} {
+		if len(d) > n {
+			if cc, err := strconv.Atoi(d[:n]); err == nil && phonenumbers.GetRegionCodeForCountryCode(cc) != "ZZ" {
+				return d[:n], d[n:]
+			}
 		}
 	}
 	return "", d
 }
 
-func (c *country) fits(nsn string) bool {
-	for _, n := range c.nsn {
-		if len(nsn) == n {
-			return c.cc != "965" || kuwaitValid(nsn)
-		}
+// validNumber asks libphonenumber whether "+<digits>" is a real, assignable number.
+func validNumber(e164 string) bool {
+	n, err := phonenumbers.Parse(e164, "")
+	return err == nil && phonenumbers.IsValidNumber(n)
+}
+
+// PhoneType says what kind of line a normalised number is: "mobile", "landline", "toll-free",
+// "service" or "" when unknown.
+func PhoneType(norm string) string {
+	if !strings.HasPrefix(norm, "+") {
+		return ""
 	}
-	return false
+	n, err := phonenumbers.Parse(norm, "")
+	if err != nil {
+		return ""
+	}
+	switch phonenumbers.GetNumberType(n) {
+	case phonenumbers.MOBILE:
+		return "mobile"
+	case phonenumbers.FIXED_LINE:
+		return "landline"
+	case phonenumbers.TOLL_FREE, phonenumbers.SHARED_COST, phonenumbers.PREMIUM_RATE:
+		return "toll-free"
+	case phonenumbers.UAN, phonenumbers.VOIP:
+		return "service"
+	}
+	return ""
+}
+
+// invalidReason explains why libphonenumber rejects a number.
+func invalidReason(e164 string, c *country) string {
+	n, err := phonenumbers.Parse(e164, "")
+	name := "its country"
+	if c != nil {
+		name = c.name
+	}
+	if err != nil {
+		return "not a phone number"
+	}
+	switch phonenumbers.IsPossibleNumberWithReason(n) {
+	case phonenumbers.TOO_SHORT:
+		return "too short for " + name
+	case phonenumbers.TOO_LONG:
+		return "too long for " + name
+	case phonenumbers.INVALID_LENGTH:
+		return "wrong length for " + name
+	}
+	return "not a number that exists in " + name
+}
+
+// fits: the number is valid in this country (checked by libphonenumber).
+func (c *country) fits(nsn string) bool {
+	if c.cc == "965" && !kuwaitValid(nsn) {
+		return false
+	}
+	return validNumber("+" + c.cc + nsn)
 }
 
 // kuwaitValid: Kuwaiti numbers are 8 digits starting with 2 (landline) or 4, 5, 6, 9 (mobile).
@@ -137,10 +192,16 @@ func analyzePhone(raw, home string, hints []string) phoneResult {
 		cc, rest := splitCC(d)
 		c := countryByCC(cc)
 		if c == nil {
-			if cc != "" && len(d) >= 8 {
+			if cc != "" && validNumber("+"+d) {
 				return phoneResult{Norm: "+" + d, Status: phOK}
 			}
-			return phoneResult{Norm: "+" + d, Status: phSuspicious, Reason: "unknown country code"}
+			if cc != "" && len(rest) > 0 && rest[0] == '0' && validNumber("+"+cc+rest[1:]) { // "+33 06…"
+				return phoneResult{Norm: "+" + cc + rest[1:], Status: phOK, Reason: "extra 0 removed"}
+			}
+			if cc == "" {
+				return phoneResult{Norm: "+" + d, Status: phSuspicious, Reason: "unknown country code"}
+			}
+			return phoneResult{Norm: "+" + d, Status: phSuspicious, Reason: invalidReason("+"+d, nil)}
 		}
 		if c.trunk && strings.HasPrefix(rest, "0") { // "+966 05…": drop the local 0
 			rest = rest[1:]
@@ -151,8 +212,8 @@ func analyzePhone(raw, home string, hints []string) phoneResult {
 		if cc == "965" && kuwaitService(rest) {
 			return phoneResult{Norm: rest, Status: phService, Reason: "Kuwait service number"}
 		}
-		why := "wrong length for " + c.name
-		if cc == "965" && len(rest) == 8 {
+		why := invalidReason("+"+cc+rest, c)
+		if cc == "965" && len(rest) == 8 && !kuwaitValid(rest) {
 			why = "Kuwaiti numbers start with 2, 4, 5, 6 or 9"
 		}
 		return phoneResult{Norm: "+" + cc + rest, Status: phSuspicious, Reason: why}
@@ -337,4 +398,14 @@ func fixEmail(raw string) (fixed, why string, valid bool) {
 		}
 	}
 	return s, strings.Join(whys, ", "), reEmailValid.MatchString(s)
+}
+
+// localDigits is the shortest ordinary local number in a country. Kuwait, Bahrain, Qatar
+// and Oman use 8 digits, so a 7-digit number there (1802555) is a service line.
+func localDigits(defCC string) int {
+	switch defCC {
+	case "965", "973", "974", "968":
+		return 8
+	}
+	return 7
 }

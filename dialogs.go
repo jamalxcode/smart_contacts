@@ -42,8 +42,10 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 			}
 		}),
 		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Bring Everything In…", u.bringEverythingIn),
 		item("Import Contacts…", cmd(fyne.KeyI), u.importHub),
 		fyne.NewMenuItem("Import from Mac Contacts…", u.importMac),
+		item("Refresh from Mac Contacts", cmdShift(fyne.KeyR), u.importMac),
 		item("Import a File…", cmd(fyne.KeyO), u.importFile),
 		fyne.NewMenuItem("Paste People from Text…", u.pasteImport),
 		fyne.NewMenuItemSeparator(),
@@ -57,6 +59,10 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		}),
 	)
 	edit := fyne.NewMenu("Contact",
+		item("Undo", cmd(fyne.KeyZ), u.undo),
+		item("Redo", cmdShift(fyne.KeyZ), u.redo),
+		fyne.NewMenuItem("History…", u.historyDialog),
+		fyne.NewMenuItemSeparator(),
 		item("Find", cmd(fyne.KeyF), func() { u.win.Canvas().Focus(u.search) }),
 		item("Edit Contact", cmd(fyne.KeyE), func() {
 			if c := current(); c != nil && u.ed == nil {
@@ -99,6 +105,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
 		fyne.NewMenuItem("Trash…", u.trash),
 		fyne.NewMenuItemSeparator(),
+		fyne.NewMenuItem("Back Up To…", u.backupTo),
 		fyne.NewMenuItem("Show Data Folder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
 		item("Settings…", cmd(fyne.KeyComma), u.settings),
 	)
@@ -403,6 +410,8 @@ func richness(c *Contact) int {
 // duplicates is Deduplicate: the same person on several cards (merge), and the same number, email,
 // link, address or note line repeated inside one card (remove).
 func (u *ui) duplicates() {
+	u.cfg.LastDedupe = time.Now()
+	_ = u.cfg.Save(u.store.Dir())
 	groups := FindDuplicates(u.store.Contacts, u.cfg.CountryCode)
 	var inside []CleanupChange
 	for _, ch := range PlanCleanup(u.store.Contacts, u.cfg.CountryCode) {
@@ -484,6 +493,9 @@ func (u *ui) duplicates() {
 					break
 				}
 			}
+		}
+		for _, o := range others {
+			keep.AddEvent(time.Now(), "Merged with another card ("+o.DisplayName()+")", "Deduplicate")
 		}
 		Merge(keep, others, u.cfg.CountryCode)
 		for _, o := range others {
@@ -680,6 +692,8 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 			for c := range touched {
 				u.store.Put(c)
 			}
+			u.cfg.LastCleanup = time.Now()
+			_ = u.cfg.Save(u.store.Dir())
 			u.save()
 			u.flash(fmt.Sprintf("Applied %d changes · backup: %s", n, filepath.Base(backup)))
 		}, u.win)
@@ -887,7 +901,13 @@ func (u *ui) help() {
 
 **Birthdays.** Type a birthday as 1990-03-14, 14/03/1990, or 14/03 when you don't know the year. The Birthdays list shows the next 30 days and the age they turn.
 
-**Bringing contacts in (⌘I).** Smart Contacts is meant to be the one place all your contacts come together. File → Import Contacts brings them in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf), Gmail, Outlook, Yahoo or iCloud (vCard or CSV), LinkedIn (Connections.csv), any spreadsheet (.csv or .xlsx — columns are matched automatically, in English or Arabic) and notes or pasted text with several people in it. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name — in Arabic or English — and their cards are updated instead of duplicated; you decide on anyone uncertain. Each card shows where its details came from, and the sidebar lists your sources.
+**Bring Everything In.** File → Bring Everything In is a checklist of every source, then Clean Up and Deduplicate; each step is ticked once done.
+
+**Bringing contacts in (⌘I).** Smart Contacts is meant to be the one place all your contacts come together. File → Import Contacts brings them in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf), Gmail, Outlook, Yahoo or iCloud (vCard or CSV), LinkedIn (Connections.csv), any spreadsheet (.csv or .xlsx — columns are matched automatically, in English or Arabic) and notes or pasted text with several people in it. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name — in Arabic or English — and their cards are updated instead of duplicated. Anyone matched by name only is listed for you to check, with the likely answer pre-selected. Each phone, email, link and address shows where it came from, and the Timeline on each card records what happened ("Connected on LinkedIn", "Job changed…") without touching your notes.
+
+**Undo (⌘Z, ⌘⇧Z).** Every change can be undone — edits, imports, clean-ups, merges, deletes. Contact → History lists this session's changes and the saved restore points.
+
+**Many at once.** The tick button above the list turns on Select mode: tick people, then group, favourite, merge, export or delete them together.
 
 **Reaching people.** A card's buttons follow what it holds: Call, Message, WhatsApp, Email, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle (Edit → Web & Social). More has number-based options.
 
@@ -899,13 +919,13 @@ func (u *ui) help() {
 
 **Names in two languages.** Each contact can hold a second name in the other language (محمد المطيري / Mohammed Al-Mutairi). Edit → "Name in other language" has a Suggest button for common names. Search finds people in either language.
 
-**Tidying.** Tools → Find Duplicates merges cards that share a phone, email or name. Tools → Clean Up writes every number the same way (+965 9999 8888).
+**Tidying.** Tools → Clean Up writes every number the same way (+965 9999 8888), fixes emails and links, and moves automatic note lines to the timeline.
 
 **Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app never uses the network unless you switch on Cloud AI. Copying to Apple's Contacts app or saving into iCloud Drive/Dropbox warns you first, because those sync off the Mac.
 
-**Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder.
+**Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder. Tools → Back Up To… saves a .zip of everything to a drive you choose.
 
-**Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘K connect · ⌘⇧K how connected · ⌘O import · ⌘, settings`
+**Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘Z undo · ⌘⇧Z redo · ⌘K connect · ⌘⇧K how connected · ⌘I import · ⌘⇧D deduplicate · ⌘⇧L calendar · ⌘, settings`
 	r := widget.NewRichTextFromMarkdown(text)
 	r.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)

@@ -45,6 +45,7 @@ func readSocialJSON(name string, data []byte) (*Batch, error) {
 func readTelegram(raw json.RawMessage) (*Batch, error) {
 	var tg struct {
 		List []struct {
+			ID    int64  `json:"user_id"`
 			First string `json:"first_name"`
 			Last  string `json:"last_name"`
 			Phone string `json:"phone_number"`
@@ -61,9 +62,13 @@ func readTelegram(raw json.RawMessage) (*Batch, error) {
 		if p.Phone != "" {
 			c.Phones = []Field{{Label: "Mobile", Value: p.Phone}}
 		}
-		c.Notes = "Telegram contact"
+		if p.ID != 0 {
+			c.SourceIDs = []string{fmt.Sprintf("|%d", p.ID)}
+		}
 		if t, err := time.Parse("2006-01-02T15:04:05", p.Date); err == nil {
-			c.Notes += " since " + t.Format("2 Jan 2006")
+			c.AddEvent(t, "Added on Telegram", "Telegram")
+		} else {
+			c.AddEvent(time.Time{}, "Telegram contact", "Telegram")
 		}
 		c.Tidy()
 		if c.FullName() == "" && len(c.Phones) == 0 {
@@ -94,10 +99,11 @@ func readFacebook(raw json.RawMessage) (*Batch, error) {
 		}
 		c := NewContact()
 		setName(c, name)
-		c.Notes = "Facebook friend"
+		at := time.Time{}
 		if f.Timestamp > 0 {
-			c.Notes += " since " + time.Unix(f.Timestamp, 0).Format("Jan 2006")
+			at = time.Unix(f.Timestamp, 0)
 		}
+		c.AddEvent(at, "Became Facebook friends", "Facebook")
 		c.Tidy()
 		b.Cards = append(b.Cards, Card{Contact: c})
 	}
@@ -123,10 +129,11 @@ func readSnapchat(raw json.RawMessage) (*Batch, error) {
 		if user != "" {
 			c.URLs = []Field{{Label: "Snapchat", Value: "https://www.snapchat.com/add/" + user}}
 		}
-		c.Notes = "Snapchat friend"
-		if ts := f["Creation Timestamp"]; len(ts) >= 4 {
-			c.Notes += " since " + ts[:4]
+		at := time.Time{}
+		if t, err := time.Parse("2006-01-02 15:04:05 MST", f["Creation Timestamp"]); err == nil {
+			at = t
 		}
+		c.AddEvent(at, "Became Snapchat friends", "Snapchat")
 		c.Tidy()
 		b.Cards = append(b.Cards, Card{Contact: c})
 	}

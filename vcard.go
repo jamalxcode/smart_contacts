@@ -272,6 +272,7 @@ func buildCard(lines []vline) *Card {
 		}
 	}
 	fn := ""
+	var ext []string
 	for _, l := range lines {
 		switch l.name {
 		case "N":
@@ -287,6 +288,10 @@ func buildCard(lines []vline) *Card {
 			}
 		case "FN":
 			fn = unescape(l.value)
+		case "UID", "X-ABUID":
+			if v := strings.TrimSpace(strings.TrimSuffix(unescape(l.value), ":ABPerson")); v != "" {
+				ext = append(ext, v)
+			}
 		case "X-ALT-NAME":
 			c.AltName = unescape(l.value)
 		case "NICKNAME":
@@ -346,6 +351,9 @@ func buildCard(lines []vline) *Card {
 				}
 			}
 		}
+	}
+	for _, e := range ext {
+		c.SourceIDs = append(c.SourceIDs, "|"+e) // the source name is filled in when imported
 	}
 	if c.FullName() == "" && fn != "" && fn != c.Company {
 		c.First = fn

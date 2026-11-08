@@ -55,6 +55,13 @@ type ui struct {
 
 	ed         *editor // non-nil while a contact is being edited
 	cal        *Calendar
+	graph      *Graph               // cached connections graph (nil = rebuild)
+	calCache   map[string][]Mention // cached calendar matches per contact
+	openSec    map[string]bool      // which folding card sections are open
+	selectMode bool                 // list shows tick boxes for bulk actions
+	picked     map[string]bool      // contacts ticked in Select mode
+	bulkBar    *fyne.Container
+	listPane   *fyne.Container
 	flashGen   int
 	photoCache map[string]fyne.Resource
 	sideBusy   bool
@@ -193,7 +200,9 @@ func (u *ui) build() {
 			sub.SizeName = theme.SizeNameCaptionText
 			star := widget.NewIcon(iconStar)
 			texts := container.New(&tightVBox{}, name, sub)
-			return container.NewBorder(nil, nil, newAvatar(38), star, texts)
+			tick := widget.NewIcon(theme.CheckButtonIcon()) // shown in Select mode
+			tick.Hide()
+			return container.NewBorder(nil, nil, container.NewHBox(tick, newAvatar(38)), star, texts)
 		},
 		func(id widget.ListItemID, o fyne.CanvasObject) {
 			if id >= len(u.filtered) {
@@ -204,7 +213,19 @@ func (u *ui) build() {
 			texts := b.Objects[0].(*fyne.Container)
 			texts.Objects[0].(*widget.Label).SetText(c.DisplayName())
 			texts.Objects[1].(*widget.Label).SetText(u.subtitleFor(c))
-			b.Objects[1].(*avatar).set(c, u.photo(c))
+			left := b.Objects[1].(*fyne.Container)
+			left.Objects[1].(*avatar).set(c, u.photo(c))
+			tick := left.Objects[0].(*widget.Icon)
+			if u.selectMode {
+				tick.Show()
+				if u.picked[c.ID] {
+					tick.SetResource(theme.CheckButtonCheckedIcon())
+				} else {
+					tick.SetResource(theme.CheckButtonIcon())
+				}
+			} else {
+				tick.Hide()
+			}
 			star := b.Objects[2].(*widget.Icon)
 			if c.Favorite {
 				star.Show()
@@ -217,6 +238,16 @@ func (u *ui) build() {
 			return
 		}
 		c := u.filtered[id]
+		if u.selectMode { // in Select mode a click ticks or unticks
+			u.picked[c.ID] = !u.picked[c.ID]
+			if !u.picked[c.ID] {
+				delete(u.picked, c.ID)
+			}
+			u.list.UnselectAll()
+			u.list.RefreshItem(id)
+			u.updateBulkBar()
+			return
+		}
 		if c.ID == u.selectedID && u.ed == nil {
 			return
 		}
@@ -228,11 +259,15 @@ func (u *ui) build() {
 	newBtn := widget.NewButtonWithIcon("", theme.ContentAddIcon(), func() { u.editContact(nil) })
 	smartBtn := widget.NewButtonWithIcon("Smart Add", iconSparkle, u.smartAdd)
 	u.listTitle = widget.NewLabelWithStyle("All Contacts", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	selBtn := widget.NewButtonWithIcon("", theme.CheckButtonCheckedIcon(), u.toggleSelectMode)
 	listTop := container.NewVBox(
-		container.NewBorder(nil, nil, nil, container.NewHBox(smartBtn, newBtn), u.listTitle),
+		container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
 		u.search,
 	)
-	listPane := container.NewBorder(listTop, nil, nil, nil, u.list)
+	u.bulkBar = container.NewVBox()
+	u.bulkBar.Hide()
+	listPane := container.NewBorder(listTop, u.bulkBar, nil, nil, u.list)
+	u.listPane = listPane
 
 	// --- right ---
 	u.right = container.NewStack()
@@ -297,6 +332,33 @@ func (u *ui) subtitleFor(c *Contact) string {
 }
 
 // ---------- data → screen ----------
+
+// invalidate drops cached lookups (connections graph, calendar matches) after data changes.
+func (u *ui) invalidate() {
+	u.graph = nil
+	u.calCache = nil
+}
+
+// graphNow returns the connections graph, built once until the data changes.
+func (u *ui) graphNow() *Graph {
+	if u.graph == nil {
+		u.graph = NewGraph(u.store, true)
+	}
+	return u.graph
+}
+
+// eventsFor returns a contact's calendar matches, worked out once until the data changes.
+func (u *ui) eventsFor(c *Contact) []Mention {
+	if u.calCache == nil {
+		u.calCache = map[string][]Mention{}
+	}
+	if m, ok := u.calCache[c.ID]; ok {
+		return m
+	}
+	m := u.cal.EventsFor(c)
+	u.calCache[c.ID] = m
+	return m
+}
 
 func (u *ui) refreshAll() {
 	u.refreshSidebar()
@@ -469,6 +531,10 @@ func (u *ui) indexOf(id string) int {
 
 // reselect highlights the current contact in the list without re-triggering OnSelected work.
 func (u *ui) reselect() {
+	if u.selectMode { // ticks show the selection; no highlight
+		u.list.UnselectAll()
+		return
+	}
 	i := u.indexOf(u.selectedID)
 	if i < 0 {
 		u.list.UnselectAll()
@@ -516,6 +582,7 @@ func (u *ui) searchKey(k *fyne.KeyEvent) bool {
 
 // save writes the store and redraws everything, keeping the selection.
 func (u *ui) save() {
+	u.invalidate()
 	if err := u.store.Save(); err != nil {
 		dialog.ShowError(fmt.Errorf("couldn't save your contacts: %w", err), u.win)
 	}
@@ -572,7 +639,7 @@ func (u *ui) emptyState() fyne.CanvasObject {
 	title.TextStyle.Bold = true
 	msg := widget.NewLabel("Bring your contacts in, or add the first one.")
 	msg.Alignment = fyne.TextAlignCenter
-	imp := widget.NewButtonWithIcon("Import from Mac Contacts", theme.DownloadIcon(), u.importMac)
+	imp := widget.NewButtonWithIcon("Bring Everything In — step by step", theme.DownloadIcon(), u.bringEverythingIn)
 	imp.Importance = widget.HighImportance
 	hub := widget.NewButtonWithIcon("Import from Gmail, LinkedIn, phones, spreadsheets…", theme.FolderOpenIcon(), u.importHub)
 	vcf := hub
@@ -673,13 +740,13 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 			btns = append(btns, u.iconLink(iconChat, "WhatsApp", c, "whatsapp://send?phone="+WhatsAppNumber(p.Value, cc)))
 		}
 		btns = append(btns, u.copyButton(p.Value))
-		phones = append(phones, u.valueRow(p.Label, p.Value, btns...))
+		phones = append(phones, u.valueRowFrom(p.Label, p.Value, c.OriginText(phoneKey(p.Value)), btns...))
 	}
 	section("PHONE", phones...)
 
 	var emails []fyne.CanvasObject
 	for _, e := range c.Emails {
-		emails = append(emails, u.valueRow(e.Label, e.Value,
+		emails = append(emails, u.valueRowFrom(e.Label, e.Value, c.OriginText("e:"+strings.ToLower(strings.TrimSpace(e.Value))),
 			u.iconLink(theme.MailComposeIcon(), "Email", c, "mailto:"+e.Value), u.copyButton(e.Value)))
 	}
 	section("EMAIL", emails...)
@@ -687,7 +754,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	var addrs []fyne.CanvasObject
 	for _, a := range c.Addresses {
 		one := a.OneLine()
-		addrs = append(addrs, u.valueRow(a.Label, strings.TrimSpace(strings.Join(nonEmpty([]string{a.Street, strings.Join(nonEmpty([]string{a.Postcode, a.City}), " "), a.Region, a.Country}), "\n")),
+		addrs = append(addrs, u.valueRowFrom(a.Label, strings.TrimSpace(strings.Join(nonEmpty([]string{a.Street, strings.Join(nonEmpty([]string{a.Postcode, a.City}), " "), a.Region, a.Country}), "\n")), c.OriginText("a:"+fold(one)),
 			u.iconLink(iconPlace, "Map", nil, "maps://?q="+url.QueryEscape(one)), u.copyButton(one)))
 	}
 	section("ADDRESS", addrs...)
@@ -700,7 +767,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		} else if !strings.Contains(v, "://") {
 			v = "https://" + v
 		}
-		links = append(links, u.valueRow(l.Label, l.Value, u.iconLink(iconLink, "Open", nil, v), u.copyButton(l.Value)))
+		links = append(links, u.valueRowFrom(l.Label, l.Value, c.OriginText("u:"+linkKey(l.Label, l.Value)), u.iconLink(iconLink, "Open", nil, v), u.copyButton(l.Value)))
 	}
 	section("WEB", links...)
 
@@ -738,10 +805,6 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		section("GROUPS", chips)
 	}
 
-	section("BUSINESS CARDS", u.cardsSection(c)...)
-	section("CONNECTIONS", u.connectionsSection(c)...)
-	section("CALENDAR", u.calendarSection(c)...)
-
 	if strings.TrimSpace(c.Notes) != "" {
 		n := widget.NewLabel(c.Notes)
 		n.Wrapping = fyne.TextWrapWord
@@ -749,11 +812,14 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 		section("NOTES", n)
 	}
 
+	// The rest folds away so the card stays short; open sections stay open between contacts.
+	body.Add(u.foldingSections(c))
+
 	meta := []string{"Added " + c.Created.Format("2 Jan 2006")}
 	if len(c.Sources) > 0 {
 		meta = append(meta, "from "+strings.Join(c.Sources, ", "))
 	}
-	if lm := LastMet(u.cal.EventsFor(c), time.Now()); !lm.IsZero() {
+	if lm := LastMet(u.eventsFor(c), time.Now()); !lm.IsZero() {
 		meta = append(meta, "last met "+Ago(lm, time.Now()))
 	}
 	if !c.LastContacted.IsZero() {
@@ -769,6 +835,24 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	exp.Importance = widget.LowImportance
 	body.Add(container.NewHBox(share, exp, layout.NewSpacer(), del))
 	return container.NewVScroll(container.NewPadded(body))
+}
+
+// valueRowFrom is valueRow with a line saying where the value came from.
+func (u *ui) valueRowFrom(label, value, origin string, buttons ...fyne.CanvasObject) fyne.CanvasObject {
+	if origin == "" {
+		return u.valueRow(label, value, buttons...)
+	}
+	l := widget.NewLabel(label)
+	l.Importance = widget.LowImportance
+	l.SizeName = theme.SizeNameCaptionText
+	l.Truncation = fyne.TextTruncateEllipsis
+	v := widget.NewLabel(value)
+	v.Selectable = true
+	v.Wrapping = fyne.TextWrapWord
+	from := caption("from " + origin)
+	from.Truncation = fyne.TextTruncateEllipsis
+	lbl := container.NewGridWrap(fyne.NewSize(90, l.MinSize().Height), l)
+	return container.NewBorder(nil, nil, lbl, container.NewHBox(buttons...), container.New(&tightVBox{}, v, from))
 }
 
 func (u *ui) valueRow(label, value string, buttons ...fyne.CanvasObject) fyne.CanvasObject {
@@ -964,12 +1048,80 @@ func actionIcon(kind string) fyne.Resource {
 		return iconPhone
 	case "message":
 		return iconMessage
-	case "chat":
+	case "whatsapp":
 		return iconChat
+	case "chat":
+		return iconBubble
 	case "video":
 		return theme.MediaVideoIcon()
 	case "email":
 		return theme.MailComposeIcon()
 	}
 	return iconLink
+}
+
+// foldingSections holds the card's longer, occasional sections: calendar, timeline, connections
+// and business cards. Each shows its count; opening one keeps it open for the next contact.
+func (u *ui) foldingSections(c *Contact) fyne.CanvasObject {
+	if u.openSec == nil {
+		u.openSec = map[string]bool{"Calendar": true}
+	}
+	box := container.NewVBox()
+	add := func(name string, count int, rows []fyne.CanvasObject) {
+		if len(rows) == 0 {
+			return
+		}
+		title := strings.ToUpper(name)
+		if count > 0 {
+			title = fmt.Sprintf("%s (%d)", title, count)
+		}
+		content := container.NewVBox(rows...)
+		var head *widget.Button
+		sync := func() {
+			if u.openSec[name] {
+				head.SetIcon(theme.MenuDropDownIcon())
+				content.Show()
+			} else {
+				head.SetIcon(theme.MenuExpandIcon())
+				content.Hide()
+			}
+		}
+		head = widget.NewButtonWithIcon(title, theme.MenuExpandIcon(), func() {
+			u.openSec[name] = !u.openSec[name]
+			sync()
+		})
+		head.Alignment = widget.ButtonAlignLeading
+		head.Importance = widget.LowImportance
+		sync()
+		box.Add(head)
+		box.Add(content)
+	}
+	add("Calendar", len(u.eventsFor(c)), u.calendarSection(c))
+	add("Timeline", len(c.Timeline), u.timelineSection(c))
+	add("Connections", len(u.store.LinksOf(c.ID)), u.connectionsSection(c))
+	add("Business cards", len(c.CardImages), u.cardsSection(c))
+	return box
+}
+
+// timelineSection lists what happened with a contact, newest first.
+func (u *ui) timelineSection(c *Contact) []fyne.CanvasObject {
+	if len(c.Timeline) == 0 {
+		return nil
+	}
+	var rows []fyne.CanvasObject
+	for i, e := range c.Timeline {
+		if i == 12 {
+			rows = append(rows, caption(fmt.Sprintf("…and %d older entries", len(c.Timeline)-12)))
+			break
+		}
+		when := "—"
+		if !e.At.IsZero() {
+			when = e.At.Format("2 Jan 2006")
+		}
+		l := caption(when)
+		t := widget.NewLabel(e.Text)
+		t.Wrapping = fyne.TextWrapWord
+		rows = append(rows, container.NewBorder(nil, nil, container.NewGridWrap(fyne.NewSize(110, l.MinSize().Height), l), nil, t))
+	}
+	return rows
 }

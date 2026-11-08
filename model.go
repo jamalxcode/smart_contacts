@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"github.com/nyaruka/phonenumbers"
 	"sort"
 	"strings"
 	"time"
@@ -45,27 +46,30 @@ func (a Address) IsEmpty() bool { return a.OneLine() == "" }
 
 // Contact is one person or organisation.
 type Contact struct {
-	ID            string      `json:"id"`
-	First         string      `json:"first,omitempty"`
-	Last          string      `json:"last,omitempty"`
-	Nickname      string      `json:"nickname,omitempty"`
-	Company       string      `json:"company,omitempty"`
-	Title         string      `json:"title,omitempty"`
-	Phones        []Field     `json:"phones,omitempty"`
-	Emails        []Field     `json:"emails,omitempty"`
-	URLs          []Field     `json:"urls,omitempty"`
-	Addresses     []Address   `json:"addresses,omitempty"`
-	Birthday      string      `json:"birthday,omitempty"` // YYYY-MM-DD, or --MM-DD when the year is unknown
-	Notes         string      `json:"notes,omitempty"`
-	Groups        []string    `json:"groups,omitempty"`
-	AltName       string      `json:"altName,omitempty"`    // the name in the other language (Arabic ↔ English)
-	Sources       []string    `json:"sources,omitempty"`    // where the details came from: "Mac Contacts", "LinkedIn"…
-	CardImages    []CardImage `json:"cardImages,omitempty"` // business cards used to add or update the contact
-	Favorite      bool        `json:"favorite,omitempty"`
-	HasPhoto      bool        `json:"hasPhoto,omitempty"`
-	Created       time.Time   `json:"created"`
-	Updated       time.Time   `json:"updated"`
-	LastContacted time.Time   `json:"lastContacted,omitempty"`
+	ID            string            `json:"id"`
+	First         string            `json:"first,omitempty"`
+	Last          string            `json:"last,omitempty"`
+	Nickname      string            `json:"nickname,omitempty"`
+	Company       string            `json:"company,omitempty"`
+	Title         string            `json:"title,omitempty"`
+	Phones        []Field           `json:"phones,omitempty"`
+	Emails        []Field           `json:"emails,omitempty"`
+	URLs          []Field           `json:"urls,omitempty"`
+	Addresses     []Address         `json:"addresses,omitempty"`
+	Birthday      string            `json:"birthday,omitempty"` // YYYY-MM-DD, or --MM-DD when the year is unknown
+	Notes         string            `json:"notes,omitempty"`
+	Groups        []string          `json:"groups,omitempty"`
+	AltName       string            `json:"altName,omitempty"`    // the name in the other language (Arabic ↔ English)
+	Sources       []string          `json:"sources,omitempty"`    // where the details came from: "Mac Contacts", "LinkedIn"…
+	CardImages    []CardImage       `json:"cardImages,omitempty"` // business cards used to add or update the contact
+	Origins       map[string]Origin `json:"origins,omitempty"`    // where each detail came from (see detailKeys)
+	SourceIDs     []string          `json:"sourceIds,omitempty"`  // "Mac Contacts|<uid>": each source's own ID, for exact re-imports
+	Timeline      []TimelineEntry   `json:"timeline,omitempty"`   // what happened: connected, imported, job changes, cards scanned
+	Favorite      bool              `json:"favorite,omitempty"`
+	HasPhoto      bool              `json:"hasPhoto,omitempty"`
+	Created       time.Time         `json:"created"`
+	Updated       time.Time         `json:"updated"`
+	LastContacted time.Time         `json:"lastContacted,omitempty"`
 
 	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
 	// edits a contact goes through Store.Put or sets Updated, which invalidates these.
@@ -75,7 +79,7 @@ type Contact struct {
 
 // PhoneLabels, EmailLabels and URLLabels are the choices offered in the editor.
 var (
-	PhoneLabels   = []string{"Mobile", "Home", "Work", "Main", "WhatsApp", "Fax", "Other"}
+	PhoneLabels   = []string{"Mobile", "Landline", "Home", "Work", "Main", "WhatsApp", "Fax", "Other"}
 	EmailLabels   = []string{"Home", "Work", "Other"}
 	URLLabels     = []string{"Website", "LinkedIn", "Telegram", "Instagram", "X", "Facebook", "Snapchat", "TikTok", "Signal", "GitHub", "Skype", "Other"}
 	AddressLabels = []string{"Home", "Work", "Other"}
@@ -103,6 +107,14 @@ func (c *Contact) Clone() *Contact {
 	n.Groups = append([]string(nil), c.Groups...)
 	n.Sources = append([]string(nil), c.Sources...)
 	n.CardImages = append([]CardImage(nil), c.CardImages...)
+	n.SourceIDs = append([]string(nil), c.SourceIDs...)
+	n.Timeline = append([]TimelineEntry(nil), c.Timeline...)
+	if c.Origins != nil {
+		n.Origins = make(map[string]Origin, len(c.Origins))
+		for k, v := range c.Origins {
+			n.Origins[k] = v
+		}
+	}
 	return &n
 }
 
@@ -208,6 +220,7 @@ func (c *Contact) Tidy() {
 		c.AltName = ""
 	}
 	c.Sources = uniqueFold(c.Sources)
+	c.SourceIDs = uniqueFold(c.SourceIDs)
 	c.Company = strings.TrimSpace(c.Company)
 	c.Title = strings.TrimSpace(c.Title)
 	c.Birthday = strings.TrimSpace(c.Birthday)
@@ -466,59 +479,20 @@ func NormalizePhone(s, defCC string) string {
 	return d
 }
 
-// FormatPhone prints a normalised number in a readable way: +965 9999 8888.
-// Numbers from other countries keep the country code separate and the rest in groups.
+// FormatPhone prints a number the way it's written internationally (+965 9999 8888,
+// +44 20 7946 0958, +1 415-555-0100). Numbers it can't place are left as typed.
 func FormatPhone(s, defCC string) string {
 	n := NormalizePhone(s, defCC)
 	if !strings.HasPrefix(n, "+") {
 		return strings.TrimSpace(s)
 	}
-	d := n[1:]
-	cc := ""
-	for _, code := range knownCountryCodes {
-		if strings.HasPrefix(d, code) {
-			cc = code
-			break
-		}
+	if strings.HasPrefix(n, "+965") && len(n) == 12 { // Kuwait: always written 4 + 4 (+965 5555 1111)
+		return "+965 " + n[4:8] + " " + n[8:]
 	}
-	if cc == "" || len(d)-len(cc) < 6 {
-		return n
+	if num, err := phonenumbers.Parse(n, ""); err == nil && phonenumbers.IsValidNumber(num) {
+		return phonenumbers.Format(num, phonenumbers.INTERNATIONAL)
 	}
-	rest := d[len(cc):]
-	var groups []string
-	switch {
-	case cc == "1" && len(rest) == 10:
-		groups = []string{rest[:3], rest[3:6], rest[6:]}
-	case len(rest) == 8:
-		groups = []string{rest[:4], rest[4:]}
-	default:
-		for len(rest) > 4 {
-			groups = append(groups, rest[:3])
-			rest = rest[3:]
-		}
-		groups = append(groups, rest)
-	}
-	return "+" + cc + " " + strings.Join(groups, " ")
-}
-
-// localDigits is the shortest ordinary local number in a country. Kuwait, Bahrain, Qatar
-// and Oman use 8 digits, so a 7-digit number there (1802555) is a service line.
-func localDigits(defCC string) int {
-	switch defCC {
-	case "965", "973", "974", "968":
-		return 8
-	}
-	return 7
-}
-
-// Longest first so "971" wins over "97".
-var knownCountryCodes = []string{
-	"965", "966", "971", "973", "974", "968", "962", "961", "963", "964", "967", "970", "972",
-	"212", "213", "216", "218", "249", "351", "353", "358", "380", "420", "852", "880", "886",
-	"20", "27", "30", "31", "32", "33", "34", "36", "39", "40", "41", "43", "44", "45", "46", "47", "48", "49",
-	"51", "52", "53", "54", "55", "56", "57", "58", "60", "61", "62", "63", "64", "65", "66",
-	"81", "82", "84", "86", "90", "91", "92", "93", "94", "95", "98",
-	"1", "7",
+	return n
 }
 
 // WhatsAppNumber is the digits-only international form wa.me wants.
@@ -527,7 +501,15 @@ func WhatsAppNumber(s, defCC string) string {
 }
 
 // CanWhatsApp is false for short codes and service numbers, which have no WhatsApp.
-func CanWhatsApp(s, defCC string) bool { return strings.HasPrefix(NormalizePhone(s, defCC), "+") }
+// It's also false for landlines and toll-free lines, which aren't WhatsApp accounts.
+func CanWhatsApp(s, defCC string) bool {
+	n := NormalizePhone(s, defCC)
+	if !strings.HasPrefix(n, "+") {
+		return false
+	}
+	t := PhoneType(n)
+	return t != "landline" && t != "toll-free" && t != "service"
+}
 
 // ---------- birthdays ----------
 
@@ -634,7 +616,11 @@ func Ago(t, now time.Time) string {
 	if t.IsZero() {
 		return ""
 	}
-	days := int(now.Sub(t).Hours() / 24)
+	day := func(x time.Time) time.Time {
+		y, m, d := x.In(now.Location()).Date()
+		return time.Date(y, m, d, 12, 0, 0, 0, time.UTC)
+	}
+	days := int(day(now).Sub(day(t)).Hours() / 24) // calendar days: last night counts as yesterday
 	switch {
 	case days <= 0:
 		return "today"

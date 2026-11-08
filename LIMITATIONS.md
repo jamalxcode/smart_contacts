@@ -94,11 +94,16 @@ that haven't been built yet.
 
 - Organisation, "how I know them" and "met at" fields you fill in yourself, linked into connections
 - A quick search from the menu bar
-- An encrypted private backup of your contacts (never to this public repo)
+- An encrypted backup (Back Up To… writes a plain .zip; keep it on a drive you control)
 - Birthday reminders as Mac notifications
-- Editing several contacts at once (adding a group to many people, for example)
+- Undo history that survives quitting (restore points do; the step-by-step list is per session)
 
 ## Done
+
+- **Undo and redo for every change**, a History window with restore points, **Select mode** for
+  changing many people at once, **Bring Everything In** checklist, **Back Up To…** a drive,
+  **where each detail came from**, a **timeline** kept apart from notes, exact re-imports by
+  source ID, and name-only matches listed for review with a pre-selected answer.
 
 - **Calendar log**, **business card images**, **one-click personal photo**, **notes clean-up**,
   **Deduplicate** (cards and repeats inside cards), and **contact buttons** for every app the card

@@ -14,6 +14,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -51,7 +52,7 @@ type ColMap struct {
 // colKinds are the choices offered in the column matcher.
 var colKinds = []string{"skip", "full name", "first name", "middle name", "last name", "name (other language)",
 	"nickname", "company", "job title", "phone", "email", "website", "address", "street", "city", "region",
-	"postcode", "country", "birthday", "notes", "groups", "type of previous column"}
+	"postcode", "country", "birthday", "notes", "groups", "connected on", "type of previous column"}
 
 // ReadImport recognises a file by its name and content and turns it into cards.
 func ReadImport(name string, data []byte, home string) (*Batch, error) {
@@ -195,7 +196,7 @@ var headerRules = func() []headerRule {
 		r(`birthday|date of birth|birth ?date|dob|تاريخ الميلاد|الميلاد`, "birthday", ""),
 		r(`notes?|comments?|remarks|ملاحظات|ملاحظ[ةه]`, "notes", ""),
 		r(`group membership|labels|categories|groups?|tags?|المجموع[ةه]|التصنيف|الفئ[ةه]`, "groups", ""),
-		r(`connected on`, "notes", "LinkedIn connection since"),
+		r(`connected on`, "connected on", ""),
 	}
 }()
 
@@ -432,6 +433,9 @@ func (t *Table) Cards(home string) ([]Card, int) {
 					v = label + " " + v
 				}
 				c.Notes = strings.TrimSpace(c.Notes + "\n" + v)
+			case "connected on": // LinkedIn: goes to the timeline, not the notes
+				at, _ := parseLooseDate(v)
+				c.AddEvent(at, "Connected on LinkedIn", "LinkedIn")
 			case "groups":
 				for _, g := range regexp.MustCompile(`:::|;|,|\|`).Split(v, -1) {
 					g = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(g), "*"))
@@ -661,6 +665,8 @@ type ImportItem struct {
 	Candidates []*Contact // piAsk: who it might be
 	Adds       []string   // what merging would add ("+965 9999 8888", "LinkedIn link"…)
 	Why        string     // how the match was found
+	Default    string     // piAsk: the suggested choice ("merge:<id>", "new" or "skip")
+	Confidence string     // piAsk: "very likely", "likely" or "unsure"
 }
 
 // PlanImport decides, for every incoming card, whether it is new, the same person as an existing
@@ -674,6 +680,13 @@ func PlanImport(s *Store, cards []Card, source, home string) []ImportItem {
 			byName[k] = append(byName[k], c)
 		}
 	}
+	byExt := map[string]*Contact{} // "source|id" → contact, and our own IDs (re-importing our own export)
+	for _, c := range s.Contacts {
+		byExt["self|"+c.ID] = c
+		for _, id := range c.SourceIDs {
+			byExt[strings.ToLower(id)] = c
+		}
+	}
 	var items []ImportItem
 	fileIdx := NewDupIndex(nil, home)
 	fileNames := map[string]*Contact{}
@@ -681,8 +694,28 @@ func PlanImport(s *Store, cards []Card, source, home string) []ImportItem {
 		in := card.Contact
 		in.Tidy()
 		in.Sources = uniqueFold(append(in.Sources, source))
+		for i, id := range in.SourceIDs { // "|uid" from the reader → "Mac Contacts|uid"
+			if strings.HasPrefix(id, "|") {
+				in.SourceIDs[i] = source + id
+			}
+		}
 		it := ImportItem{Card: card}
-		if m := strongMatch(idx, in); m != nil {
+		var exact *Contact
+		for _, id := range in.SourceIDs {
+			if m := byExt[strings.ToLower(id)]; m != nil {
+				exact = m
+			} else if m := byExt["self|"+strings.TrimPrefix(id, source+"|")]; m != nil {
+				exact = m
+			}
+		}
+		if exact != nil {
+			it.Match, it.Why = exact, "the same "+source+" card as last time"
+			it.Adds = mergeAdds(exact, in, home)
+			it.Kind = piMerge
+			if len(it.Adds) == 0 {
+				it.Kind = piUpToDate
+			}
+		} else if m := strongMatch(idx, in); m != nil {
 			it.Match, it.Why = m, "same phone, email or profile link"
 			it.Adds = mergeAdds(m, in, home)
 			it.Kind = piMerge
@@ -704,25 +737,25 @@ func PlanImport(s *Store, cards []Card, source, home string) []ImportItem {
 					}
 				}
 			}
+			// A name alone never merges silently: the user checks it, with a suggestion.
 			switch {
-			case len(cands) == 1 && (!reachable(in) || !reachable(cands[0]) || fold(in.FullName()) == fold(cands[0].FullName())):
-				// one person with this name, and nothing contradicts it
-				it.Kind, it.Match, it.Why = piMerge, cands[0], "same name"
+			case len(cands) == 1:
+				c := cands[0]
+				it.Kind, it.Candidates, it.Match = piAsk, cands, c
+				it.Adds = mergeAdds(c, in, home)
+				sameScript := hasArabic(in.FullName()) == hasArabic(c.FullName())
 				switch {
-				case hasArabic(in.FullName()) != hasArabic(cands[0].FullName()) || (cands[0].AltName != "" && fold(in.FullName()) == fold(cands[0].AltName) && hasArabic(in.FullName()) != hasArabic(cands[0].FullName())):
-					it.Why = "same name in another language"
-				case fold(in.FullName()) != fold(cands[0].FullName()):
-					it.Why = "same name, spelled differently"
-				}
-				it.Adds = mergeAdds(cands[0], in, home)
-				if len(it.Adds) == 0 {
-					it.Kind = piUpToDate
-				}
-				if reachable(in) && reachable(cands[0]) {
-					it.Kind, it.Candidates = piAsk, cands // both have different numbers: ask
+				case reachable(in) && reachable(c):
+					it.Why, it.Confidence, it.Default = "same name, but different numbers or emails", "unsure", "new"
+				case sameScript && fold(in.FullName()) == fold(c.FullName()):
+					it.Why, it.Confidence, it.Default = "same name", "very likely", "merge:"+c.ID
+				case !sameScript:
+					it.Why, it.Confidence, it.Default = "same name in another language", "likely", "merge:"+c.ID
+				default:
+					it.Why, it.Confidence, it.Default = "same name, spelled differently", "likely", "merge:"+c.ID
 				}
 			case len(cands) > 0:
-				it.Kind, it.Candidates, it.Why = piAsk, cands, "same name as someone you have"
+				it.Kind, it.Candidates, it.Why, it.Confidence, it.Default = piAsk, cands, fmt.Sprintf("%d people with this name", len(cands)), "unsure", "new"
 			default:
 				it.Kind = piNew
 				fileIdx.Add(in)
@@ -803,6 +836,15 @@ func mergeAdds(existing, in *Contact, home string) []string {
 	if trial.Notes != existing.Notes {
 		adds = append(adds, "notes")
 	}
+	had := map[string]bool{}
+	for _, e := range existing.Timeline {
+		had[strings.ToLower(e.Text)] = true
+	}
+	for _, e := range trial.Timeline {
+		if !had[strings.ToLower(e.Text)] {
+			adds = append(adds, "timeline: "+e.Text)
+		}
+	}
 	return adds
 }
 
@@ -814,7 +856,11 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 	for i, it := range items {
 		in := it.Card.Contact
 		kind, target := it.Kind, it.Match
-		if ch, ok := choice[i]; ok {
+		ch, ok := choice[i]
+		if !ok && it.Kind == piAsk { // not changed by the user: take the suggestion
+			ch, ok = it.Default, it.Default != ""
+		}
+		if ok {
 			switch {
 			case ch == "skip":
 				continue
@@ -826,6 +872,8 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 		}
 		switch kind {
 		case piNew:
+			in.AddEvent(time.Now(), "Added from "+sourceOf(in), sourceOf(in))
+			StampNew(in, sourceOf(in), time.Now())
 			s.Put(in)
 			if len(it.Card.Photo) > 0 && CanDecodeImage(it.Card.Photo) {
 				_ = s.SetPhoto(in, ShrinkPhoto(it.Card.Photo, 512))
@@ -844,16 +892,28 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 			if !target.HasPhoto && len(it.Card.Photo) > 0 && CanDecodeImage(it.Card.Photo) {
 				_ = s.SetPhoto(target, ShrinkPhoto(it.Card.Photo, 512))
 			}
+			before := target.Clone()
+			var shown []string
+			for _, a := range mergeAdds(target, in, home) {
+				if !strings.HasPrefix(a, "timeline: ") {
+					shown = append(shown, a)
+				}
+			}
+			if len(shown) > 0 {
+				target.AddEvent(time.Now(), "Updated from "+sourceOf(in)+": "+strings.Join(shown, ", "), sourceOf(in))
+			}
 			noteDifferences(target, in)
 			Merge(target, []*Contact{in}, home)
+			StampChanges(before, target, sourceOf(in), time.Now())
 			s.Put(target)
 			newCard[in] = target
 			touched = append(touched, target)
 		case piUpToDate:
 			if target != nil {
-				before := len(target.Sources)
+				before := len(target.Sources) + len(target.SourceIDs)
 				target.Sources = uniqueFold(append(target.Sources, in.Sources...))
-				if len(target.Sources) != before {
+				target.SourceIDs = uniqueFold(append(target.SourceIDs, in.SourceIDs...))
+				if len(target.Sources)+len(target.SourceIDs) != before {
 					s.Put(target)
 				}
 			}
@@ -919,17 +979,22 @@ func noteDifferences(target, in *Contact) {
 			if in.Title == "" {
 				target.Title = ""
 			}
-			lines = append(lines, "Previously: "+old)
+			lines = append(lines, "Job changed: was "+old+", now "+jobOf(in.Title, in.Company))
 		} else {
-			lines = append(lines, src+": "+jobOf(in.Title, in.Company))
+			lines = append(lines, src+" lists "+jobOf(in.Title, in.Company))
 		}
 	}
 	if diff(target.Birthday, in.Birthday) {
 		lines = append(lines, src+" gives the birthday as "+BirthdayText(in.Birthday))
 	}
 	for _, l := range lines {
-		if !strings.Contains(target.Notes, l) {
-			target.Notes = strings.TrimSpace(target.Notes + "\n" + l)
-		}
+		target.AddEvent(time.Now(), l, src)
 	}
+}
+
+func sourceOf(c *Contact) string {
+	if len(c.Sources) > 0 {
+		return c.Sources[0]
+	}
+	return "Import"
 }

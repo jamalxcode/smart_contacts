@@ -128,6 +128,16 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 					out = append(out, CleanupChange{Contact: c, Kind: ckFix, Field: "phone", Old: v, New: pretty,
 						Reason: why, Default: true, apply: func(string) { setField(c.Phones, v, pretty) }})
 				}
+				if strings.EqualFold(p.Label, "mobile") && PhoneType(r.Norm) == "landline" {
+					out = append(out, CleanupChange{Contact: c, Kind: ckFix, Field: "phone", Old: v + " (Mobile)", New: "Landline",
+						Reason: "this number is a landline", Default: true, apply: func(string) {
+							for i := range c.Phones {
+								if analyzePhone(c.Phones[i].Value, home, hints).Norm == r.Norm && strings.EqualFold(c.Phones[i].Label, "mobile") {
+									c.Phones[i].Label = "Landline"
+								}
+							}
+						}})
+				}
 			case phInvalid, phSuspicious:
 				out = append(out, CleanupChange{Contact: c, Kind: ckWrong, Field: "phone", Old: v,
 					Reason: "looks wrong: " + r.Reason, Default: r.Status == phInvalid,
@@ -221,6 +231,22 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 			seenA[k] = true
 		}
 
+		// automatic lines from older versions move from the notes to the timeline
+		if own, auto := splitAutoNotes(c.Notes); len(auto) > 0 {
+			old, n, lines := c.Notes, own, auto
+			out = append(out, CleanupChange{Contact: c, Kind: ckFix, Field: "notes", Old: "notes", New: "timeline",
+				Reason: plural(len(auto), "automatic line") + " moved from the notes to the timeline", Default: true,
+				apply: func(string) {
+					if c.Notes != old {
+						return
+					}
+					for _, l := range lines {
+						e := autoLineEvent(l)
+						c.AddEvent(e.At, e.Text, e.Source)
+					}
+					c.Notes = n
+				}})
+		}
 		// notes: repeats, blank-line runs, leftover HTML, lines that only repeat a number or email
 		if tidy, why, onlyRepeats := TidyNotes(c); tidy != c.Notes {
 			old, n := c.Notes, tidy
@@ -232,6 +258,21 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 				Reason: why, Default: true, apply: func(string) {
 					if c.Notes == old {
 						c.Notes = n
+					}
+				}})
+		}
+
+		// first and last swapped: "Al-Kandari" as the first name, "Dr. Yousef" as the last
+		if looksFamily(c.First) && !looksFamily(c.Last) && strings.TrimSpace(c.Last) != "" {
+			f, l := c.First, c.Last
+			kind, def := ckUnsure, false
+			if hasTitle(l) {
+				kind, def = ckFix, true
+			}
+			out = append(out, CleanupChange{Contact: c, Kind: kind, Field: "name", Old: f + " " + l, New: l + " " + f,
+				Reason: "first and last name look swapped", Default: def, apply: func(string) {
+					if c.First == f && c.Last == l {
+						c.First, c.Last = l, f
 					}
 				}})
 		}
@@ -250,13 +291,14 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 			}
 		}
 
-		// links without https://
+		// links: a bare handle under a service label becomes its profile page ("@khalid" under
+		// Telegram → t.me/khalid); a web address gets https://. Repairs "https://@khalid".
 		for _, u := range c.URLs {
-			v := strings.TrimSpace(u.Value)
-			if v != "" && !strings.Contains(v, "://") {
-				old, n := u.Value, "https://"+v
+			old := u.Value
+			n, why := fixLink(u.Label, u.Value)
+			if n != "" && n != old {
 				out = append(out, CleanupChange{Contact: c, Kind: ckFix, Field: "link", Old: old, New: n,
-					Reason: "https:// added", Default: true, apply: func(string) { setField(c.URLs, old, n) }})
+					Reason: why, Default: true, apply: func(string) { setField(c.URLs, old, n) }})
 			}
 		}
 	}
@@ -381,4 +423,47 @@ func plural(n int, word string) string {
 		return "1 " + word
 	}
 	return fmt.Sprintf("%d %ss", n, word)
+}
+
+// fixLink returns the tidy form of a link and why it changed ("" if it can't be improved).
+func fixLink(label, value string) (string, string) {
+	v := strings.TrimSpace(value)
+	if v == "" {
+		return "", ""
+	}
+	bare, broken := v, false
+	for _, p := range []string{"https://", "http://"} {
+		if rest := strings.TrimPrefix(v, p); rest != v && (strings.HasPrefix(rest, "@") || !strings.ContainsAny(rest, "./")) {
+			bare, broken = rest, true // "https://@khalid" — a handle that had https:// put in front
+		}
+	}
+	if p, ok := parseProfile(label, bare); ok && p.Handle != "" && p.URL != "" && (broken || !strings.Contains(bare, "://")) {
+		return p.URL, "made a " + p.Service + " profile link"
+	}
+	if broken || strings.Contains(v, "://") || !strings.Contains(v, ".") {
+		return "", "" // a handle with no known page: leave it as typed
+	}
+	return "https://" + v, "https:// added"
+}
+
+// looksFamily: a family name by its form — Al-Kandari, Al Sabah, El-Sayed, Bin Salem, العنزي.
+func looksFamily(s string) bool {
+	l := strings.ToLower(strings.TrimSpace(s))
+	for _, p := range []string{"al-", "al ", "el-", "bin ", "bint ", "ال"} {
+		if strings.HasPrefix(l, p) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasTitle: the name starts with a title — Dr., Eng., Mr., Sheikh, د., م.
+func hasTitle(s string) bool {
+	l := strings.ToLower(strings.TrimSpace(s))
+	for _, p := range []string{"dr.", "dr ", "eng.", "eng ", "mr.", "mr ", "mrs.", "ms.", "prof.", "sheikh ", "shaikh ", "د.", "د ", "م.", "الدكتور", "المهندس", "الشيخ"} {
+		if strings.HasPrefix(l, p) {
+			return true
+		}
+	}
+	return false
 }

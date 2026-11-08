@@ -259,6 +259,18 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 		}
 		keep.Sources = append(keep.Sources, o.Sources...)
 		keep.CardImages = append(keep.CardImages, o.CardImages...)
+		keep.SourceIDs = append(keep.SourceIDs, o.SourceIDs...)
+		for _, e := range o.Timeline {
+			keep.AddEvent(e.At, e.Text, e.Source)
+		}
+		for k, v := range o.Origins {
+			if keep.Origins == nil {
+				keep.Origins = map[string]Origin{}
+			}
+			if _, ok := keep.Origins[k]; !ok {
+				keep.Origins[k] = v
+			}
+		}
 		keep.Phones = mergeFields(keep.Phones, o.Phones, func(s string) string { return NormalizePhone(s, defCC) })
 		keep.Emails = mergeFields(keep.Emails, o.Emails, strings.ToLower)
 		keep.URLs = mergeFields(keep.URLs, o.URLs, strings.ToLower)

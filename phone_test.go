@@ -109,7 +109,7 @@ func TestCleanupPlan(t *testing.T) {
 	for _, p := range c.Phones {
 		phones = append(phones, p.Value)
 	}
-	if got := strings.Join(phones, " | "); got != "+965 9999 8888 | +966 501 234 567" {
+	if got := strings.Join(phones, " | "); got != "+965 9999 8888 | +966 50 123 4567" {
 		t.Errorf("phones after clean-up: %s", got)
 	}
 	emails := []string{}
@@ -168,5 +168,61 @@ func TestRepeatedLinksAndAddresses(t *testing.T) {
 	}
 	if n != 4 || len(c.URLs) != 3 || len(c.Addresses) != 1 {
 		t.Errorf("%d repeats; urls %+v; addresses %+v", n, c.URLs, c.Addresses)
+	}
+}
+
+func TestPhoneTypes(t *testing.T) {
+	for n, want := range map[string]string{"+96599998888": "mobile", "+96522223333": "landline", "+447911123456": "mobile", "+442079460958": "landline", "171": ""} {
+		if got := PhoneType(n); got != want {
+			t.Errorf("PhoneType(%s) = %q, want %q", n, got, want)
+		}
+	}
+	if CanWhatsApp("22223333", "965") || !CanWhatsApp("99998888", "965") {
+		t.Error("WhatsApp only for mobiles")
+	}
+	// numbers from countries outside the built-in table are now validated too
+	if r := analyzePhone("+351 912 345 678", "965", nil); r.Status != phOK || r.Norm != "+351912345678" {
+		t.Errorf("Portugal: %+v", r)
+	}
+	if r := analyzePhone("+351 912", "965", nil); r.Status != phSuspicious {
+		t.Errorf("short foreign number should be flagged: %+v", r)
+	}
+}
+
+func TestFixLink(t *testing.T) {
+	for _, tc := range []struct{ label, in, want string }{
+		{"Telegram", "@khalid_kw", "https://t.me/khalid_kw"},
+		{"Telegram", "https://@khalid_kw", "https://t.me/khalid_kw"},
+		{"X", "https://@khalidkw", "https://x.com/khalidkw"},
+		{"Homepage", "example.com", "https://example.com"},
+		{"LinkedIn", "https://www.linkedin.com/in/khalidm", ""},
+		{"Other", "somehandle", ""},
+	} {
+		got, _ := fixLink(tc.label, tc.in)
+		if got != tc.want {
+			t.Errorf("fixLink(%q, %q) = %q, want %q", tc.label, tc.in, got, tc.want)
+		}
+	}
+}
+
+func TestSwappedNames(t *testing.T) {
+	c := NewContact()
+	c.First, c.Last = "Al-Kandari", "Dr. Yousef"
+	found := false
+	for _, ch := range PlanCleanup([]*Contact{c}, "965") {
+		if ch.Reason == "first and last name look swapped" {
+			found = ch.Default
+			ch.apply("")
+		}
+	}
+	if !found || c.First != "Dr. Yousef" || c.Last != "Al-Kandari" {
+		t.Errorf("got %q %q", c.First, c.Last)
+	}
+	d := NewContact()
+	d.First, d.Last = "Fatima", "Al-Sabah"
+	for _, ch := range PlanCleanup([]*Contact{d}, "965") {
+		if ch.Reason == "first and last name look swapped" {
+			t.Error("a normal name must not be swapped")
+		}
 	}
 }

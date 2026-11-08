@@ -28,7 +28,9 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 
 ## What it does
 
-**Bring everything in (⌘I).** File → Import Contacts takes contacts from:
+**Bring Everything In (File menu, and the first screen).** A checklist walks through every source
+below, then Clean Up and Deduplicate, ticking off each one as it's done. File → Import Contacts (⌘I)
+takes contacts from:
 
 | Source | What to export |
 |---|---|
@@ -51,12 +53,16 @@ Or drag files onto the window. Every import shows a preview first:
   (across Arabic and English, and across spellings like Mohammed / Muhammad / محمد).
 - **Enriching:** a matched card gets what's new (numbers, emails, job title, company, LinkedIn
   link, the name in the other language) instead of a duplicate being created.
-- **You decide on doubtful matches:** two people with the same name are never merged by name
-  alone without you.
-- **Sources:** each card shows where its details came from, and the sidebar lists your sources.
-- **Notes from each source:** "LinkedIn connection since…", "Facebook friend since…", "Telegram
-  contact". When a source disagrees (another company or birthday), the card keeps its value and
-  the other is noted; LinkedIn's job is taken as current and the old one noted as "Previously".
+- **You decide on name-only matches:** a card matched only by name is listed separately with the
+  likely answer pre-selected ("very likely", "likely" or "unsure") — check and change any of them.
+- **Re-importing is exact:** a card from Mac Contacts or Telegram is recognised by its own ID next
+  time, so refreshing never creates doubles.
+- **Where each detail came from:** every phone, email, link and address shows its source and date
+  ("LinkedIn · Mar 2026"); the sidebar lists your sources.
+- **Timeline, kept apart from your notes:** "Connected on LinkedIn", "Became Facebook friends",
+  "Added from Google", "Job changed: was … now …", meetings from business cards. When a source
+  disagrees (another company or birthday) the card keeps its value and the timeline records the
+  other. Your own notes stay yours.
 - **Names-only lists** (Facebook, Snapchat) only enrich people you have; unmatched names are added
   only if you tick them.
 - **Clean up automatically** applies the safe fixes during import and shows you only doubtful ones;
@@ -72,6 +78,8 @@ Or drag files onto the window. Every import shows a preview first:
 - **Emails:** typos fixed (gmial.com, .con), mailto: and stray spaces removed, and values in the
   wrong field moved (an email typed as a phone, or the other way round).
 - **Duplicates:** the same number or email twice on one card is removed.
+- **Links and names:** "@khalid" under Telegram becomes its profile link; a first and last name
+  entered the wrong way round ("Al-Kandari" / "Dr. Yousef") are swapped back.
 - **Wrong numbers:** 00000000, 12345678, too short or too long, or impossible Kuwaiti prefixes are
   flagged for removal. Clear junk is pre-ticked; numbers that might be real are not.
 - **Safety:** 171, 112 and 7-digit 180… service lines are left alone, and a backup is saved
@@ -102,6 +110,17 @@ one — and the image is kept on the card under *Business Cards*.
 (محمد المطيري / Mohammed Al-Mutairi); *Suggest* fills the other spelling for common names. Search
 finds people in either language.
 
+**Undo everything (⌘Z / ⌘⇧Z).** Every change — an edit, an import, a clean-up, a merge, a
+delete — can be undone and redone. Contact → History lists this session's changes ("Undo back to
+here") and the saved restore points (before each import, clean-up and de-duplication, and daily).
+
+**Many at once.** The tick button above the list turns on Select mode: tick people, then add or
+remove a group, favourite, merge, export or delete them together.
+
+**Backups you control.** Tools → Back Up To… writes one .zip of everything (contacts, photos,
+business cards, calendar log) to a drive or folder you pick. The OpenRouter key is left out, and
+it warns you if the folder syncs to the cloud.
+
 **Everything else**
 
 - **Three panes** — groups and sources on the left, a searchable list, the contact card on the right.
@@ -114,7 +133,6 @@ finds people in either language.
 - **Groups** — tick on the Edit page; renaming or deleting a group never deletes people.
 - **Connections (six degrees)** — link people (⌘K); *How Are They Connected?* (⌘⇧K) finds the
   shortest chain between two people, up to six steps; colleagues at one company are linked.
-- **Find Duplicates** — merges cards that are the same person (names must fit, in any language).
 - **Export** — vCard or CSV (both names and sources included), or copy to Apple Contacts.
 - **Safe by default** — atomic saves, daily backups, backups before imports and clean-ups, Trash.
 
@@ -160,6 +178,8 @@ finds people in either language.
 | ⌘E / Return | edit |
 | ⌘S | save |
 | ⌘⌫ | delete (to Trash) |
+| ⌘Z / ⌘⇧Z | undo / redo |
+| ⌘⇧R | refresh from Mac Contacts |
 | ⌘⇧F | favourite |
 | ⌘K | connect to someone |
 | ⌘⇧K | how are they connected? |
@@ -172,14 +192,13 @@ finds people in either language.
 ## Roadmap
 
 Planned: organisation / "how I know them" / "met at" fields linked into connections, a menu-bar
-quick search, birthday notifications, editing several contacts at once, and an encrypted private
-backup.
+quick search, birthday notifications, and encrypted backups.
 
 Not planned, by design: online lookup or enrichment of contacts (searching Google, X or LinkedIn
 for people, reverse lookup by phone or email), cloud sync, or accounts.
 
 Known limits: the app is ad-hoc signed, so install it with the curl line (a browser-downloaded
-zip is held by macOS); iPhone HEIC photos need exporting as JPEG first.
+zip is held by macOS).
 
 ## Building it yourself
 
