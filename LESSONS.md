@@ -401,6 +401,10 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - A step that says "press X" must have X in sight. Guide buttons are pinned under the steps, outside the scroll, and steps say "at the bottom of this window" — never "below".
 - Check every menu path against the vendor's current help page; they move (Google now: ⋮ More actions → Export; iCloud: Select → Select All Contacts, then Actions → Export vCard).
 
+- Never refresh a whole window to animate it — move the sheet. A container Refresh re-draws every label and picture inside, every frame.
+- Big windows that open often (Import) are built once, while idle, and reused.
+- LinkedIn moved Connections out of "Want something in particular?" — it is only in the larger archive now (up to 24 hours).
+
 ## 31. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.

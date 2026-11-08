@@ -236,16 +236,16 @@ func (u *ui) importQuestions() *wizQuestion {
 			}},
 			{label: "LinkedIn", icon: iconLink, guide: &wizGuide{
 				title: "Download your LinkedIn connections",
-				intro: "LinkedIn emails you a file of your connections. It takes a little while to arrive, so this is two sittings: ask now, import when the email comes.",
+				intro: "LinkedIn emails you an archive of your data with your connections inside. It can take up to a day to arrive, so this is two sittings: ask now, import when the email comes.",
 				steps: []wizStep{
 					{"Press Open LinkedIn at the bottom of this window and sign in. (On LinkedIn it's Me → Settings & Privacy → Data privacy → Get a copy of your data.)", "A page asking which data you want."},
-					{"Choose \"Want something in particular?\", tick only Connections, then Request archive (it may ask for your password).", "\"Your download is being prepared\"."},
-					{"Wait for LinkedIn's email — usually about ten minutes, sometimes up to a day.", "An email \"Your LinkedIn data archive is ready\"."},
-					{"Open the link in the email, press Download archive, then double-click the downloaded .zip in Downloads.", "A folder with Connections.csv inside."},
+					{"Choose the first option, \"Download larger data archive, including connections…\" (the \"Want something in particular?\" list no longer has Connections). Press Request archive and enter your LinkedIn password if asked.", "A note that your archive is being prepared and you'll get an email."},
+					{"Wait for LinkedIn's email to the address on your LinkedIn account — it can take up to 24 hours. You can close Smart Contacts meanwhile; come back to File → Import… → LinkedIn later.", "An email saying your LinkedIn data archive is ready."},
+					{"Open the link in the email (it takes you back to the same LinkedIn page), press Download archive, then double-click the downloaded .zip in Downloads.", "A folder with many .csv files — one is Connections.csv."},
 					{"Come back to Smart Contacts, press Choose File… at the bottom of this window and pick Connections.csv.", "A window listing the people found — nothing is added until you press Import there."},
 				},
 				check:   []string{"You picked Connections.csv (not Messages or Profile).", "Many connections hide their email — that's LinkedIn, not a fault."},
-				trouble: []string{"No email after a day? Check Spam, or request the archive again."},
+				trouble: []string{"No email after a day? Check Spam, then open the LinkedIn page again — the Download archive button appears there once it's ready."},
 				expect:  "Names, companies, job titles and emails where people share them.",
 				link:    "https://www.linkedin.com/mypreferences/d/download-my-data", linkTo: "Open LinkedIn",
 				finish: finishFile,
@@ -338,6 +338,33 @@ func (u *ui) importQuestions() *wizQuestion {
 
 // importHub opens the import wizard (File → Import…, and the funnel in the organiser).
 func (u *ui) importHub() {
+	if u.importWiz == nil {
+		u.importWiz = u.newImportWizard()
+	}
+	u.importWiz.start()
+	u.importWiz.d.Show()
+}
+
+// importWizard is built once and kept, so opening Import again is instant.
+type importWizard struct {
+	d     *paperDialog
+	start func() // back to the first question
+}
+
+// prewarmImport builds the wizard and lays it out while the app is idle, so the first press of
+// Import Contacts doesn't wait for it.
+func (u *ui) prewarmImport() {
+	if u.importWiz != nil {
+		return
+	}
+	u.importWiz = u.newImportWizard()
+	u.importWiz.start()
+	c := u.importWiz.d.content
+	c.Resize(fyne.NewSize(600, 420))
+	c.MinSize()
+}
+
+func (u *ui) newImportWizard() *importWizard {
 	var d *paperDialog
 	page := container.NewStack()
 	var history []func()
@@ -475,7 +502,11 @@ func (u *ui) importHub() {
 		bar := container.NewVBox(rule, container.NewHBox(append([]fyne.CanvasObject{caption("The steps' buttons:"), layout.NewSpacer()}, acts...)...))
 		set(container.NewBorder(nil, bar, nil, nil, container.NewVScroll(box)))
 	}
-	go1(func() { showQ(u.importQuestions()) })
+	first := u.importQuestions()
+	start := func() {
+		history = nil
+		go1(func() { showQ(first) })
+	}
 
 	funnel := canvas.NewImageFromResource(resImportFunnel)
 	funnel.FillMode = canvas.ImageFillContain
@@ -485,7 +516,7 @@ func (u *ui) importHub() {
 	d.clipboard = true // you're answering questions
 	d.SetButtons([]fyne.CanvasObject{backBtn, closeBtn})
 	d.Resize(fyne.NewSize(700, 560))
-	d.Show()
+	return &importWizard{d: d, start: start}
 }
 
 func downloadsDir() string {

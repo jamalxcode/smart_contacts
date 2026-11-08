@@ -257,9 +257,14 @@ func (d *paperDialog) Show() {
 	}
 	// it slides onto the desk
 	d.sheet.drop = -26
+	// Only the sheet moves: refreshing the whole overlay every frame redrew every label and
+	// picture on it, which made big windows (Import) slow to appear.
+	place := &sheetPlacer{d: d}
 	a := fyne.NewAnimation(170*time.Millisecond, func(t float32) {
 		d.sheet.drop = -26 * (1 - t) * (1 - t)
-		d.overlay.Refresh()
+		if d.overlay != nil {
+			place.Layout(d.overlay.Objects, d.overlay.Size())
+		}
 	})
 	a.Start()
 	if kind == kindClipboard {

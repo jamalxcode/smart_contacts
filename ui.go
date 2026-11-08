@@ -75,7 +75,8 @@ type ui struct {
 	askHint       *widget.Label // what a question in the search field was understood as
 	askFor        string        // the question the AI turned into…
 	askQuery      string        // …this search
-	todayMemo     *todayData    // today's page, worked out once until the data changes
+	importWiz     *importWizard
+	todayMemo     *todayData // today's page, worked out once until the data changes
 	todayDay      string
 	todayAt       time.Time
 	tidySkipped   map[string]bool // cards skipped in this session's tidy-one-by-one
@@ -166,6 +167,10 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	}
 	u.remindLoop()
 	u.checkAttention()
+	go func() { // build the Import window while idle, so it opens at once
+		time.Sleep(2 * time.Second)
+		fyne.Do(u.prewarmImport)
+	}()
 	u.setupMenuBar()
 	w, h := cfg.WindowW, cfg.WindowH
 	if w < 700 || h < 450 {
