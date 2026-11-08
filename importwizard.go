@@ -8,6 +8,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -409,6 +410,22 @@ func (u *ui) importHub() {
 		}
 		for i, st := range g.steps {
 			box.Add(newNumberedStep(i+1, st.do, st.see))
+			// The step that opens a page also carries the link itself, right there.
+			if g.link != "" && g.linkTo != "" && strings.Contains(st.do, g.linkTo) {
+				if p, err := url.Parse(g.link); err == nil {
+					text := g.link
+					if p.Scheme == "http" || p.Scheme == "https" {
+						text = p.Host + strings.TrimSuffix(p.Path, "/")
+					} else {
+						text = g.linkTo
+					}
+					h := widget.NewHyperlink("→ "+text, p)
+					h.Wrapping = fyne.TextWrapBreak
+					pad := canvas.NewRectangle(color.Transparent)
+					pad.SetMinSize(fyne.NewSize(38, 1))
+					box.Add(container.NewBorder(nil, nil, pad, nil, h))
+				}
+			}
 		}
 		if len(g.check) > 0 {
 			head("Check before you continue")
