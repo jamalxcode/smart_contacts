@@ -136,3 +136,37 @@ func TestCleanupUnsureNeedsChoice(t *testing.T) {
 		t.Errorf("chosen: %s", c.Phones[0].Value)
 	}
 }
+
+func TestTidyNotes(t *testing.T) {
+	c := &Contact{Phones: []Field{{"Mobile", "+965 6000 1234"}}, Emails: []Field{{"Work", "k@x.com"}},
+		Notes: "Met at GITEX 2025.  \n\nMet at GITEX 2025.\nLinkedIn connection since 12 Mar 2021\nLinkedIn connection since 12 Mar 2021\n\n\n\nMobile: +965 6000 1234\nk@x.com\nPrefers Telegram &amp; WhatsApp<br>Coffee at 4pm\\nCall after 5"}
+	got, why, only := TidyNotes(c)
+	want := "Met at GITEX 2025.\n\nLinkedIn connection since 12 Mar 2021\n\nPrefers Telegram & WhatsApp\nCoffee at 4pm\nCall after 5"
+	if got != want || only {
+		t.Errorf("got %q (%s, only=%v)\nwant %q", got, why, only, want)
+	}
+	d := &Contact{Notes: "Same line\nsame line\nOther"}
+	if got, _, only := TidyNotes(d); got != "Same line\nOther" || !only {
+		t.Errorf("repeat-only: %q %v", got, only)
+	}
+	clean := &Contact{Notes: "All fine\n\nSecond paragraph"}
+	if got, _, _ := TidyNotes(clean); got != clean.Notes {
+		t.Errorf("clean notes changed: %q", got)
+	}
+}
+
+func TestRepeatedLinksAndAddresses(t *testing.T) {
+	c := &Contact{First: "K", URLs: []Field{{"LinkedIn", "https://www.linkedin.com/in/khalidm/"}, {"Website", "linkedin.com/in/khalidm"},
+		{"Telegram", "@khalid_kw"}, {"Other", "https://t.me/khalid_kw"}, {"Website", "https://sala.company"}, {"Website", "sala.company/"}},
+		Addresses: []Address{{Label: "Home", City: "Salmiya"}, {Label: "Work", City: "salmiya"}}}
+	n := 0
+	for _, ch := range PlanCleanup([]*Contact{c}, "965") {
+		if ch.Kind == ckDuplicate {
+			ch.Apply("")
+			n++
+		}
+	}
+	if n != 4 || len(c.URLs) != 3 || len(c.Addresses) != 1 {
+		t.Errorf("%d repeats; urls %+v; addresses %+v", n, c.URLs, c.Addresses)
+	}
+}

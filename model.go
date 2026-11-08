@@ -45,26 +45,27 @@ func (a Address) IsEmpty() bool { return a.OneLine() == "" }
 
 // Contact is one person or organisation.
 type Contact struct {
-	ID            string    `json:"id"`
-	First         string    `json:"first,omitempty"`
-	Last          string    `json:"last,omitempty"`
-	Nickname      string    `json:"nickname,omitempty"`
-	Company       string    `json:"company,omitempty"`
-	Title         string    `json:"title,omitempty"`
-	Phones        []Field   `json:"phones,omitempty"`
-	Emails        []Field   `json:"emails,omitempty"`
-	URLs          []Field   `json:"urls,omitempty"`
-	Addresses     []Address `json:"addresses,omitempty"`
-	Birthday      string    `json:"birthday,omitempty"` // YYYY-MM-DD, or --MM-DD when the year is unknown
-	Notes         string    `json:"notes,omitempty"`
-	Groups        []string  `json:"groups,omitempty"`
-	AltName       string    `json:"altName,omitempty"` // the name in the other language (Arabic ↔ English)
-	Sources       []string  `json:"sources,omitempty"` // where the details came from: "Mac Contacts", "LinkedIn"…
-	Favorite      bool      `json:"favorite,omitempty"`
-	HasPhoto      bool      `json:"hasPhoto,omitempty"`
-	Created       time.Time `json:"created"`
-	Updated       time.Time `json:"updated"`
-	LastContacted time.Time `json:"lastContacted,omitempty"`
+	ID            string      `json:"id"`
+	First         string      `json:"first,omitempty"`
+	Last          string      `json:"last,omitempty"`
+	Nickname      string      `json:"nickname,omitempty"`
+	Company       string      `json:"company,omitempty"`
+	Title         string      `json:"title,omitempty"`
+	Phones        []Field     `json:"phones,omitempty"`
+	Emails        []Field     `json:"emails,omitempty"`
+	URLs          []Field     `json:"urls,omitempty"`
+	Addresses     []Address   `json:"addresses,omitempty"`
+	Birthday      string      `json:"birthday,omitempty"` // YYYY-MM-DD, or --MM-DD when the year is unknown
+	Notes         string      `json:"notes,omitempty"`
+	Groups        []string    `json:"groups,omitempty"`
+	AltName       string      `json:"altName,omitempty"`    // the name in the other language (Arabic ↔ English)
+	Sources       []string    `json:"sources,omitempty"`    // where the details came from: "Mac Contacts", "LinkedIn"…
+	CardImages    []CardImage `json:"cardImages,omitempty"` // business cards used to add or update the contact
+	Favorite      bool        `json:"favorite,omitempty"`
+	HasPhoto      bool        `json:"hasPhoto,omitempty"`
+	Created       time.Time   `json:"created"`
+	Updated       time.Time   `json:"updated"`
+	LastContacted time.Time   `json:"lastContacted,omitempty"`
 
 	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
 	// edits a contact goes through Store.Put or sets Updated, which invalidates these.
@@ -76,7 +77,7 @@ type Contact struct {
 var (
 	PhoneLabels   = []string{"Mobile", "Home", "Work", "Main", "WhatsApp", "Fax", "Other"}
 	EmailLabels   = []string{"Home", "Work", "Other"}
-	URLLabels     = []string{"Website", "LinkedIn", "Instagram", "X", "Other"}
+	URLLabels     = []string{"Website", "LinkedIn", "Telegram", "Instagram", "X", "Facebook", "Snapchat", "TikTok", "Signal", "GitHub", "Skype", "Other"}
 	AddressLabels = []string{"Home", "Work", "Other"}
 )
 
@@ -101,6 +102,7 @@ func (c *Contact) Clone() *Contact {
 	n.Addresses = append([]Address(nil), c.Addresses...)
 	n.Groups = append([]string(nil), c.Groups...)
 	n.Sources = append([]string(nil), c.Sources...)
+	n.CardImages = append([]CardImage(nil), c.CardImages...)
 	return &n
 }
 

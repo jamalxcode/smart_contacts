@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"path/filepath"
 	"strings"
 	"time"
@@ -93,8 +94,9 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		}),
 	)
 	tools := fyne.NewMenu("Tools",
-		fyne.NewMenuItem("Find Duplicates…", u.duplicates),
+		item("Deduplicate…", cmdShift(fyne.KeyD), u.duplicates),
 		fyne.NewMenuItem("Clean Up Numbers and Names…", u.cleanup),
+		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
 		fyne.NewMenuItem("Trash…", u.trash),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Show Data Folder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
@@ -122,8 +124,14 @@ func (u *ui) smartAdd() {
 	note.Wrapping = fyne.TextWrapWord
 	progress := widget.NewProgressBarInfinite()
 	progress.Hide()
-	content := container.NewBorder(nil, container.NewVBox(note, progress), nil, nil, in)
 	var d *dialog.ConfirmDialog
+	cardBtn := widget.NewButtonWithIcon("Business Card Image…", theme.FileImageIcon(), func() {
+		d.Hide()
+		u.chooseCardImage()
+	})
+	cardNote := caption("…or read a photo or screenshot of a business card (the text is read on this Mac; the image is kept with the contact). You can also drag a card image onto the window.")
+	cardNote.Wrapping = fyne.TextWrapWord
+	content := container.NewBorder(nil, container.NewVBox(note, progress, widget.NewSeparator(), container.NewBorder(nil, nil, nil, cardBtn, cardNote)), nil, nil, in)
 	d = dialog.NewCustomConfirm("Smart Add", "Read It", "Cancel", content, func(ok bool) {
 		text := strings.TrimSpace(in.Text)
 		if !ok || text == "" {
@@ -136,10 +144,14 @@ func (u *ui) smartAdd() {
 	u.win.Canvas().Focus(in)
 }
 
-func (u *ui) runSmartAdd(text string) {
+func (u *ui) runSmartAdd(text string) { u.runSmartAddCard(text, nil) }
+
+// runSmartAddCard reads text (typed, pasted or recognised from a card image) into a contact.
+// card is the business card image, kept with whichever contact is saved.
+func (u *ui) runSmartAddCard(text string, card []byte) {
 	cc := u.cfg.CountryCode
 	if !u.cloudAI() {
-		u.finishSmartAdd(ParseLocal(text, cc), true, "Read privately on this Mac — check the details, then Save.")
+		u.finishSmartAddCard(ParseLocal(text, cc), "Read privately on this Mac — check the details, then Save.", card)
 		return
 	}
 	prog := dialog.NewCustomWithoutButtons("Reading…", container.NewVBox(widget.NewLabel("Asking "+u.cfg.AIModel+"…"), widget.NewProgressBarInfinite()), u.win)
@@ -149,14 +161,14 @@ func (u *ui) runSmartAdd(text string) {
 		fyne.Do(func() {
 			prog.Hide()
 			if err != nil {
-				u.finishSmartAdd(ParseLocal(text, cc), true, "The AI didn't answer ("+err.Error()+"), so this was read on this Mac — check it, then Save.")
+				u.finishSmartAddCard(ParseLocal(text, cc), "The AI didn't answer ("+err.Error()+"), so this was read on this Mac — check it, then Save.", card)
 				return
 			}
 			msg := "Filled in by AI — check the details, then Save."
 			if !confident {
 				msg = "The text may describe more than one person; this is the AI's best single contact. Check it, then Save."
 			}
-			u.finishSmartAdd(c, confident, msg)
+			u.finishSmartAddCard(c, msg, card)
 		})
 	}()
 }
@@ -166,12 +178,87 @@ func (u *ui) cloudAI() bool {
 	return u.cfg.AllowCloudAI && strings.TrimSpace(u.cfg.OpenRouterKey) != ""
 }
 
-func (u *ui) finishSmartAdd(c *Contact, _ bool, banner string) {
+// finishSmartAddCard opens the editor with what was read. If the person is already in the book,
+// it asks whether to update that card (adding what's new) or add a new person.
+func (u *ui) finishSmartAddCard(c *Contact, banner string, card []byte) {
 	c.Tidy()
-	if x := NewDupIndex(u.store.Contacts, u.cfg.CountryCode).Find(c); x != nil {
-		banner += "\nHeads-up: this looks like " + x.DisplayName() + ", who is already in your contacts."
+	if card != nil {
+		banner += "\nThe business card image will be kept with this contact."
 	}
-	u.leaveEditor(func() { u.openEditor(nil, c, banner) }, nil)
+	x := NewDupIndex(u.store.Contacts, u.cfg.CountryCode).Find(c)
+	if x == nil {
+		u.leaveEditor(func() { u.openEditorCard(nil, c, banner, card, "added this contact") }, nil)
+		return
+	}
+	merged := x.Clone()
+	Merge(merged, []*Contact{c}, u.cfg.CountryCode)
+	adds := mergeAdds(x, c, u.cfg.CountryCode)
+	what := "nothing new"
+	if len(adds) > 0 {
+		what = strings.Join(adds, ", ")
+	}
+	msg := widget.NewLabel(fmt.Sprintf("This looks like %s, who is already in your contacts.\n\nUpdating adds: %s.", x.DisplayName(), what))
+	msg.Wrapping = fyne.TextWrapWord
+	var d *dialog.CustomDialog
+	update := widget.NewButton("Update "+x.DisplayName(), func() {
+		d.Hide()
+		u.leaveEditor(func() {
+			u.selectedID = x.ID
+			u.reselect()
+			u.openEditorCard(x, merged, banner+"\nUpdated from the new details — check, then Save.", card, "updated this contact")
+		}, nil)
+	})
+	update.Importance = widget.HighImportance
+	add := widget.NewButton("Add as a new person", func() {
+		d.Hide()
+		u.leaveEditor(func() { u.openEditorCard(nil, c, banner, card, "added this contact") }, nil)
+	})
+	cancel := widget.NewButton("Cancel", func() { d.Hide() })
+	d = dialog.NewCustomWithoutButtons("Already in your contacts?", container.NewVBox(msg, update, add, cancel), u.win)
+	d.Resize(fyne.NewSize(520, 300))
+	d.Show()
+}
+
+// chooseCardImage picks a business card photo or screenshot and reads it.
+func (u *ui) chooseCardImage() {
+	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+		if err != nil || r == nil {
+			return
+		}
+		defer r.Close()
+		b, err := io.ReadAll(io.LimitReader(r, 60<<20))
+		if err != nil {
+			dialog.ShowError(err, u.win)
+			return
+		}
+		u.readCardImage(r.URI().Name(), b)
+	}, u.win)
+	d.SetFilter(storage.NewExtensionFileFilter([]string{".jpg", ".jpeg", ".png", ".heic", ".heif", ".tiff", ".JPG", ".JPEG", ".PNG", ".HEIC"}))
+	d.Resize(fyne.NewSize(760, 520))
+	d.Show()
+}
+
+// readCardImage recognises the text on a card image (on this Mac) and continues as Smart Add.
+func (u *ui) readCardImage(name string, data []byte) {
+	img, err := ToJPEG(data, name)
+	if err != nil {
+		dialog.ShowError(err, u.win)
+		return
+	}
+	prog := dialog.NewCustomWithoutButtons("Reading the business card…", container.NewVBox(
+		widget.NewLabel("Recognising the text on this Mac."), widget.NewProgressBarInfinite()), u.win)
+	prog.Show()
+	go func() {
+		text, err := ReadCardText(img)
+		fyne.Do(func() {
+			prog.Hide()
+			if err != nil {
+				dialog.ShowError(err, u.win)
+				return
+			}
+			u.runSmartAddCard(text, img)
+		})
+	}()
 }
 
 // ---------- import ----------
@@ -313,13 +400,63 @@ func richness(c *Contact) int {
 	return n
 }
 
+// duplicates is Deduplicate: the same person on several cards (merge), and the same number, email,
+// link, address or note line repeated inside one card (remove).
 func (u *ui) duplicates() {
 	groups := FindDuplicates(u.store.Contacts, u.cfg.CountryCode)
-	if len(groups) == 0 {
-		dialog.ShowInformation("No duplicates", "Every contact looks unique — no shared phones, emails or names.", u.win)
+	var inside []CleanupChange
+	for _, ch := range PlanCleanup(u.store.Contacts, u.cfg.CountryCode) {
+		if ch.Kind == ckDuplicate {
+			inside = append(inside, ch)
+		}
+	}
+	if len(groups) == 0 && len(inside) == 0 {
+		dialog.ShowInformation("No duplicates", "Every contact is on one card, and no card repeats a number, email, link, address or note line.", u.win)
 		return
 	}
 	box := container.NewVBox()
+	if len(inside) > 0 {
+		cards := map[*Contact]bool{}
+		var lines []string
+		for _, ch := range inside {
+			cards[ch.Contact] = true
+			if len(lines) < 8 {
+				what := ch.Old
+				if ch.Field == "notes" {
+					what = "note lines (" + ch.Reason + ")"
+				}
+				lines = append(lines, ch.Contact.DisplayName()+": "+what)
+			}
+		}
+		if len(inside) > 8 {
+			lines = append(lines, fmt.Sprintf("…and %d more", len(inside)-8))
+		}
+		head := widget.NewLabelWithStyle(fmt.Sprintf("Repeats inside cards (%d on %d cards)", len(inside), len(cards)), fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		list := caption(strings.Join(lines, "\n"))
+		var rm *widget.Button
+		rm = widget.NewButtonWithIcon("Remove Repeats", theme.DeleteIcon(), func() {
+			if _, err := u.store.SnapshotBackup("before-dedupe"); err != nil {
+				dialog.ShowError(err, u.win)
+				return
+			}
+			touched := map[*Contact]bool{}
+			for _, ch := range inside {
+				ch.Apply("")
+				touched[ch.Contact] = true
+			}
+			for c := range touched {
+				u.store.Put(c)
+			}
+			u.save()
+			rm.SetText("Removed")
+			rm.Disable()
+		})
+		box.Add(container.NewBorder(nil, nil, nil, container.NewVBox(rm), container.NewVBox(head, list)))
+		box.Add(widget.NewSeparator())
+	}
+	if len(groups) > 0 {
+		box.Add(widget.NewLabelWithStyle(fmt.Sprintf("Same person on several cards (%d)", len(groups)), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}))
+	}
 	var d *dialog.CustomDialog
 	merge := func(g DupeGroup) bool {
 		var cs []*Contact // only cards still in the address book (not merged away already)
@@ -412,11 +549,11 @@ func (u *ui) duplicates() {
 	}
 	note := caption("Merging keeps the card with the most details and copies in the rest. The extra cards go to the Trash.")
 	note.Wrapping = fyne.TextWrapWord
-	content := container.NewBorder(note, container.NewHBox(layout.NewSpacer(), mergeAll), nil, nil, container.NewVScroll(box))
-	title := fmt.Sprintf("%d sets of possible duplicates", len(groups))
-	if len(groups) == 1 {
-		title = "1 possible duplicate"
+	if len(groups) == 0 {
+		mergeAll.Hide()
 	}
+	content := container.NewBorder(note, container.NewHBox(layout.NewSpacer(), mergeAll), nil, nil, container.NewVScroll(box))
+	title := "Deduplicate"
 	d = dialog.NewCustom(title, "Close", content, u.win)
 	d.Resize(fyne.NewSize(640, 520))
 	d.Show()
@@ -751,6 +888,14 @@ func (u *ui) help() {
 **Birthdays.** Type a birthday as 1990-03-14, 14/03/1990, or 14/03 when you don't know the year. The Birthdays list shows the next 30 days and the age they turn.
 
 **Bringing contacts in (⌘I).** Smart Contacts is meant to be the one place all your contacts come together. File → Import Contacts brings them in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf), Gmail, Outlook, Yahoo or iCloud (vCard or CSV), LinkedIn (Connections.csv), any spreadsheet (.csv or .xlsx — columns are matched automatically, in English or Arabic) and notes or pasted text with several people in it. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name — in Arabic or English — and their cards are updated instead of duplicated; you decide on anyone uncertain. Each card shows where its details came from, and the sidebar lists your sources.
+
+**Reaching people.** A card's buttons follow what it holds: Call, Message, WhatsApp, Email, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle (Edit → Web & Social). More has number-based options.
+
+**Calendar log (⌘⇧L).** Reads the Mac Calendar app or an .ics file; each card lists the meetings the person was in or mentioned in, and "last met".
+
+**Photos and business cards.** Click the round picture to set the person's photo. Smart Add → Business Card Image (or drag a card photo onto the window) reads the card on this Mac and keeps the image on the contact.
+
+**Deduplicate (⌘⇧D).** Merges the same person on several cards and removes repeats inside cards. Clean Up also tidies notes.
 
 **Names in two languages.** Each contact can hold a second name in the other language (محمد المطيري / Mohammed Al-Mutairi). Edit → "Name in other language" has a Suggest button for common names. Search finds people in either language.
 

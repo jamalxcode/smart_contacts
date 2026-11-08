@@ -40,6 +40,8 @@ jobs:
           # Explain the Contacts permission prompts (Import from Mac Contacts).
           /usr/libexec/PlistBuddy -c "Add :NSAppleEventsUsageDescription string 'Smart Contacts reads your Mac Contacts when you choose Import from Mac Contacts.'" "$PL" || true
           /usr/libexec/PlistBuddy -c "Add :NSContactsUsageDescription string 'Smart Contacts imports people from your Mac Contacts when you ask it to.'" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Add :NSCalendarsUsageDescription string 'Smart Contacts reads your calendar when you choose Calendar Log, to show the meetings each contact was in. Nothing leaves this Mac.'" "$PL" || true
+          /usr/libexec/PlistBuddy -c "Add :NSDownloadsFolderUsageDescription string 'Smart Contacts watches Downloads for a contacts file sent from your phone when you choose Receive from a Phone.'" "$PL" || true
           /usr/libexec/PlistBuddy -c "Add :LSMinimumSystemVersion string 12.0" "$PL" || true
           codesign --force --deep --sign - "$APP"
           codesign --verify --verbose "$APP"

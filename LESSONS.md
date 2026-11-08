@@ -134,7 +134,29 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Test with the data folder you mean: one screenshot run without `SMART_CONTACTS_DIR` opened an
   empty default folder and looked like data loss. `--preview <file>` opens straight into an import.
 
-## 7. Ideas not done yet
+## 7. Reach, calendar, cards (2026-11-08)
+
+- **Buttons from data, not a fixed set:** `Contact.Actions` builds them from phones, emails and
+  profile links (`parseProfile` reads URLs and bare "@handles" under a service label). Deep links:
+  `tg://resolve?domain=` / `?phone=`, `https://ig.me/m/<user>`, `https://m.me/<user>`,
+  `sgnl://signal.me/#p/+…`, `facetime://`, `msteams:/l/chat/0/0?users=`. Guesses ("by number")
+  go under More.
+- **A horizontal scroll container swallows the mouse wheel** in Fyne: the card stopped scrolling
+  whenever the pointer was over the group chips. Use a wrapping GridWrap instead.
+- **Calendar via AppleScript is fast only in bulk:** fetch `uid/summary/start date… of (a reference
+  to every event whose …)` once per calendar, then loop locally; use ASCII 30/31 as separators
+  (notes contain tabs and newlines). `«class isot»` gives an ISO date.
+- **OCR without cgo:** `osascript -l JavaScript` can drive Vision (`VNRecognizeTextRequest`)
+  synchronously; ask for ["ar-SA","en-US"] and fall back to English. HEIC → JPEG with `sips`.
+- **Facebook exports are mis-encoded** (UTF-8 bytes as Latin-1 characters); re-encode runes ≤ 255 as
+  bytes and keep the result if it is valid UTF-8.
+- **Merging loses disagreements unless you write them down:** `noteDifferences` notes another
+  source's company/birthday; LinkedIn's job is taken as current with "Previously: …". A Google row
+  that only disagreed on company was first classed "up to date" — differences now count as changes.
+- Rebuild before screenshotting: one round of screenshots showed a stale binary without the new
+  sections.
+
+## 8. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

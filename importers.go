@@ -27,6 +27,9 @@ type Batch struct {
 	Table   *Table   // set for spreadsheets, so the user can change the column matching
 	Skipped int      // rows with nothing usable
 	Notes   []string // anything the user should know
+	// MatchOnly: the cards hold names only (Facebook, Snapchat). They enrich people already in
+	// the book; unmatched ones are added only if the user ticks them.
+	MatchOnly bool
 }
 
 // Table is a spreadsheet: a header row, data rows, and what each column means.
@@ -70,8 +73,8 @@ func ReadImport(name string, data []byte, home string) (*Batch, error) {
 		return tableBatch(rows, base, "Excel spreadsheet", home), nil
 	case ext == ".xls" || ext == ".numbers":
 		return nil, errors.New("save the spreadsheet as .xlsx or .csv first (File → Export in Numbers or Excel)")
-	case ext == ".json":
-		return nil, socialJSONError(data)
+	case ext == ".json" || ext == ".js":
+		return readSocialJSON(name, data)
 	case ext == ".csv" || ext == ".tsv" || looksLikeTable(data):
 		rows, err := readDelimited(data)
 		if err != nil {
@@ -108,19 +111,6 @@ func guessSource(base, fallback string) string {
 		return "File: " + base
 	}
 	return fallback
-}
-
-// socialJSONError explains what Facebook/Instagram/X exports contain.
-func socialJSONError(data []byte) error {
-	s := string(data[:min(len(data), 4096)])
-	switch {
-	case strings.Contains(s, "friends") || strings.Contains(s, "relationships_following") || strings.Contains(s, "string_list_data"):
-		return errors.New("this is a Facebook or Instagram export. It lists only names or usernames, with no numbers or emails, " +
-			"so it can't be matched to your contacts reliably. Add profile links to a contact by hand (Edit → Web & Social)")
-	case strings.Contains(s, "accountId") || strings.Contains(s, "window.YTD"):
-		return errors.New("this is an X (Twitter) archive. It lists only account numbers, so it can't be matched to your contacts")
-	}
-	return errors.New("JSON files aren't a contacts format; export your contacts as .vcf or .csv")
 }
 
 func looksLikeTable(data []byte) bool {
@@ -764,8 +754,16 @@ func strongMatch(idx *DupIndex, c *Contact) *Contact {
 // mergeAdds lists what merging in would add to existing, for the preview.
 func mergeAdds(existing, in *Contact, home string) []string {
 	trial := existing.Clone()
-	Merge(trial, []*Contact{in.Clone()}, home)
+	inc := in.Clone()
+	noteDifferences(trial, inc)
+	Merge(trial, []*Contact{inc}, home)
 	var adds []string
+	if existing.Company != "" && trial.Company != existing.Company {
+		adds = append(adds, "company → "+trial.Company)
+	}
+	if existing.Title != "" && trial.Title != existing.Title {
+		adds = append(adds, "job title → "+trial.Title)
+	}
 	if trial.AltName != existing.AltName && trial.AltName != "" {
 		adds = append(adds, "name "+trial.AltName)
 	}
@@ -846,6 +844,7 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 			if !target.HasPhoto && len(it.Card.Photo) > 0 && CanDecodeImage(it.Card.Photo) {
 				_ = s.SetPhoto(target, ShrinkPhoto(it.Card.Photo, 512))
 			}
+			noteDifferences(target, in)
 			Merge(target, []*Contact{in}, home)
 			s.Put(target)
 			newCard[in] = target
@@ -891,3 +890,46 @@ func (s *Store) SourceNames() []string {
 }
 
 var _ = json.Valid
+
+// noteDifferences keeps information that merging would otherwise drop: when a source gives a
+// different company, job title or birthday than the card has, the card keeps its own value and
+// the other one is written in the notes ("LinkedIn: Head of Partnerships at Zain Group").
+// LinkedIn is usually the most current for work, so its job replaces the card's, and the old job
+// goes into the notes instead.
+func noteDifferences(target, in *Contact) {
+	src := "Also listed"
+	if len(in.Sources) > 0 {
+		src = in.Sources[0]
+	}
+	diff := func(a, b string) bool { return a != "" && b != "" && fold(a) != fold(b) }
+	var lines []string
+	jobOf := func(title, company string) string {
+		switch {
+		case title != "" && company != "":
+			return title + " at " + company
+		case title != "":
+			return title
+		}
+		return company
+	}
+	if diff(target.Company, in.Company) || diff(target.Title, in.Title) {
+		if strings.EqualFold(src, "LinkedIn") {
+			old := jobOf(target.Title, target.Company)
+			target.Company, target.Title = in.Company, in.Title
+			if in.Title == "" {
+				target.Title = ""
+			}
+			lines = append(lines, "Previously: "+old)
+		} else {
+			lines = append(lines, src+": "+jobOf(in.Title, in.Company))
+		}
+	}
+	if diff(target.Birthday, in.Birthday) {
+		lines = append(lines, src+" gives the birthday as "+BirthdayText(in.Birthday))
+	}
+	for _, l := range lines {
+		if !strings.Contains(target.Notes, l) {
+			target.Notes = strings.TrimSpace(target.Notes + "\n" + l)
+		}
+	}
+}

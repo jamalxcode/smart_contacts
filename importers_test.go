@@ -119,9 +119,9 @@ just a note without contact details`
 }
 
 func TestSocialJSON(t *testing.T) {
-	_, err := ReadImport("friends.json", []byte(`{"friends_v2":[{"name":"A","timestamp":1}]}`), "965")
-	if err == nil || !strings.Contains(err.Error(), "Facebook") {
-		t.Errorf("%v", err)
+	b, err := ReadImport("friends.json", []byte(`{"friends_v2":[{"name":"A B","timestamp":1}]}`), "965")
+	if err != nil || !b.MatchOnly || b.Source != "Facebook" {
+		t.Errorf("%v %+v", err, b)
 	}
 }
 
@@ -192,4 +192,59 @@ func mustRead(t *testing.T, csv string) *Batch {
 		t.Fatal(err)
 	}
 	return b
+}
+
+func TestSocialExports(t *testing.T) {
+	tg := `{"personal_information":{},"contacts":{"about":"x","list":[{"first_name":"Hamad","last_name":"Al-Ali","phone_number":"+96566112233","date":"2021-03-04T10:00:00"},{"first_name":"","last_name":"","phone_number":""}]}}`
+	b, err := ReadImport("result.json", []byte(tg), "965")
+	if err != nil || b.Source != "Telegram" || len(b.Cards) != 1 || b.Skipped != 1 || b.MatchOnly {
+		t.Fatalf("%v %+v", err, b)
+	}
+	if c := b.Cards[0].Contact; c.Last != "Al-Ali" || len(c.Phones) != 1 || c.Notes != "Telegram contact since 4 Mar 2021" {
+		t.Errorf("%+v", c)
+	}
+	// Facebook writes UTF-8 bytes as Latin-1 characters
+	fb := `{"friends_v2":[{"name":"Khalid Al Mutairi","timestamp":1500000000},{"name":"Ù\u0086Ù\u0088Ø±Ø© Ø§Ù\u0084Ø±Ø´Ù\u008aØ¯","timestamp":1600000000}]}`
+	b, err = ReadImport("your_friends.json", []byte(fb), "965")
+	if err != nil || !b.MatchOnly || len(b.Cards) != 2 {
+		t.Fatalf("%v %+v", err, b)
+	}
+	if n := b.Cards[1].Contact; n.First != "نورة" || n.Last != "الرشيد" {
+		t.Errorf("Facebook Arabic name: %q %q", n.First, n.Last)
+	}
+	sc := `{"Friends":[{"Username":"dana.k","Display Name":"Dana K","Creation Timestamp":"2019-05-01 10:00:00 UTC"}]}`
+	b, _ = ReadImport("friends.json", []byte(sc), "965")
+	if b.Source != "Snapchat" || b.Cards[0].Contact.URLs[0].Label != "Snapchat" {
+		t.Errorf("%+v", b)
+	}
+	for _, bad := range []string{`{"relationships_following":[{"string_list_data":[{"value":"x"}]}]}`, `window.YTD.following.part0 = [{"following":{"accountId":"1"}}]`} {
+		if _, err := ReadImport("following.json", []byte(bad), "965"); err == nil {
+			t.Errorf("should explain why it can't be imported: %s", bad)
+		}
+	}
+}
+
+func TestImportNotesDifferences(t *testing.T) {
+	s, _ := OpenStore(t.TempDir())
+	f := NewContact()
+	f.First, f.Last, f.Company, f.Title = "Fatima", "Al-Sabah", "Gulf Bank", "Branch Manager"
+	f.Phones = []Field{{"Mobile", "99991234"}}
+	s.Put(f)
+	b, _ := ReadImport("Connections.csv", []byte("First Name,Last Name,URL,Email Address,Company,Position,Connected On\nFatima,Al-Sabah,https://www.linkedin.com/in/fatimas,,KIB,Regional Director,03 Feb 2022\n"), "965")
+	items := PlanImport(s, b.Cards, "LinkedIn", "965")
+	ApplyImport(s, items, nil, "965")
+	if f.Company != "KIB" || f.Title != "Regional Director" || !strings.Contains(f.Notes, "Previously: Branch Manager at Gulf Bank") ||
+		!strings.Contains(f.Notes, "LinkedIn connection since 03 Feb 2022") {
+		t.Errorf("LinkedIn job should be current, old job noted: %+v", f)
+	}
+	g, _ := ReadImport("google.csv", []byte("Name,Mobile,Company\nFatima Al-Sabah,99991234,Some Other Co\n"), "965")
+	ApplyImport(s, PlanImport(s, g.Cards, "Google Contacts", "965"), nil, "965")
+	if f.Company != "KIB" || !strings.Contains(f.Notes, "Google Contacts: Some Other Co") {
+		t.Errorf("other sources keep the card's value and note theirs: %+v", f)
+	}
+	// importing the same thing again adds no repeated notes
+	ApplyImport(s, PlanImport(s, g.Cards, "Google Contacts", "965"), nil, "965")
+	if strings.Count(f.Notes, "Some Other Co") != 1 {
+		t.Errorf("repeated note: %q", f.Notes)
+	}
 }

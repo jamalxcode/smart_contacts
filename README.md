@@ -40,6 +40,10 @@ Every push to `main` is compiled, tested and packaged by GitHub on a real Mac
 | Yahoo, iCloud, others | the account's export, as vCard or CSV |
 | Spreadsheets | any .csv or .xlsx — columns matched automatically (English or Arabic headers), adjustable |
 | Notes / text | a .txt or pasted text with several people (one per line, or blocks) |
+| Telegram | Telegram Desktop → Export Telegram data → Contacts list (JSON) — includes numbers |
+| Facebook / Snapchat friends | their data downloads (JSON) — names only, so matched to people you have |
+| A phone over Bluetooth / AirDrop | *Receive from a Phone* waits for the .vcf the phone sends |
+| Business cards | Smart Add → Business Card Image, or drag a photo/screenshot onto the window |
 
 Or drag files onto the window. Every import shows a preview first:
 
@@ -50,7 +54,14 @@ Or drag files onto the window. Every import shows a preview first:
 - **You decide on doubtful matches:** two people with the same name are never merged by name
   alone without you.
 - **Sources:** each card shows where its details came from, and the sidebar lists your sources.
-- **Safety:** a backup is saved before every import, and Clean Up is offered straight afterwards.
+- **Notes from each source:** "LinkedIn connection since…", "Facebook friend since…", "Telegram
+  contact". When a source disagrees (another company or birthday), the card keeps its value and
+  the other is noted; LinkedIn's job is taken as current and the old one noted as "Previously".
+- **Names-only lists** (Facebook, Snapchat) only enrich people you have; unmatched names are added
+  only if you tick them.
+- **Clean up automatically** applies the safe fixes during import and shows you only doubtful ones;
+  duplicates among the people just imported are offered for review.
+- **Safety:** a backup is saved before every import.
 
 **Clean Up (Tools).** Phones and emails are checked against what's known:
 
@@ -65,6 +76,27 @@ Or drag files onto the window. Every import shows a preview first:
   flagged for removal. Clear junk is pre-ticked; numbers that might be real are not.
 - **Safety:** 171, 112 and 7-digit 180… service lines are left alone, and a backup is saved
   before applying.
+
+**Notes clean-up and Deduplicate.** Clean Up also tidies notes: repeated lines, runs of blank
+lines, HTML and `\n` left by exports, and lines that only repeat a number or email on the card.
+Tools → Deduplicate (⌘⇧D) does both kinds of de-duplication: the same person on several cards
+(merged into the fullest card) and repeats inside a card (numbers, emails, links, addresses, note
+lines).
+
+**Reach them any way they use.** Each card shows buttons for what it actually holds: Call,
+Message, WhatsApp, Email, FaceTime, plus LinkedIn, Telegram, Instagram (DM), Messenger, X,
+Signal, Snapchat, TikTok, GitHub or Skype when there's a profile link or handle. *More* offers
+number-based options (Telegram or Signal by number, FaceTime Audio, Teams chat).
+
+**Calendar log.** Tools → Calendar Log (⌘⇧L) reads the Mac Calendar app (including Google, Outlook
+and iCloud calendars added to the Mac) or an .ics file. Each card then lists the meetings the
+person attended (by email or full name) or was mentioned in (full name, Arabic or English, in the
+title, place or notes), upcoming ones first, and shows "last met".
+
+**Photos and business cards.** Click the round picture on a card to set or remove the person's
+photo (iPhone HEIC works). A business card photo or screenshot is read on the Mac (Apple's own
+text recognition, Arabic and English), turned into a contact — or used to update the matching
+one — and the image is kept on the card under *Business Cards*.
 
 **Names in two languages.** Each card can hold the name in Arabic and English side by side
 (محمد المطيري / Mohammed Al-Mutairi); *Suggest* fills the other spelling for common names. Search
@@ -132,6 +164,8 @@ finds people in either language.
 | ⌘K | connect to someone |
 | ⌘⇧K | how are they connected? |
 | ⌘I | import contacts (all sources) |
+| ⌘⇧D | deduplicate |
+| ⌘⇧L | calendar log |
 | ⌘O | import a file |
 | ⌘, | settings |
 
@@ -159,7 +193,8 @@ cd smart_contacts
 
 Code map: `model.go` (contacts, search, phones, birthdays) · `store.go` (file, backups, trash,
 photos) · `vcard.go` · `tools.go` (CSV, duplicates, clean-up) · `smart.go` (Smart Add) ·
-`importers.go` (vCard/CSV/Excel/notes readers, import planning) · `phone.go` (numbers by country, emails) · `cleanup.go` · `names.go` (Arabic ↔ English names) · `graph.go` (connections, six-degrees paths) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
+`importers.go` (vCard/CSV/Excel/notes readers, import planning) · `phone.go` (numbers by country, emails) · `cleanup.go` · `names.go` (Arabic ↔ English names) · `graph.go` (connections, six-degrees paths) · `social.go` (profiles, ways to reach) ·
+`socialimport.go` (Telegram, Facebook, Snapchat) · `calendar.go` · `cards.go` (business cards, text recognition) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
 
 See [LIMITATIONS.md](LIMITATIONS.md) for what the app deliberately won't do and what's next, and
 [LESSONS.md](LESSONS.md) for notes from building it.

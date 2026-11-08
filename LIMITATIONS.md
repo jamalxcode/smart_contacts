@@ -55,8 +55,20 @@ that haven't been built yet.
 - Connections between people are not included in vCard exports.
 - Search needs the exact spelling (no typo tolerance) — Arabic letter forms and accents are matched.
 - Google, Outlook and LinkedIn come in through files you export (vCard / CSV), not a live link.
-- Facebook, Instagram and X exports list only names or usernames, with no numbers or emails, so
-  they can't be matched to contacts; profile links are added by hand.
+- Facebook and Snapchat exports list friends by name only: they enrich people already in the book
+  and never create cards unless you tick them. Instagram and X exports hold only usernames or
+  account numbers, so they can't be matched at all; add those links by hand.
+- macOS can't pull contacts from a phone over Bluetooth by itself; the phone has to send a .vcf
+  (Bluetooth Sharing or AirDrop), which *Receive from a Phone* picks up from Downloads.
+- WhatsApp has no contacts export (it uses the phone's address book) — import the phone instead.
+- LinkedIn messages open the person's LinkedIn page (where the Message button is); LinkedIn has no
+  direct "message this person" link. X opens the profile for the same reason.
+- "Telegram / Signal by number" only works if the person uses that app and allows it.
+- The calendar log reads repeating events once (their first date); calendars not shown in the
+  Mac Calendar app need an .ics export. Matching needs an email or a full name — a first name
+  alone is ignored on purpose.
+- Business card text recognition needs macOS (Arabic needs a recent macOS); handwriting and
+  stylised logos are often misread, so the result is always shown for checking.
 - Name matching across languages uses consonants, so a few names share a key (Mohammed / Mahmoud,
   Hassan / Hussain); a name alone never merges two cards without you.
 - Spelling suggestions for the other language cover common Arabic names and Gulf family names;
@@ -87,6 +99,12 @@ that haven't been built yet.
 - Editing several contacts at once (adding a group to many people, for example)
 
 ## Done
+
+- **Calendar log**, **business card images**, **one-click personal photo**, **notes clean-up**,
+  **Deduplicate** (cards and repeats inside cards), and **contact buttons** for every app the card
+  has a link or handle for.
+- **Telegram, Facebook and Snapchat exports**, **Receive from a Phone** (Bluetooth / AirDrop), notes
+  saying where details came from, and automatic clean-up during import.
 
 - **Import from every source:** Mac/iPhone, other phones, Gmail, Outlook, Yahoo, iCloud, LinkedIn,
   spreadsheets (.csv/.xlsx) and notes, with matching and merging into existing cards.

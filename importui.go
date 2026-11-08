@@ -5,7 +5,9 @@ import (
 	"image/color"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -22,13 +24,15 @@ var importSources = []struct {
 	mac        bool
 }{
 	{"Mac & iPhone contacts", "Everything in the Mac's Contacts app, including iPhone contacts synced through iCloud and any Google or Exchange accounts added in System Settings → Internet Accounts.", true},
-	{"Another phone", "Android: Contacts app → Settings → Export → .vcf file. Old iPhone: icloud.com → Contacts → select all → Export vCard. Then AirDrop or email the file to this Mac.", false},
+	{"Another phone", "Android: Contacts app → Settings → Export → .vcf file. Old iPhone: icloud.com → Contacts → select all → Export vCard. Then AirDrop or email the file to this Mac — or use Receive from a Phone below.", false},
 	{"Gmail / Google", "contacts.google.com → Export → Google CSV or vCard.", false},
 	{"Outlook / Hotmail", "outlook.com → People → Manage contacts → Export contacts (CSV).", false},
 	{"LinkedIn", "linkedin.com → Me → Settings & Privacy → Data privacy → Get a copy of your data → Connections → Request archive. Open Connections.csv from the email LinkedIn sends.", false},
 	{"Yahoo, iCloud or another email", "Use the account's Export contacts option and choose vCard or CSV.", false},
 	{"Spreadsheet", "Any .csv or .xlsx file. Columns are matched automatically (English or Arabic headers) and you can change the matching before importing.", false},
 	{"Notes or text", "A .txt file or text from Notes with several people in it — one per line (\"Ali 9999 8888\") or in blocks separated by an empty line.", false},
+	{"Telegram", "Telegram Desktop → Settings → Advanced → Export Telegram data → tick Contacts list, format JSON. Import result.json — contacts come with their phone numbers.", false},
+	{"Facebook / Snapchat friends", "Facebook: Settings → Download your information → Friends, format JSON (your_friends.json). Snapchat: Settings → My Data → friends.json. Names only, so they're matched to people you already have.", false},
 }
 
 // importHub is the one place to bring contacts in from anywhere.
@@ -55,8 +59,16 @@ func (u *ui) importHub() {
 		box.Add(container.NewBorder(nil, nil, nil, container.NewVBox(btn), container.NewVBox(title, how)))
 		box.Add(widget.NewSeparator())
 	}
+	phoneBtn := widget.NewButtonWithIcon("Receive from a Phone…", theme.DownloadIcon(), func() { d.Hide(); u.receiveFromPhone() })
+	phoneBtn.Importance = widget.HighImportance
+	phoneHow := caption("Over Bluetooth or AirDrop: the app waits for the contacts file your phone sends and opens it here.")
+	phoneHow.Wrapping = fyne.TextWrapWord
+	box.Objects = append([]fyne.CanvasObject{
+		container.NewBorder(nil, nil, nil, container.NewVBox(phoneBtn), container.NewVBox(
+			widget.NewLabelWithStyle("Receive from a phone (Bluetooth / AirDrop)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}), phoneHow)),
+		widget.NewSeparator()}, box.Objects...)
 	paste := widget.NewButtonWithIcon("Paste Text…", theme.ContentPasteIcon(), func() { d.Hide(); u.pasteImport() })
-	social := caption("Facebook, Instagram and X exports list only names or usernames — no numbers or emails — so they can't be matched to people; add those profile links by hand. You can also drag files onto the main window.")
+	social := caption("Instagram and X exports list only usernames or account numbers — nothing to match a person by — so add those profile links by hand. You can also drag files onto the main window.")
 	social.Wrapping = fyne.TextWrapWord
 	privacy := caption("Everything is read on this Mac. People you already have are recognised (by number, email, profile link or name — in Arabic or English) and their cards are updated instead of duplicated. A backup is saved before each import.")
 	privacy.Wrapping = fyne.TextWrapWord
@@ -80,7 +92,7 @@ func (u *ui) importFile() {
 		}
 		u.importData(r.URI().Name(), b)
 	}, u.win)
-	d.SetFilter(storage.NewExtensionFileFilter([]string{".vcf", ".vcard", ".csv", ".tsv", ".xlsx", ".txt", ".json", ".VCF", ".CSV", ".XLSX", ".TXT"}))
+	d.SetFilter(storage.NewExtensionFileFilter([]string{".vcf", ".vcard", ".csv", ".tsv", ".xlsx", ".txt", ".json", ".ics", ".VCF", ".CSV", ".XLSX", ".TXT"}))
 	d.Resize(fyne.NewSize(760, 520))
 	d.Show()
 }
@@ -93,11 +105,19 @@ func (u *ui) importDropped(_ fyne.Position, uris []fyne.URI) {
 			dialog.ShowError(err, u.win)
 			continue
 		}
+		if IsImageFile(uri.Name()) { // a dropped picture is read as a business card
+			u.readCardImage(uri.Name(), b)
+			continue
+		}
 		u.importData(uri.Name(), b)
 	}
 }
 
 func (u *ui) importData(name string, data []byte) {
+	if len(name) > 4 && (name[len(name)-4:] == ".ics" || name[len(name)-4:] == ".ICS") {
+		u.importICS(name, data)
+		return
+	}
 	b, err := ReadImport(name, data, u.cfg.CountryCode)
 	if err != nil {
 		dialog.ShowError(err, u.win)
@@ -145,8 +165,12 @@ func (u *ui) previewImport(b *Batch) {
 		for _, it := range items {
 			count[it.Kind]++
 		}
-		summary.SetText(fmt.Sprintf("%s · %d people: %d new, %d will update cards you have, %d already up to date, %d need your decision, %d repeated in the file.%s",
-			b.Format, len(items), count[piNew], count[piMerge], count[piUpToDate], count[piAsk], count[piInFile], skippedText(b.Skipped)))
+		newWord := "new"
+		if b.MatchOnly {
+			newWord = "not matched"
+		}
+		summary.SetText(fmt.Sprintf("%s · %d people: %d %s, %d will update cards you have, %d already up to date, %d need your decision, %d repeated in the file.%s",
+			b.Format, len(items), count[piNew], newWord, count[piMerge], count[piUpToDate], count[piAsk], count[piInFile], skippedText(b.Skipped)))
 		acc := widget.NewAccordion()
 		section := func(kind int, title string, build func(i int, it ImportItem) fyne.CanvasObject) {
 			box := container.NewVBox()
@@ -172,7 +196,7 @@ func (u *ui) previewImport(b *Batch) {
 			if old, ok := ticks[i]; ok {
 				c.SetChecked(old.Checked)
 			} else {
-				c.SetChecked(true)
+				c.SetChecked(!(b.MatchOnly && items[i].Kind == piNew)) // name-only strangers: off unless ticked
 			}
 			ticks[i] = c
 			return c
@@ -207,7 +231,11 @@ func (u *ui) previewImport(b *Batch) {
 			return container.NewVBox(container.NewHBox(c, widget.NewLabel("←"), widget.NewLabel(incomingLabel(it.Card.Contact))),
 				caption("adds "+strings.Join(it.Adds, ", ")+"   ·   "+it.Why))
 		})
-		section(piNew, "New people", func(i int, it ImportItem) fyne.CanvasObject {
+		newTitle := "New people"
+		if b.MatchOnly {
+			newTitle = "Not matched to anyone (names only — tick to add as new cards)"
+		}
+		section(piNew, newTitle, func(i int, it ImportItem) fyne.CanvasObject {
 			return tick(i, incomingLabel(it.Card.Contact))
 		})
 		section(piUpToDate, "Already up to date", func(_ int, it ImportItem) fyne.CanvasObject {
@@ -241,6 +269,9 @@ func (u *ui) previewImport(b *Batch) {
 	if b.Table != nil {
 		top.Add(u.columnMatcher(b, replan))
 	}
+	autoClean := widget.NewCheck("Clean up automatically: numbers, emails, repeats and notes (anything doubtful is shown to you)", nil)
+	autoClean.SetChecked(true)
+	top.Add(autoClean)
 	source.OnChanged = func(string) {
 		for _, it := range items {
 			it.Card.Contact.Sources = []string{strings.TrimSpace(source.Text)}
@@ -277,9 +308,21 @@ func (u *ui) previewImport(b *Batch) {
 			}
 			u.save()
 			u.flash(fmt.Sprintf("Imported from %s: %d cards added or updated · backup %s", src, len(touched), shortName(backup)))
-			if len(touched) > 0 {
-				u.cleanupFor(touched, fmt.Sprintf("Imported %d people from %s. Tidy their numbers and emails now?", len(touched), src))
+			if len(touched) == 0 {
+				return
 			}
+			intro := fmt.Sprintf("Imported %d people from %s. Tidy their numbers and emails now?", len(touched), src)
+			if autoClean.Checked {
+				n, rest := u.autoCleanup(touched)
+				if len(rest) == 0 {
+					u.flash(fmt.Sprintf("Imported from %s: %d cards added or updated, %d fixes applied", src, len(touched), n))
+					u.checkNewDuplicates(touched)
+					return
+				}
+				intro = fmt.Sprintf("Imported %d people from %s and applied %d safe fixes. These need your decision:", len(touched), src, n)
+			}
+			u.cleanupFor(touched, intro)
+			u.checkNewDuplicates(touched)
 		}, u.win)
 	d.Resize(fyne.NewSize(900, 680))
 	d.Show()
@@ -351,4 +394,127 @@ func (u *ui) columnMatcher(b *Batch, changed func()) fyne.CanvasObject {
 		acc.Open(0) // a hand-made sheet: show the matching straight away
 	}
 	return acc
+}
+
+// autoCleanup applies the confident fixes and repeat removals to the given contacts and returns
+// how many it applied and the contacts that still have doubtful suggestions (wrong-looking
+// numbers, unknown countries).
+func (u *ui) autoCleanup(cs []*Contact) (int, []*Contact) {
+	n := 0
+	restSet := map[*Contact]bool{}
+	for _, ch := range PlanCleanup(cs, u.cfg.CountryCode) {
+		switch {
+		case (ch.Kind == ckFix || ch.Kind == ckDuplicate) && ch.Default:
+			ch.Apply("")
+			n++
+		case ch.Kind == ckWrong || ch.Kind == ckUnsure:
+			restSet[ch.Contact] = true
+		}
+	}
+	for _, c := range cs {
+		u.store.Put(c)
+	}
+	u.save()
+	var rest []*Contact
+	for c := range restSet {
+		rest = append(rest, c)
+	}
+	return n, rest
+}
+
+// checkNewDuplicates offers Deduplicate when people just imported look like someone else in the book.
+func (u *ui) checkNewDuplicates(touched []*Contact) {
+	in := map[string]bool{}
+	for _, c := range touched {
+		in[c.ID] = true
+	}
+	n := 0
+	for _, g := range FindDuplicates(u.store.Contacts, u.cfg.CountryCode) {
+		for _, c := range g.Contacts {
+			if in[c.ID] {
+				n++
+				break
+			}
+		}
+	}
+	if n == 0 {
+		return
+	}
+	dialog.ShowConfirm("Possible duplicates", fmt.Sprintf("%d of the people just imported look like someone already on another card. Review them in Deduplicate?", n),
+		func(ok bool) {
+			if ok {
+				u.duplicates()
+			}
+		}, u.win)
+}
+
+// receiveFromPhone waits for a contacts file sent from a phone over Bluetooth or AirDrop
+// (both land in Downloads) and opens the import preview when it arrives.
+func (u *ui) receiveFromPhone() {
+	home, _ := os.UserHomeDir()
+	dirs := []string{filepath.Join(home, "Downloads")}
+	start := time.Now()
+	how := widget.NewLabel("On this Mac: System Settings → General → Sharing → turn on Bluetooth Sharing (files go to Downloads). AirDrop also works.\n\n" +
+		"Android: Contacts → select all (or ⋮ → Share) → Bluetooth → choose this Mac.\n" +
+		"iPhone: Contacts → a contact → Share Contact → AirDrop → this Mac (or share many from icloud.com as a vCard).\n" +
+		"Other phones: send the contacts as a .vcf file over Bluetooth.\n\nWaiting for the file…")
+	how.Wrapping = fyne.TextWrapWord
+	stop := make(chan struct{})
+	d := dialog.NewCustom("Receive from a Phone", "Cancel", container.NewVBox(how, widget.NewProgressBarInfinite()), u.win)
+	d.SetOnClosed(func() {
+		select {
+		case <-stop:
+		default:
+			close(stop)
+		}
+	})
+	d.Resize(fyne.NewSize(620, 380))
+	d.Show()
+	go func() {
+		seenSize := map[string]int64{}
+		tick := time.NewTicker(1500 * time.Millisecond)
+		defer tick.Stop()
+		deadline := time.After(15 * time.Minute)
+		for {
+			select {
+			case <-stop:
+				return
+			case <-deadline:
+				fyne.Do(func() { d.Hide() })
+				return
+			case <-tick.C:
+			}
+			for _, dir := range dirs {
+				entries, err := os.ReadDir(dir)
+				if err != nil {
+					continue
+				}
+				for _, e := range entries {
+					ext := strings.ToLower(filepath.Ext(e.Name()))
+					if ext != ".vcf" && ext != ".vcard" {
+						continue
+					}
+					fi, err := e.Info()
+					if err != nil || fi.ModTime().Before(start) {
+						continue
+					}
+					p := filepath.Join(dir, e.Name())
+					if seenSize[p] != fi.Size() { // wait until the transfer has finished
+						seenSize[p] = fi.Size()
+						continue
+					}
+					data, err := os.ReadFile(p)
+					if err != nil {
+						continue
+					}
+					name := e.Name()
+					fyne.Do(func() {
+						d.Hide()
+						u.importData(name, data)
+					})
+					return
+				}
+			}
+		}
+	}()
 }

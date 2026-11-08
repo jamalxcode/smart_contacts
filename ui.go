@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -53,6 +54,7 @@ type ui struct {
 	status    *widget.Label
 
 	ed         *editor // non-nil while a contact is being edited
+	cal        *Calendar
 	flashGen   int
 	photoCache map[string]fyne.Resource
 	sideBusy   bool
@@ -78,7 +80,7 @@ func (e *searchEntry) TypedKey(k *fyne.KeyEvent) {
 }
 
 func newUI(a fyne.App, s *Store, cfg *Config) *ui {
-	u := &ui{app: a, store: s, cfg: cfg, group: grpAll, photoCache: map[string]fyne.Resource{}}
+	u := &ui{app: a, store: s, cfg: cfg, group: grpAll, photoCache: map[string]fyne.Resource{}, cal: LoadCalendar(s.Dir())}
 	if cfg.LastGroup != "" {
 		u.group = cfg.LastGroup
 	}
@@ -598,6 +600,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	cc := u.cfg.CountryCode
 	av := newAvatar(84)
 	av.set(c, u.photo(c))
+	av.onTap = func() { u.photoMenu(c, av) }
 
 	nameBox := container.NewVBox(headline(c.DisplayName(), 24, true))
 	if c.AltName != "" {
@@ -622,24 +625,24 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	edit := widget.NewButtonWithIcon("Edit", theme.DocumentCreateIcon(), func() { u.editContact(c) })
 	head := container.NewBorder(nil, nil, av, container.NewVBox(container.NewHBox(fav, edit)), container.NewVBox(layout.NewSpacer(), container.NewPadded(nameBox), layout.NewSpacer()))
 
-	// Quick actions use the first mobile (else first) number and the first email.
-	actions := container.NewHBox()
-	var phone *Field
-	for i := range c.Phones {
-		if phone == nil || strings.EqualFold(c.Phones[i].Label, "mobile") && !strings.EqualFold(phone.Label, "mobile") {
-			phone = &c.Phones[i]
+	// Ways to reach them, from what the card holds (phone, email, profile links).
+	actions := container.NewGridWrap(fyne.NewSize(128, 36))
+	var more []*fyne.MenuItem
+	for _, a := range c.Actions(cc) {
+		a := a
+		if a.More {
+			more = append(more, fyne.NewMenuItem(a.Title, func() { u.open(c, a.Link) }))
+			continue
 		}
+		actions.Add(u.actionButton(a.Title, actionIcon(a.Kind), c, a.Link))
 	}
-	if phone != nil {
-		p := *phone
-		actions.Add(u.actionButton("Call", iconPhone, c, "tel:"+NormalizePhone(p.Value, cc)))
-		actions.Add(u.actionButton("Message", iconMessage, c, "sms:"+NormalizePhone(p.Value, cc)))
-		if CanWhatsApp(p.Value, cc) {
-			actions.Add(u.actionButton("WhatsApp", iconChat, c, "whatsapp://send?phone="+WhatsAppNumber(p.Value, cc)))
-		}
-	}
-	if len(c.Emails) > 0 {
-		actions.Add(u.actionButton("Email", theme.MailComposeIcon(), c, "mailto:"+c.Emails[0].Value))
+	if len(more) > 0 {
+		var mb *widget.Button
+		mb = widget.NewButtonWithIcon("More", theme.MoreHorizontalIcon(), func() {
+			pos := fyne.CurrentApp().Driver().AbsolutePositionForObject(mb)
+			widget.ShowPopUpMenuAtPosition(fyne.NewMenu("", more...), u.win.Canvas(), pos.Add(fyne.NewPos(0, mb.Size().Height)))
+		})
+		actions.Add(mb)
 	}
 
 	body := container.NewVBox(head)
@@ -692,7 +695,9 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	var links []fyne.CanvasObject
 	for _, l := range c.URLs {
 		v := l.Value
-		if !strings.Contains(v, "://") {
+		if p, ok := parseProfile(l.Label, l.Value); ok && p.URL != "" {
+			v = p.URL // "@khalid_kw" under Telegram opens t.me/khalid_kw
+		} else if !strings.Contains(v, "://") {
 			v = "https://" + v
 		}
 		links = append(links, u.valueRow(l.Label, l.Value, u.iconLink(iconLink, "Open", nil, v), u.copyButton(l.Value)))
@@ -717,7 +722,7 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	}
 
 	if len(c.Groups) > 0 {
-		chips := container.NewHBox()
+		chips := container.NewGridWrap(fyne.NewSize(150, 36)) // wraps; a sideways scroller would swallow the mouse wheel
 		for _, g := range c.Groups {
 			g := g
 			b := widget.NewButtonWithIcon(g, iconLabel, func() {
@@ -730,10 +735,12 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 			b.Importance = widget.LowImportance
 			chips.Add(b)
 		}
-		section("GROUPS", container.NewHScroll(chips))
+		section("GROUPS", chips)
 	}
 
+	section("BUSINESS CARDS", u.cardsSection(c)...)
 	section("CONNECTIONS", u.connectionsSection(c)...)
+	section("CALENDAR", u.calendarSection(c)...)
 
 	if strings.TrimSpace(c.Notes) != "" {
 		n := widget.NewLabel(c.Notes)
@@ -745,6 +752,9 @@ func (u *ui) detailView(c *Contact) fyne.CanvasObject {
 	meta := []string{"Added " + c.Created.Format("2 Jan 2006")}
 	if len(c.Sources) > 0 {
 		meta = append(meta, "from "+strings.Join(c.Sources, ", "))
+	}
+	if lm := LastMet(u.cal.EventsFor(c), time.Now()); !lm.IsZero() {
+		meta = append(meta, "last met "+Ago(lm, time.Now()))
 	}
 	if !c.LastContacted.IsZero() {
 		meta = append(meta, "last contacted "+Ago(c.LastContacted, time.Now()))
@@ -802,8 +812,9 @@ func (u *ui) open(c *Contact, link string) {
 		return
 	}
 	if err := u.app.OpenURL(p); err != nil {
-		if p.Scheme == "whatsapp" {
-			err = fmt.Errorf("the WhatsApp app isn't installed on this Mac (get it from the App Store)")
+		apps := map[string]string{"whatsapp": "WhatsApp", "tg": "Telegram", "sgnl": "Signal", "msteams": "Microsoft Teams", "skype": "Skype"}
+		if name, ok := apps[p.Scheme]; ok {
+			err = fmt.Errorf("the %s app isn't installed on this Mac", name)
 		}
 		dialog.ShowError(err, u.win)
 		return
@@ -868,6 +879,7 @@ func (u *ui) deleteContact(c *Contact) {
 // avatar is a circle with initials, or the contact's photo cut to a circle.
 type avatar struct {
 	widget.BaseWidget
+	onTap  func() // when set, clicking the picture calls it (change photo)
 	size   float32
 	circle *canvas.Circle
 	text   *canvas.Text
@@ -902,6 +914,21 @@ func (a *avatar) set(c *Contact, photo fyne.Resource) {
 
 func (a *avatar) MinSize() fyne.Size { return fyne.NewSize(a.size, a.size) }
 
+// Tapped makes the picture clickable when onTap is set.
+func (a *avatar) Tapped(*fyne.PointEvent) {
+	if a.onTap != nil {
+		a.onTap()
+	}
+}
+
+// Cursor shows a pointing hand over a clickable picture.
+func (a *avatar) Cursor() desktop.Cursor {
+	if a.onTap != nil {
+		return desktop.PointerCursor
+	}
+	return desktop.DefaultCursor
+}
+
 func (a *avatar) CreateRenderer() fyne.WidgetRenderer {
 	return &avatarRenderer{a}
 }
@@ -930,3 +957,19 @@ func (r *avatarRenderer) Objects() []fyne.CanvasObject {
 	return []fyne.CanvasObject{r.a.circle, r.a.text, r.a.img}
 }
 func (r *avatarRenderer) Destroy() {}
+
+func actionIcon(kind string) fyne.Resource {
+	switch kind {
+	case "call":
+		return iconPhone
+	case "message":
+		return iconMessage
+	case "chat":
+		return iconChat
+	case "video":
+		return theme.MediaVideoIcon()
+	case "email":
+		return theme.MailComposeIcon()
+	}
+	return iconLink
+}

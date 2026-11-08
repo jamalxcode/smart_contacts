@@ -260,6 +260,7 @@ func (s *Store) EmptyTrash() {
 	defer s.dropDeadLinks()
 	for _, t := range s.Trash {
 		os.Remove(s.PhotoPath(t.Contact.ID))
+		s.removeCardFiles(t.Contact)
 	}
 	s.Trash = nil
 }
@@ -270,6 +271,7 @@ func (s *Store) purgeTrash(now time.Time) {
 	for _, t := range s.Trash {
 		if now.Sub(t.Deleted) > trashDays*24*time.Hour {
 			os.Remove(s.PhotoPath(t.Contact.ID))
+			s.removeCardFiles(t.Contact)
 			continue
 		}
 		keep = append(keep, t)

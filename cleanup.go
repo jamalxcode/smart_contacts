@@ -1,6 +1,8 @@
 package main
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -183,6 +185,57 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 			}
 		}
 
+		// repeated links (same profile or page) and addresses on one card
+		seenU := map[string]string{}
+		urlKey := func(v string) string { // the label matters: "@khalid_kw" under Telegram = t.me/khalid_kw
+			for _, f := range c.URLs {
+				if f.Value == v {
+					return linkKey(f.Label, v)
+				}
+			}
+			return linkKey("", v)
+		}
+		for _, f := range c.URLs {
+			k := linkKey(f.Label, f.Value)
+			if k == "" {
+				continue
+			}
+			if first, ok := seenU[k]; ok {
+				kk := k
+				out = append(out, CleanupChange{Contact: c, Kind: ckDuplicate, Field: "link", Old: f.Value,
+					Reason: "same link as " + first, Default: true,
+					apply: func(string) { c.URLs = dropLaterDup(c.URLs, kk, urlKey) }})
+			} else {
+				seenU[k] = f.Value
+			}
+		}
+		seenA := map[string]bool{}
+		for _, a := range c.Addresses {
+			k := fold(a.OneLine())
+			if seenA[k] {
+				kk := k
+				out = append(out, CleanupChange{Contact: c, Kind: ckDuplicate, Field: "address", Old: a.OneLine(),
+					Reason: "same address listed twice", Default: true,
+					apply: func(string) { c.Addresses = dropLaterAddr(c.Addresses, kk) }})
+			}
+			seenA[k] = true
+		}
+
+		// notes: repeats, blank-line runs, leftover HTML, lines that only repeat a number or email
+		if tidy, why, onlyRepeats := TidyNotes(c); tidy != c.Notes {
+			old, n := c.Notes, tidy
+			kind := ckFix
+			if onlyRepeats {
+				kind = ckDuplicate
+			}
+			out = append(out, CleanupChange{Contact: c, Kind: kind, Field: "notes", Old: "notes", New: "tidied notes",
+				Reason: why, Default: true, apply: func(string) {
+					if c.Notes == old {
+						c.Notes = n
+					}
+				}})
+		}
+
 		// names typed ALL CAPS / all lower case
 		for _, fld := range []*string{&c.First, &c.Last} {
 			fld := fld
@@ -208,4 +261,124 @@ func PlanCleanup(cs []*Contact, home string) []CleanupChange {
 		}
 	}
 	return out
+}
+
+// linkKey compares links: a social profile by account, any other page without https/www/slash.
+func linkKey(label, v string) string {
+	if p, ok := parseProfile(label, v); ok && p.Handle != "" {
+		return strings.ToLower(p.Service + ":" + p.Handle)
+	}
+	l := strings.ToLower(strings.TrimSpace(v))
+	for _, p := range []string{"https://", "http://", "www."} {
+		l = strings.TrimPrefix(l, p)
+	}
+	return strings.TrimRight(l, "/")
+}
+
+func dropLaterAddr(as []Address, k string) []Address {
+	out, seen := as[:0], false
+	for _, a := range as {
+		if fold(a.OneLine()) == k {
+			if seen {
+				continue
+			}
+			seen = true
+		}
+		out = append(out, a)
+	}
+	return out
+}
+
+var (
+	reHTMLBreak = regexp.MustCompile(`(?i)<br\s*/?>|</p>|</div>|</li>`)
+	reHTMLTag   = regexp.MustCompile(`<[^>]{1,200}>`)
+	htmlEntity  = strings.NewReplacer("&amp;", "&", "&lt;", "<", "&gt;", ">", "&quot;", "\"", "&#39;", "'", "&apos;", "'", "&nbsp;", " ")
+	reNoteLabel = regexp.MustCompile(`(?i)^\s*(mobile|mob|phone|tel|cell|work|home|whatsapp|m|t|p|e|email|e-mail|mail|جوال|هاتف|ايميل)\s*[:.\-]?\s*`)
+)
+
+// TidyNotes cleans a contact's notes: literal "\n" codes and HTML from exports become real text,
+// trailing spaces and runs of blank lines go, repeated lines (common after merging sources) are
+// kept once, and lines that only repeat a phone number or email already on the card are removed.
+// It returns the tidy notes, a short description, and whether only repeats were removed.
+func TidyNotes(c *Contact) (string, string, bool) {
+	orig := c.Notes
+	s := strings.ReplaceAll(orig, "\r\n", "\n")
+	var whys []string
+	onlyRepeats := true
+	if strings.Contains(s, `\n`) {
+		s = strings.ReplaceAll(s, `\n`, "\n")
+		whys = append(whys, "turned \\n codes into line breaks")
+		onlyRepeats = false
+	}
+	if reHTMLTag.MatchString(s) || strings.Contains(s, "&amp;") || strings.Contains(s, "&nbsp;") || strings.Contains(s, "&quot;") {
+		s = reHTMLBreak.ReplaceAllString(s, "\n")
+		s = reHTMLTag.ReplaceAllString(s, "")
+		s = htmlEntity.Replace(s)
+		whys = append(whys, "removed HTML")
+		onlyRepeats = false
+	}
+	phones := map[string]bool{}
+	for _, p := range c.Phones {
+		if d := digitsOnly(NormalizePhone(p.Value, "")); len(d) >= 7 {
+			phones[d[len(d)-7:]] = true
+		}
+	}
+	emails := map[string]bool{}
+	for _, e := range c.Emails {
+		emails[strings.ToLower(strings.TrimSpace(e.Value))] = true
+	}
+	var lines []string
+	seen := map[string]bool{}
+	repeats, echoes, blank := 0, 0, false
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimRight(line, " \t")
+		if strings.TrimSpace(line) == "" {
+			if len(lines) > 0 && !blank {
+				lines = append(lines, "")
+			}
+			blank = true
+			continue
+		}
+		k := fold(strings.Join(strings.Fields(line), " "))
+		if seen[k] {
+			repeats++
+			continue
+		}
+		seen[k] = true
+		// a line that is just "Mobile: +965 6000 1234" or an email already on the card
+		rest := strings.TrimSpace(reNoteLabel.ReplaceAllString(line, ""))
+		if d := digitsOnly(rest); len(d) >= 7 && !hasLetters(rest) && phones[d[len(d)-7:]] {
+			echoes++
+			continue
+		}
+		if emails[strings.ToLower(rest)] {
+			echoes++
+			continue
+		}
+		lines = append(lines, line)
+		blank = false
+	}
+	for len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	out := strings.Join(lines, "\n")
+	if repeats > 0 {
+		whys = append(whys, plural(repeats, "repeated line")+" removed")
+	}
+	if echoes > 0 {
+		whys = append(whys, plural(echoes, "line")+" that only repeat a number or email on the card")
+		onlyRepeats = false
+	}
+	if out != orig && len(whys) == 0 {
+		whys = append(whys, "spacing tidied")
+		onlyRepeats = false
+	}
+	return out, strings.Join(whys, ", "), onlyRepeats && repeats > 0
+}
+
+func plural(n int, word string) string {
+	if n == 1 {
+		return "1 " + word
+	}
+	return fmt.Sprintf("%d %ss", n, word)
 }

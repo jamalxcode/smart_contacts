@@ -23,6 +23,8 @@ type editor struct {
 	c        *Contact // the working copy
 	start    string   // JSON of the copy when editing began, to detect changes
 	photo    []byte   // new photo chosen in this session
+	card     []byte   // a business card image to keep with the contact on Save
+	cardNote string   // "added this contact" / "updated this contact"
 	photoSet bool     // photo was changed (set or removed)
 
 	first, last, nick, company, title, birthday *widget.Entry
@@ -170,8 +172,16 @@ func (u *ui) editContact(c *Contact) {
 // openEditor shows the editor. prefill (from Smart Add) starts a new contact with values filled in;
 // banner is an optional note shown at the top.
 func (u *ui) openEditor(c *Contact, prefill *Contact, banner string) {
-	e := &editor{u: u, orig: c}
+	u.openEditorCard(c, prefill, banner, nil, "")
+}
+
+// openEditorCard is openEditor with a business card image to keep on Save. With both c and
+// prefill set, it edits c starting from prefill (c with new details merged in).
+func (u *ui) openEditorCard(c *Contact, prefill *Contact, banner string, card []byte, cardNote string) {
+	e := &editor{u: u, orig: c, card: card, cardNote: cardNote}
 	switch {
+	case c != nil && prefill != nil:
+		e.c = prefill
 	case c != nil:
 		e.c = c.Clone()
 	case prefill != nil:
@@ -252,7 +262,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 		}
 	}
 	e.groups = widget.NewCheckGroup(allGroups, nil)
-	e.groups.Horizontal = true
+	e.groups.Horizontal = false // one per line: no sideways scroller to trap the mouse wheel
 	e.groups.SetSelected(c.Groups)
 	e.newGroup = widget.NewEntry()
 	e.newGroup.SetPlaceHolder("New group name")
@@ -339,7 +349,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	body.Add(container.NewBorder(nil, nil, nil, e.bdayHint, e.birthday))
 	body.Add(label("GROUPS"))
 	if len(allGroups) > 0 {
-		body.Add(container.NewHScroll(e.groups))
+		body.Add(e.groups)
 	}
 	body.Add(container.NewBorder(nil, nil, nil, groupAdd, e.newGroup))
 	body.Add(e.fav)
@@ -395,7 +405,7 @@ func (e *editor) snapshot() string {
 	return string(b)
 }
 
-func (e *editor) dirty() bool { return e.photoSet || e.snapshot() != e.start }
+func (e *editor) dirty() bool { return e.photoSet || e.card != nil || e.snapshot() != e.start }
 
 func (e *editor) save() {
 	e.collect()
@@ -417,6 +427,12 @@ func (e *editor) save() {
 			return
 		}
 		delete(e.u.photoCache, c.ID)
+	}
+	if e.card != nil {
+		if err := e.u.store.AddCardImage(c, e.card, e.cardNote); err != nil {
+			dialog.ShowError(err, e.u.win)
+		}
+		e.card = nil
 	}
 	isNew := e.orig == nil
 	e.u.store.Put(c)

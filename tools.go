@@ -258,6 +258,7 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 			}
 		}
 		keep.Sources = append(keep.Sources, o.Sources...)
+		keep.CardImages = append(keep.CardImages, o.CardImages...)
 		keep.Phones = mergeFields(keep.Phones, o.Phones, func(s string) string { return NormalizePhone(s, defCC) })
 		keep.Emails = mergeFields(keep.Emails, o.Emails, strings.ToLower)
 		keep.URLs = mergeFields(keep.URLs, o.URLs, strings.ToLower)
