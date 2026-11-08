@@ -94,7 +94,8 @@ func (u *ui) installUpdate(r *Release) {
 	prog.Resize(fyne.NewSize(420, 140))
 	prog.Show()
 	go func() {
-		app, err := DownloadUpdate(func(p float64) { fyne.Do(func() { bar.SetValue(p) }) })
+		app, err := DownloadUpdate(func(p float64) { fyne.Do(func() { bar.SetValue(p) }) },
+			func(s string) { fyne.Do(func() { status.SetText(s) }) })
 		fyne.Do(func() {
 			if err != nil {
 				prog.Hide()

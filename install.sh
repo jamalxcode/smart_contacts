@@ -6,8 +6,23 @@
 set -euo pipefail
 URL="https://github.com/jamalxcode/smart_contacts/releases/download/latest/Smart-Contacts-mac.zip"
 TMP="$(mktemp -d)"
+API="https://api.github.com/repos/jamalxcode/smart_contacts/releases/tags/latest"
 echo "Downloading Smart Contacts…"
-curl -fL --progress-bar -o "$TMP/sc.zip" "$URL"
+# GitHub's file server sometimes answers 504; retry, resume, then try the API link.
+get() { curl -fL --retry 5 --retry-delay 3 --retry-all-errors -C - --progress-bar "$@" -o "$TMP/sc.zip"; }
+if ! get "$URL"; then
+  echo "GitHub is slow — trying its other download link…"
+  rm -f "$TMP/sc.zip"
+  ASSET="$(curl -fsSL "$API" | grep -o '"url": *"https://api.github.com/repos/[^"]*/releases/assets/[0-9]*"' | head -1 | sed 's/.*"\(https[^"]*\)"/\1/')"
+  if [ -z "$ASSET" ] || ! get -H "Accept: application/octet-stream" "$ASSET"; then
+    echo "The download didn't finish — GitHub's file server is busy. Try again in a few minutes." >&2
+    exit 1
+  fi
+fi
+if ! unzip -tq "$TMP/sc.zip" >/dev/null 2>&1; then
+  echo "The download was damaged — please run the command again." >&2
+  exit 1
+fi
 pkill -x "smartcontacts" 2>/dev/null || true
 pkill -x "Smart Contacts" 2>/dev/null || true
 rm -rf "/Applications/Smart Contacts.app"

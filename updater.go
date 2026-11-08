@@ -105,54 +105,159 @@ func appBundle() string {
 
 // DownloadUpdate fetches and unpacks the new app next to a temporary folder, reporting progress
 // (0–1). It returns the unpacked .app; nothing is replaced yet.
-func DownloadUpdate(progress func(float64)) (string, error) {
-	tmp, err := os.MkdirTemp("", "smart-contacts-update-")
-	if err != nil {
-		return "", err
-	}
-	zipPath := filepath.Join(tmp, "update.zip")
-	cl := &http.Client{Timeout: 10 * time.Minute}
-	req, _ := http.NewRequest("GET", releaseZip, nil)
+// GitHub serves release files from a separate storage server that sometimes answers
+// "504 Gateway Timeout" or drops the connection. So the download tries two routes (the
+// release link, then GitHub's API asset link), retries with pauses, and resumes a partial
+// download instead of starting over.
+var (
+	retryWaits   = []time.Duration{0, 2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+	downloadURLs = func() []string { return []string{releaseZip, assetAPIURL()} }
+)
+
+// assetAPIURL is the API link of the release's zip ("" if GitHub can't be asked).
+func assetAPIURL() string {
+	req, _ := http.NewRequest("GET", releaseAPI, nil)
+	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("User-Agent", "SmartContacts-updater")
-	resp, err := cl.Do(req)
+	resp, err := (&http.Client{Timeout: 20 * time.Second}).Do(req)
 	if err != nil {
-		return "", fmt.Errorf("download failed: %v", err)
+		return ""
 	}
 	defer resp.Body.Close()
-	if resp.StatusCode != 200 {
-		return "", fmt.Errorf("download failed: %s", resp.Status)
+	var r struct {
+		Assets []struct {
+			Name string `json:"name"`
+			URL  string `json:"url"`
+		} `json:"assets"`
 	}
-	f, err := os.Create(zipPath)
+	if json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&r) != nil {
+		return ""
+	}
+	for _, a := range r.Assets {
+		if a.Name == filepath.Base(releaseZip) {
+			return a.URL
+		}
+	}
+	return ""
+}
+
+// errPermanent is an answer that retrying won't change (404, 403…).
+type errPermanent struct{ error }
+
+// fetchOnce downloads url into path, resuming from what's already there.
+func fetchOnce(cl *http.Client, url, path string, progress func(float64)) error {
+	have := int64(0)
+	if st, err := os.Stat(path); err == nil {
+		have = st.Size()
+	}
+	req, _ := http.NewRequest("GET", url, nil)
+	req.Header.Set("User-Agent", "SmartContacts-updater")
+	if strings.Contains(url, "api.github.com") {
+		req.Header.Set("Accept", "application/octet-stream")
+	}
+	if have > 0 {
+		req.Header.Set("Range", fmt.Sprintf("bytes=%d-", have))
+	}
+	resp, err := cl.Do(req)
 	if err != nil {
-		return "", err
+		return err
 	}
-	var done int64
+	defer resp.Body.Close()
+	flags := os.O_CREATE | os.O_WRONLY
+	total := resp.ContentLength
+	switch {
+	case resp.StatusCode == http.StatusPartialContent && have > 0:
+		flags |= os.O_APPEND
+		if total > 0 {
+			total += have
+		}
+	case resp.StatusCode == http.StatusOK:
+		flags |= os.O_TRUNC
+		have = 0
+	case resp.StatusCode == http.StatusRequestedRangeNotSatisfiable && have > 0:
+		return nil // already complete
+	case resp.StatusCode >= 500 || resp.StatusCode == 429:
+		return fmt.Errorf("GitHub answered %s", resp.Status)
+	default:
+		return errPermanent{fmt.Errorf("GitHub answered %s", resp.Status)}
+	}
+	f, err := os.OpenFile(path, flags, 0o600)
+	if err != nil {
+		return errPermanent{err}
+	}
+	defer f.Close()
+	done := have
 	buf := make([]byte, 256<<10)
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
 			if _, err := f.Write(buf[:n]); err != nil {
-				f.Close()
-				return "", err
+				return errPermanent{err}
 			}
 			done += int64(n)
-			if resp.ContentLength > 0 && progress != nil {
-				progress(float64(done) / float64(resp.ContentLength))
+			if total > 0 && progress != nil {
+				progress(float64(done) / float64(total))
 			}
 		}
 		if rerr == io.EOF {
-			break
+			if total > 0 && done < total {
+				return fmt.Errorf("the connection closed early")
+			}
+			return nil
 		}
 		if rerr != nil {
-			f.Close()
-			return "", fmt.Errorf("download interrupted: %v", rerr)
+			return rerr
 		}
 	}
-	f.Close()
-	if zr, err := zip.OpenReader(zipPath); err != nil {
-		return "", errors.New("the download is damaged; try again")
-	} else {
-		zr.Close()
+}
+
+// downloadZip tries each route with retries; status reports "trying again…" to the screen.
+func downloadZip(path string, progress func(float64), status func(string)) error {
+	cl := &http.Client{Timeout: 10 * time.Minute}
+	var last error
+	urls := downloadURLs()
+	for ui, url := range urls {
+		if url == "" {
+			continue
+		}
+		os.Remove(path) // a new route starts clean
+		for i, wait := range retryWaits {
+			if wait > 0 && status != nil {
+				status(fmt.Sprintf("GitHub is slow to answer — trying again (%d of %d)…", i+1, len(retryWaits)))
+			}
+			time.Sleep(wait)
+			err := fetchOnce(cl, url, path, progress)
+			if err == nil {
+				if zr, zerr := zip.OpenReader(path); zerr == nil {
+					zr.Close()
+					return nil
+				}
+				os.Remove(path)
+				last = errors.New("the download was damaged")
+				continue
+			}
+			last = err
+			var p errPermanent
+			if errors.As(err, &p) {
+				break
+			}
+		}
+		if ui < len(urls)-1 && status != nil {
+			status("Trying GitHub's other download link…")
+		}
+	}
+	return fmt.Errorf("the download didn't finish: GitHub's file server is busy (%v). Try Check for Updates again in a few minutes, "+
+		"or update from Terminal:\n\ncurl -fsSL https://raw.githubusercontent.com/jamalxcode/smart_contacts/main/install.sh | bash", last)
+}
+
+func DownloadUpdate(progress func(float64), status func(string)) (string, error) {
+	tmp, err := os.MkdirTemp("", "smart-contacts-update-")
+	if err != nil {
+		return "", err
+	}
+	zipPath := filepath.Join(tmp, "update.zip")
+	if err := downloadZip(zipPath, progress, status); err != nil {
+		return "", err
 	}
 	out := filepath.Join(tmp, "app")
 	// ditto keeps the app's permissions and signature intact

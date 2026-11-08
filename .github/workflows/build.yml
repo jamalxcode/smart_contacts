@@ -113,13 +113,20 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release delete latest --yes --cleanup-tag || true
           # The update dialog in the app shows these notes: the latest change, then the build line.
           { git log -1 --format=%B | grep -v -e '^Co-Authored-By:' -e '^Claude-Session:'
             echo
             echo "Built from ${GITHUB_SHA::7} on $(date -u '+%Y-%m-%d %H:%M') UTC. Apple Silicon Mac app, ad-hoc signed. Install with the one-line command in the README."
           } > notes.md
-          gh release create latest dist/Smart-Contacts-mac.zip \
-            --title "Smart Contacts ${VERSION}" \
-            --notes-file notes.md \
-            --latest
+          # Replace the file in place instead of deleting the release, so the download link
+          # never points at nothing (a deleted-then-recreated release made updates fail).
+          if gh release view latest >/dev/null 2>&1; then
+            git tag -f latest "$GITHUB_SHA" && git push -f origin refs/tags/latest
+            gh release upload latest dist/Smart-Contacts-mac.zip --clobber
+            gh release edit latest --title "Smart Contacts ${VERSION}" --notes-file notes.md --latest
+          else
+            gh release create latest dist/Smart-Contacts-mac.zip \
+              --title "Smart Contacts ${VERSION}" \
+              --notes-file notes.md \
+              --latest
+          fi
