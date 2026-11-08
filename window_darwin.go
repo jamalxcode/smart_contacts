@@ -4,8 +4,9 @@ package main
 
 /*
 #cgo CFLAGS: -x objective-c -fobjc-arc
-#cgo LDFLAGS: -framework Cocoa
+#cgo LDFLAGS: -framework Cocoa -framework QuartzCore
 #import <Cocoa/Cocoa.h>
+#import <QuartzCore/QuartzCore.h>
 
 // scFitWindow animates the window to a content size of w×h points. The right edge stays where it
 // is (the front cover swings open to the left, like a real organiser) and the top edge stays put;
