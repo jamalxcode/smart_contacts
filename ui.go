@@ -129,7 +129,7 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 		cv := &closedCover{count: len(s.Contacts), onOpen: u.openBook}
 		cv.ExtendBaseWidget(cv)
 		u.coverShown = true
-		u.win.SetContent(cv)
+		u.win.SetContent(onGrey(cv))
 	}
 	if cfg.AutoActivity {
 		u.readActivity(false) // refresh "last talked" quietly in the background
@@ -146,6 +146,13 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 		u.openSize = fyne.NewSize(w, h)
 		u.win.Resize(closedSize(h))
 	}
+	go func() { // once the window is on screen: dark title bar, and make sure it fits the screen
+		time.Sleep(300 * time.Millisecond)
+		fyne.Do(func() {
+			darkChrome(u.win, !u.cfg.ClassicLook)
+			fitWindow(u.win, u.win.Canvas().Size(), false)
+		})
+	}()
 	u.win.SetOnDropped(u.importDropped) // drag .vcf / .csv / .xlsx / .txt files onto the window
 	// ⌘Q from the app menu quits without going through the window's close button.
 	u.win.SetCloseIntercept(func() {
@@ -368,9 +375,10 @@ func (u *ui) build() {
 		u.win.SetContent(container.NewBorder(nil, u.status, nil, nil, panes))
 	} else {
 		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
-		u.bookContent = u.filofaxLayout(listPane)
+		u.bookContent = onGrey(u.filofaxLayout(listPane))
 		u.win.SetContent(u.bookContent)
 	}
+	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)
 	u.win.SetMainMenu(u.mainMenu())
 	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if u.coverShown { // any key opens the organiser

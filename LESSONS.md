@@ -254,7 +254,16 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - The build used to delete and recreate the "latest" release, leaving a moment with nothing to
   download. It now replaces the file in place.
 
-## 15. Ideas not done yet
+## 15. Opening the book without leaving the screen (2026-11-08)
+
+- Fyne can't move a window or read the screen size, so opening the book grew the window off the right
+  edge. window_darwin.go reaches the real Mac window (Fyne's RunNative gives the NSWindow) and animates
+  it: the right edge stays put so the cover seems to swing open to the left, then the frame is pulled
+  inside the screen's visible area (below the menu bar, above the Dock) and shrunk if the screen is small.
+- The same helper gives the title bar the dark grey of the "desk" behind the book, so no white shows.
+  Other systems just resize (window_other.go).
+
+## 16. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

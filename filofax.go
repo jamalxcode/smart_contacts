@@ -43,7 +43,7 @@ var (
 // ---------- colours ----------
 
 var (
-	deskColor   = color.NRGBA{0xEE, 0xEC, 0xE8, 0xFF}
+	deskColor   = color.NRGBA{0x2B, 0x2B, 0x2E, 0xFF} // dark grey around the book, like the title bar
 	inkColor    = color.NRGBA{0x22, 0x24, 0x2A, 0xFF}
 	inkFaint    = color.NRGBA{0x66, 0x68, 0x6E, 0xFF}
 	paperColor  = color.NRGBA{0xF7, 0xF6, 0xF2, 0xFF}
@@ -1337,8 +1337,8 @@ func (u *ui) showCover() {
 		cv := &closedCover{count: len(u.store.Contacts), onOpen: u.openBook}
 		cv.ExtendBaseWidget(cv)
 		u.coverShown = true
-		u.win.SetContent(cv)
-		u.win.Resize(closedSize(u.openSize.Height)) // the window takes the shape of the closed book
+		u.win.SetContent(onGrey(cv))
+		u.sizeWindow(closedSize(u.openSize.Height), true) // the window takes the shape of the closed book
 	}, nil)
 }
 
@@ -1353,11 +1353,7 @@ func (u *ui) openBook() {
 	}
 	u.win.SetContent(u.bookContent)
 	if sz := u.openSize; sz.Width > 0 {
-		u.win.Resize(sz)
-		go func() { // some window managers apply a resize only after the new content is laid out
-			time.Sleep(150 * time.Millisecond)
-			fyne.Do(func() { u.win.Resize(sz) })
-		}()
+		u.sizeWindow(sz, true) // opens leftwards, like the cover swinging open, and stays on screen
 	}
 	u.refreshAll()
 	if i := u.indexOf(u.selectedID); i >= 0 {
@@ -1396,6 +1392,27 @@ func (t *leatherTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) col
 }
 
 // closedSize is the window size that fits the closed book for a given height.
+// windowGrey is what shows around the book: dark grey, like a desk in a dim room, instead of white.
+var windowGrey = deskColor
+
+// onGrey puts o on the dark grey window background.
+func onGrey(o fyne.CanvasObject) fyne.CanvasObject {
+	return container.NewStack(canvas.NewRectangle(windowGrey), o)
+}
+
+// sizeWindow changes the window size. On the Mac it animates, keeps the right edge (the cover
+// swings open to the left) and keeps the whole window on screen; elsewhere it just resizes.
+func (u *ui) sizeWindow(sz fyne.Size, animate bool) {
+	if fitWindow(u.win, sz, animate) {
+		return
+	}
+	u.win.Resize(sz)
+	go func() { // some window managers apply a resize only after the new content is laid out
+		time.Sleep(150 * time.Millisecond)
+		fyne.Do(func() { u.win.Resize(sz) })
+	}()
+}
+
 func closedSize(h float32) fyne.Size {
 	if h < 480 {
 		h = 480
