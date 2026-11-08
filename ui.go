@@ -78,6 +78,8 @@ type ui struct {
 	rightPage   *paperPage      // Filofax look: the person's page
 	bookContent fyne.CanvasObject
 	coverShown  bool
+	openSize    fyne.Size // the window size with the organiser open
+	filter      *contactFilter
 	attnGen     int
 }
 
@@ -139,6 +141,10 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 		w, h = 1120, 720
 	}
 	u.win.Resize(fyne.NewSize(w, h))
+	if u.coverShown { // closed: the window takes the shape of the closed book
+		u.openSize = fyne.NewSize(w, h)
+		u.win.Resize(closedSize(h))
+	}
 	u.win.SetOnDropped(u.importDropped) // drag .vcf / .csv / .xlsx / .txt files onto the window
 	// ⌘Q from the app menu quits without going through the window's close button.
 	u.win.SetCloseIntercept(func() {
@@ -157,7 +163,11 @@ func (u *ui) quit() {
 }
 
 func (u *ui) saveWindow() {
-	if sz := u.win.Canvas().Size(); sz.Width > 0 && sz.Height > 0 {
+	sz := u.win.Canvas().Size()
+	if u.coverShown && u.openSize.Width > 0 { // remember the open size, not the closed book's
+		sz = u.openSize
+	}
+	if sz.Width > 0 && sz.Height > 0 {
 		u.cfg.WindowW, u.cfg.WindowH = sz.Width, sz.Height
 	}
 	_ = u.cfg.Save(u.store.Dir())
@@ -330,6 +340,7 @@ func (u *ui) build() {
 	u.saveSearch.Hide()
 	listTop := container.NewVBox(
 		container.NewBorder(nil, nil, nil, container.NewHBox(selBtn, smartBtn, newBtn), u.listTitle),
+		u.buildFilter(),
 		u.search,
 		u.saveSearch,
 	)
@@ -478,7 +489,16 @@ func (u *ui) refreshSidebar() {
 			incomplete++
 		}
 	}
+	filterN := 0
+	if !u.filter.empty() {
+		for _, c := range u.store.Contacts {
+			if u.filter.matches(c) {
+				filterN++
+			}
+		}
+	}
 	items := []sideItem{
+		{grpFilter, "Search Filter", theme.SearchIcon(), filterN},
 		{grpAll, "All Contacts", theme.AccountIcon(), len(u.store.Contacts)},
 		{grpFavorites, "Favorites", iconStar, fav},
 		{grpBirthdays, "Upcoming Birthdays", iconCake, bday},
@@ -600,6 +620,8 @@ func (u *ui) inGroup(c *Contact, now time.Time) bool {
 		return c.HasSource(u.group[2:])
 	case u.group == grpReachOut:
 		return u.dueToReachOut(c, now)
+	case u.group == grpFilter:
+		return u.filter.matches(c)
 	case u.group == grpAttention:
 		return u.attention[c.ID] > 0
 	case strings.HasPrefix(u.group, "q:"):
@@ -620,6 +642,7 @@ func (u *ui) refreshList() {
 	now := time.Now()
 	q := u.search.Text
 	sq := parseQuery(q)
+	u.showFilterForm()
 	out := make([]*Contact, 0, len(u.store.Contacts))
 	used := map[string]bool{}
 	for _, c := range u.store.Contacts {

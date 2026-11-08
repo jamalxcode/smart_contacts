@@ -390,13 +390,13 @@ type coverRenderer struct {
 	last                        fyne.Size
 }
 
-const coverMargin = 12
+const coverMargin = 3 // the leather runs almost to the window edge
 
 func (r *coverRenderer) Layout(s fyne.Size) {
 	r.desk.Resize(s)
 	m := float32(coverMargin)
-	cw, ch := s.Width-2*m-22, s.Height-2*m // leaves room for the strap on the right
-	r.shadow.Move(fyne.NewPos(m+4, m+7))
+	cw, ch := s.Width-2*m-26, s.Height-2*m-2 // leaves room for the strap on the right
+	r.shadow.Move(fyne.NewPos(m+1, m+2))
 	r.shadow.Resize(fyne.NewSize(cw, ch))
 	r.leather.Move(fyne.NewPos(m, m))
 	r.leather.Resize(fyne.NewSize(cw, ch))
@@ -1024,6 +1024,7 @@ func (f *fixedWidth) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 type organiserLayout struct {
 	cover                        *leatherCover
 	tabs, left, rings, right, az fyne.CanvasObject
+	status                       fyne.CanvasObject
 	pagesPos                     fyne.Position
 	pagesSize                    fyne.Size
 }
@@ -1032,9 +1033,9 @@ func (l *organiserLayout) MinSize([]fyne.CanvasObject) fyne.Size { return fyne.N
 
 func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	m := float32(coverMargin)
-	top, bottom := m+30, s.Height-m-26
+	top, bottom := m+22, s.Height-m-34
 	h := bottom - top
-	penW := float32(70)
+	penW := float32(64)
 	tabsW := float32(165)
 	azW := float32(30)
 	x := m + penW
@@ -1044,7 +1045,7 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	pagesRight := s.Width - m - 22 - 58 - azW // room for the A–Z tabs and the strap
 	total := pagesRight - x
 	ringsW := float32(46)
-	leftW := float32(math.Max(300, math.Min(400, float64(total)*0.4)))
+	leftW := float32(math.Max(260, math.Min(400, float64(total)*0.42)))
 	l.left.Move(fyne.NewPos(x, top))
 	l.left.Resize(fyne.NewSize(leftW, h))
 	l.rings.Move(fyne.NewPos(x+leftW, top-10))
@@ -1054,6 +1055,10 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	l.right.Resize(fyne.NewSize(pagesRight-rx, h))
 	l.az.Move(fyne.NewPos(pagesRight, top+14))
 	l.az.Resize(fyne.NewSize(azW, h-28))
+	if l.status != nil { // the status line, small, on the leather under the pages
+		l.status.Move(fyne.NewPos(x-6, bottom+2))
+		l.status.Resize(fyne.NewSize(pagesRight-x, 16))
+	}
 	l.pagesPos = fyne.NewPos(x, top)
 	l.pagesSize = fyne.NewSize(pagesRight-x, h)
 	l.cover.Move(fyne.NewPos(0, 0))
@@ -1068,15 +1073,13 @@ func (u *ui) filofaxLayout(listPane fyne.CanvasObject) fyne.CanvasObject {
 	u.rightPage = newPaperPage(u.right, true, false)
 	rings := newBinderRings()
 	az := u.letterStrip()
-	lay := &organiserLayout{tabs: tabs, left: u.leftPage, rings: rings, right: u.rightPage, az: az}
+	status := container.NewThemeOverride(u.status, &leatherTextTheme{&filofaxTheme{newAppTheme()}})
+	lay := &organiserLayout{tabs: tabs, left: u.leftPage, rings: rings, right: u.rightPage, az: az, status: status}
 	cover := &leatherCover{pageArea: func() (fyne.Position, fyne.Size) { return lay.pagesPos, lay.pagesSize }}
 	cover.ExtendBaseWidget(cover)
 	lay.cover = cover
 	// order matters: the A–Z and index tabs sit under the page edges, the rings over them
-	book := container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings)
-	statusBg := canvas.NewRectangle(deskColor)
-	status := container.NewStack(statusBg, container.NewPadded(u.status))
-	return container.NewBorder(nil, status, nil, nil, book)
+	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status)
 }
 
 // toggleLook switches between the Filofax organiser and the classic Mac panes.
@@ -1170,11 +1173,11 @@ type closedRenderer struct {
 
 func (r *closedRenderer) Layout(s fyne.Size) {
 	r.desk.Resize(s)
-	// a closed organiser is about half as wide as an open one
-	ch := s.Height - 60
-	cw := float32(math.Min(float64(ch)*0.72, float64(s.Width)-140))
-	x, y := (s.Width-cw)/2-20, float32(30)
-	r.shadow.Move(fyne.NewPos(x+6, y+9))
+	// the book fills the window, leaving only room for the strap's overhang
+	ch := s.Height - 6
+	cw := s.Width - 6 - 40
+	x, y := float32(3), float32(3)
+	r.shadow.Move(fyne.NewPos(x+1, y+2))
 	r.shadow.Resize(fyne.NewSize(cw, ch))
 	r.leather.Move(fyne.NewPos(x, y))
 	r.leather.Resize(fyne.NewSize(cw, ch))
@@ -1209,8 +1212,8 @@ func (r *closedRenderer) Layout(s fyne.Size) {
 	r.hint.Resize(fyne.NewSize(tw, r.hint.MinSize().Height))
 	r.hint.Move(fyne.NewPos(tx, y+ch-60))
 	// strap over the right edge, fastened
-	sw, sh := float32(120), float32(124)
-	sx, sy := x+cw-80, y+ch/2-sh/2
+	sw, sh := float32(116), float32(124)
+	sx, sy := x+cw-78, y+ch/2-sh/2
 	r.strap.Move(fyne.NewPos(sx, sy))
 	r.strap.Resize(fyne.NewSize(sw, sh))
 	r.strapShade.Move(fyne.NewPos(sx, sy))
@@ -1247,10 +1250,12 @@ func (u *ui) showCover() {
 	}
 	u.leaveEditor(func() {
 		u.saveWindow() // remembers the page it was left at
+		u.openSize = u.win.Canvas().Size()
 		cv := &closedCover{count: len(u.store.Contacts), onOpen: u.openBook}
 		cv.ExtendBaseWidget(cv)
 		u.coverShown = true
 		u.win.SetContent(cv)
+		u.win.Resize(closedSize(u.openSize.Height)) // the window takes the shape of the closed book
 	}, nil)
 }
 
@@ -1264,6 +1269,9 @@ func (u *ui) openBook() {
 		u.group, u.letter, u.selectedID = grpAll, "", ""
 	}
 	u.win.SetContent(u.bookContent)
+	if u.openSize.Width > 0 {
+		u.win.Resize(u.openSize)
+	}
 	u.refreshAll()
 	if i := u.indexOf(u.selectedID); i >= 0 {
 		u.list.ScrollTo(i)
@@ -1284,4 +1292,22 @@ func (u *ui) restorePage() {
 	if u.store.Get(u.cfg.LastContact) != nil {
 		u.selectedID = u.cfg.LastContact
 	}
+}
+
+// leatherTextTheme: light tan writing for text placed on the leather (the status line).
+type leatherTextTheme struct{ fyne.Theme }
+
+func (t *leatherTextTheme) Color(n fyne.ThemeColorName, v fyne.ThemeVariant) color.Color {
+	if n == theme.ColorNameForeground || n == theme.ColorNameDisabled {
+		return color.NRGBA{0xF0, 0xD6, 0xB0, 0xD8}
+	}
+	return t.Theme.Color(n, v)
+}
+
+// closedSize is the window size that fits the closed book for a given height.
+func closedSize(h float32) fyne.Size {
+	if h < 480 {
+		h = 480
+	}
+	return fyne.NewSize(h*0.70+40, h)
 }

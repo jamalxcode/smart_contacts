@@ -175,6 +175,11 @@ Settings choose whether it opens at the last page or the first, and whether to s
 cover at all. View → Filofax Look switches back to plain Mac panes. Everything is drawn by the
 app; the printed parts are set in Libre Baskerville, names and fields in a font with Arabic.
 
+**Search Filter tab.** The first index tab opens a small form on the page — Name, Company, Country
+(by address or phone code), City and "Anything else" (a number, an email, a word from the notes).
+Only people matching every filled-in field stay on the page, as you type; the filter can be saved
+as a smart group.
+
 **Country flags.** Every phone number shows its country's flag — 🇰🇼 for +965, 🇬🇧 for +44 —
 in the list, on the card (updating as you type) and in Quick Find. The flags are small pictures
 because the toolkit can't draw colour emoji.

@@ -1094,7 +1094,9 @@ func (u *ui) settings() {
 }
 
 func (u *ui) help() {
-	text := `**The organiser.** It opens closed: click the cover or press any key. The coloured tabs on the left are your lists and groups; the A–Z tabs down the right edge show only the people filed under those letters (All shows everyone, ع holds Arabic names, # the rest). View → Close Organiser (⇧⌘W) closes it; next time it opens at the same page, unless Settings → Open at says the first page. View → Filofax Look switches to the plain Mac look and back. Each phone number shows its country's flag.
+	text := `**Search Filter.** The first tab opens a form on the page: fill in any of Name, Company, Country, City or Other, and only the people matching all of them are shown. Save as Smart Group keeps it in the sidebar.
+
+**The organiser.** It opens closed: click the cover or press any key. The coloured tabs on the left are your lists and groups; the A–Z tabs down the right edge show only the people filed under those letters (All shows everyone, ع holds Arabic names, # the rest). View → Close Organiser (⇧⌘W) closes it; next time it opens at the same page, unless Settings → Open at says the first page. View → Filofax Look switches to the plain Mac look and back. Each phone number shows its country's flag.
 
 **Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
 
