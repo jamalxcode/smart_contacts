@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"archive/zip"
 	"bytes"
 	"fmt"
@@ -25,10 +26,11 @@ func testZip(t *testing.T) []byte {
 }
 
 func fastRetries(t *testing.T, urls ...string) {
-	ow, ou := retryWaits, downloadURLs
-	retryWaits = []time.Duration{0, time.Millisecond, time.Millisecond, time.Millisecond}
+	ow, ou, oh, os_ := retryWaits, downloadURLs, headerWait, stallWait
+	retryWaits = []time.Duration{0, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond, time.Millisecond}
 	downloadURLs = func() []string { return urls }
-	t.Cleanup(func() { retryWaits, downloadURLs = ow, ou })
+	headerWait, stallWait = 300*time.Millisecond, 300*time.Millisecond
+	t.Cleanup(func() { retryWaits, downloadURLs, headerWait, stallWait = ow, ou, oh, os_ })
 }
 
 // 504 twice, then a connection that drops halfway, then the rest via Range.
@@ -66,7 +68,7 @@ func TestDownloadRetriesAndResumes(t *testing.T) {
 	fastRetries(t, srv.URL)
 	var msgs []string
 	path := filepath.Join(t.TempDir(), "u.zip")
-	if err := downloadZip(path, nil, func(s string) { msgs = append(msgs, s) }); err != nil {
+	if err := downloadZip(context.Background(), path, nil, func(s string) { msgs = append(msgs, s) }); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -94,7 +96,7 @@ func TestDownloadFallsBack(t *testing.T) {
 	defer good.Close()
 	fastRetries(t, bad.URL, good.URL)
 	path := filepath.Join(t.TempDir(), "u.zip")
-	if err := downloadZip(path, nil, nil); err != nil {
+	if err := downloadZip(context.Background(), path, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := os.ReadFile(path)
@@ -110,8 +112,67 @@ func TestDownloadGivesUpKindly(t *testing.T) {
 	}))
 	defer bad.Close()
 	fastRetries(t, bad.URL)
-	err := downloadZip(filepath.Join(t.TempDir(), "u.zip"), nil, nil)
+	err := downloadZip(context.Background(), filepath.Join(t.TempDir(), "u.zip"), nil, nil)
 	if err == nil || !strings.Contains(err.Error(), "install.sh") || !strings.Contains(err.Error(), "few minutes") {
 		t.Fatalf("unhelpful error: %v", err)
+	}
+}
+
+// A server that never answers, and one that goes quiet mid-download, don't hang the update:
+// the attempt is dropped and the other link is used.
+func TestDownloadDoesNotHang(t *testing.T) {
+	data := testZip(t)
+	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	}))
+	defer silent.Close()
+	stalls := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(data)))
+		w.WriteHeader(200)
+		w.Write(data[:len(data)/2])
+		w.(http.Flusher).Flush()
+		select {
+		case <-r.Context().Done():
+		case <-time.After(5 * time.Second):
+		}
+	}))
+	defer stalls.Close()
+	good := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.ServeContent(w, r, "u.zip", time.Time{}, bytes.NewReader(data))
+	}))
+	defer good.Close()
+	for _, bad := range []string{silent.URL, stalls.URL} {
+		fastRetries(t, bad, good.URL)
+		start := time.Now()
+		path := filepath.Join(t.TempDir(), "u.zip")
+		if err := downloadZip(context.Background(), path, nil, nil); err != nil {
+			t.Fatal(err)
+		}
+		if got, _ := os.ReadFile(path); !bytes.Equal(got, data) {
+			t.Fatal("file differs")
+		}
+		if d := time.Since(start); d > 3*time.Second {
+			t.Fatalf("took %v", d)
+		}
+	}
+}
+
+// Cancel stops at once.
+func TestDownloadCancel(t *testing.T) {
+	silent := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer silent.Close()
+	fastRetries(t, silent.URL)
+	headerWait = 10 * time.Second
+	ctx, cancel := context.WithCancel(context.Background())
+	time.AfterFunc(200*time.Millisecond, cancel)
+	start := time.Now()
+	err := downloadZip(ctx, filepath.Join(t.TempDir(), "u.zip"), nil, nil)
+	if err == nil || time.Since(start) > 2*time.Second {
+		t.Fatalf("cancel didn't stop it: %v after %v", err, time.Since(start))
 	}
 }

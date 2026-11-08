@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/zip"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -110,8 +111,11 @@ func appBundle() string {
 // release link, then GitHub's API asset link), retries with pauses, and resumes a partial
 // download instead of starting over.
 var (
-	retryWaits   = []time.Duration{0, 2 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
+	// pauses between attempts; each attempt switches link, so both get tried early
+	retryWaits   = []time.Duration{0, 0, 3 * time.Second, 3 * time.Second, 8 * time.Second, 8 * time.Second}
 	downloadURLs = func() []string { return []string{assetAPIURL(), releaseZip} } // the API link first: it has been the reliable one
+	headerWait   = 20 * time.Second                                               // GitHub must start answering within this
+	stallWait    = 30 * time.Second                                               // and must not go quiet for longer than this mid-download
 )
 
 // assetAPIURL is the API link of the release's zip ("" if GitHub can't be asked).
@@ -145,12 +149,16 @@ func assetAPIURL() string {
 type errPermanent struct{ error }
 
 // fetchOnce downloads url into path, resuming from what's already there.
-func fetchOnce(cl *http.Client, url, path string, progress func(float64)) error {
+func fetchOnce(ctx context.Context, cl *http.Client, url, path string, progress func(float64)) error {
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	stall := time.AfterFunc(headerWait+stallWait, cancel) // reset whenever bytes arrive
 	have := int64(0)
 	if st, err := os.Stat(path); err == nil {
 		have = st.Size()
 	}
-	req, _ := http.NewRequest("GET", url, nil)
+	defer stall.Stop()
+	req, _ := http.NewRequestWithContext(ctx, "GET", url, nil)
 	req.Header.Set("User-Agent", "SmartContacts-updater")
 	if strings.Contains(url, "api.github.com") {
 		req.Header.Set("Accept", "application/octet-stream")
@@ -191,6 +199,7 @@ func fetchOnce(cl *http.Client, url, path string, progress func(float64)) error 
 	for {
 		n, rerr := resp.Body.Read(buf)
 		if n > 0 {
+			stall.Reset(stallWait)
 			if _, err := f.Write(buf[:n]); err != nil {
 				return errPermanent{err}
 			}
@@ -211,52 +220,73 @@ func fetchOnce(cl *http.Client, url, path string, progress func(float64)) error 
 	}
 }
 
-// downloadZip tries each route with retries; status reports "trying again…" to the screen.
-func downloadZip(path string, progress func(float64), status func(string)) error {
-	cl := &http.Client{Timeout: 10 * time.Minute}
+// downloadZip tries the links in turn, switching after every failure, keeping what has
+// arrived so the next attempt resumes. status tells the screen what's happening.
+func downloadZip(ctx context.Context, path string, progress func(float64), status func(string)) error {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	tr.ResponseHeaderTimeout = headerWait
+	cl := &http.Client{Transport: tr} // no overall limit: a slow but moving download is fine
+	var urls []string
+	for _, u := range downloadURLs() {
+		if u != "" {
+			urls = append(urls, u)
+		}
+	}
+	if len(urls) == 0 {
+		return errors.New("couldn't find the update on GitHub; try again in a few minutes")
+	}
+	say := func(s string) {
+		if status != nil {
+			status(s)
+		}
+	}
 	var last error
-	urls := downloadURLs()
-	for ui, url := range urls {
-		if url == "" {
+	gone := map[string]bool{} // links that answered "not found" or similar
+	for i, wait := range retryWaits {
+		url := urls[i%len(urls)]
+		if gone[url] {
 			continue
 		}
-		os.Remove(path) // a new route starts clean
-		for i, wait := range retryWaits {
-			if wait > 0 && status != nil {
-				status(fmt.Sprintf("GitHub is slow to answer — trying again (%d of %d)…", i+1, len(retryWaits)))
-			}
-			time.Sleep(wait)
-			err := fetchOnce(cl, url, path, progress)
-			if err == nil {
-				if zr, zerr := zip.OpenReader(path); zerr == nil {
-					zr.Close()
-					return nil
-				}
-				os.Remove(path)
-				last = errors.New("the download was damaged")
-				continue
-			}
-			last = err
-			var p errPermanent
-			if errors.As(err, &p) {
-				break
-			}
+		if i > 0 {
+			say(fmt.Sprintf("GitHub is slow to answer — trying again (%d of %d)…", i+1, len(retryWaits)))
 		}
-		if ui < len(urls)-1 && urls[ui+1] != "" && status != nil {
-			status("Trying GitHub's other download link…")
+		select {
+		case <-time.After(wait):
+		case <-ctx.Done():
+			return ctx.Err()
+		}
+		err := fetchOnce(ctx, cl, url, path, progress)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if err == nil {
+			if zr, zerr := zip.OpenReader(path); zerr == nil {
+				zr.Close()
+				return nil
+			}
+			os.Remove(path)
+			last = errors.New("the download was damaged")
+			continue
+		}
+		last = err
+		var p errPermanent
+		if errors.As(err, &p) {
+			gone[url] = true
+			os.Remove(path)
 		}
 	}
 	return fmt.Errorf("the download didn't finish: GitHub's file server is busy (%v). Try Check for Updates again in a few minutes, "+
 		"or update from Terminal:\n\ncurl -fsSL https://raw.githubusercontent.com/jamalxcode/smart_contacts/main/install.sh | bash", last)
 }
 
-func DownloadUpdate(progress func(float64), status func(string)) (string, error) {
+func DownloadUpdate(ctx context.Context, progress func(float64), status func(string)) (string, error) {
 	tmp, err := os.MkdirTemp("", "smart-contacts-update-")
 	if err != nil {
 		return "", err
 	}
 	zipPath := filepath.Join(tmp, "update.zip")
-	if err := downloadZip(zipPath, progress, status); err != nil {
+	if err := downloadZip(ctx, zipPath, progress, status); err != nil {
+		os.RemoveAll(tmp)
 		return "", err
 	}
 	out := filepath.Join(tmp, "app")

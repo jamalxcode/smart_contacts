@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -90,12 +91,17 @@ func (u *ui) installUpdate(r *Release) {
 	}
 	bar := widget.NewProgressBar()
 	status := widget.NewLabel("Downloading " + r.Version + "…")
-	prog := dialog.NewCustomWithoutButtons("Updating Smart Contacts", container.NewVBox(status, bar), u.win)
-	prog.Resize(fyne.NewSize(420, 140))
+	ctx, cancel := context.WithCancel(context.Background())
+	prog := dialog.NewCustom("Updating Smart Contacts", "Cancel", container.NewVBox(status, bar), u.win)
+	prog.SetOnClosed(cancel)
+	prog.Resize(fyne.NewSize(460, 160))
 	prog.Show()
 	go func() {
-		app, err := DownloadUpdate(func(p float64) { fyne.Do(func() { bar.SetValue(p) }) },
+		app, err := DownloadUpdate(ctx, func(p float64) { fyne.Do(func() { bar.SetValue(p) }) },
 			func(s string) { fyne.Do(func() { status.SetText(s) }) })
+		if ctx.Err() != nil { // cancelled: nothing changed
+			return
+		}
 		fyne.Do(func() {
 			if err != nil {
 				prog.Hide()
