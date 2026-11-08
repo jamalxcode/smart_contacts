@@ -47,7 +47,7 @@ func (u *ui) bringEverythingIn() {
 		{"Facebook / Snapchat friends", "Their data downloads (JSON); names are matched to people you have.", has("Facebook", "Snapchat"), "Choose File…", u.importFile},
 		{"Calendar", "Links meetings to the people in them.", len(u.cal.Events) > 0, "Read…", u.calendarDialog},
 		{"Clean up", "Fix numbers, emails and notes across everyone.", !u.cfg.LastCleanup.IsZero(), "Clean Up…", u.cleanup},
-		{"Deduplicate", "Merge anyone who ended up on two cards.", !u.cfg.LastDedupe.IsZero(), "Deduplicate…", u.duplicates},
+		{"Look for duplicates", "Merge anyone who ended up on two cards.", !u.cfg.LastDedupe.IsZero(), "Look…", u.duplicates},
 	}
 	box := container.NewVBox()
 	done, marked := 0, false
@@ -85,13 +85,13 @@ func (u *ui) backupTo() {
 		write := func() {
 			name := filepath.Join(dir.Path(), "Smart Contacts backup "+time.Now().Format("2006-01-02 1504")+".zip")
 			if err := zipDataDir(u.store.Dir(), name); err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			u.flash("Backed up to " + name)
 		}
 		if InCloudFolder(dir.Path()) {
-			dialog.ShowConfirm("This folder syncs to the cloud", "A backup there leaves this Mac. Use an external drive or a local folder to keep it private. Save there anyway?", func(ok bool) {
+			u.confirmCB("This folder syncs to the cloud", "A backup there leaves this Mac. Use an external drive or a local folder to keep it private. Save there anyway?", "Save Anyway", false, func(ok bool) {
 				if ok {
 					write()
 				}

@@ -36,16 +36,16 @@ func (u *ui) choosePersonalPhoto(c *Contact) {
 		defer r.Close()
 		b, err := io.ReadAll(io.LimitReader(r, 60<<20))
 		if err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			return
 		}
 		img, err := ToJPEG(b, r.URI().Name()) // iPhone HEIC photos are converted on the Mac
 		if err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			return
 		}
 		if err := u.store.SetPhoto(c, ShrinkPhoto(img, 512)); err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			return
 		}
 		delete(u.photoCache, c.ID)
@@ -75,7 +75,7 @@ func (u *ui) cardsSection(c *Contact) []fyne.CanvasObject {
 		reveal := widget.NewButtonWithIcon("", theme.FolderOpenIcon(), func() { RevealInFinder(path) })
 		reveal.Importance = widget.LowImportance
 		del := widget.NewButtonWithIcon("", theme.DeleteIcon(), func() {
-			dialog.ShowConfirm("Delete this card image?", "The contact's details stay; only the picture is deleted.", func(ok bool) {
+			u.confirmCB("Delete this card image?", "The contact's details stay; only the picture is deleted.", "Delete", true, func(ok bool) {
 				if ok {
 					u.store.RemoveCardImage(c, ci.File)
 					u.store.Put(c)

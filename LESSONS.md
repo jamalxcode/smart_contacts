@@ -186,7 +186,24 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
   prompt. A translocated copy (opened from a quarantined zip) can't update itself.
 - The release notes carry the commit message so the update dialog can say what changed.
 
-## 10. Ideas not done yet
+## 10. Making a Fyne app feel like a Mac app (2026-11-08)
+
+- **Theme:** Apple's NSColor values for light and dark (system blue accent, label/secondary/
+  tertiary greys, separator), 13-pt text, 11-pt captions, 4/7 padding, 6-pt corner radius. The
+  font stays Fyne's: macOS ships San Francisco only as a variable font with no separate bold file.
+- **Fyne moves menu items labelled exactly "About" and "Settings…"** into the macOS app menu.
+  "About Smart Contacts" stays where it is, so the label is just "About".
+- **The split divider is painted with the shadow colour**; a theme override on the split container
+  makes it a light gutter without touching anything else.
+- **Any widget that handles a mouse event takes every click:** a right-click wrapper on list rows
+  stopped rows from selecting until it passed left clicks back to the list.
+- **Fyne dialogs ignore Esc and Return;** dialogs are tracked and the window's key handler
+  dismisses or confirms the top one. Yes/No buttons were replaced with verbs (HIG).
+- Menu shortcuts are caught before text fields, so Cut/Copy/Paste/Select All forward to the
+  focused field; ⌘C with nothing focused copies the card.
+- Missing glyphs: "↔" rendered as a coloured blob in Fyne's font; use words.
+
+## 11. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

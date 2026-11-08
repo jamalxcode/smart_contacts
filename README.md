@@ -35,7 +35,7 @@ are untouched. The app never checks by itself; running the install line again al
 ## What it does
 
 **Bring Everything In (File menu, and the first screen).** A checklist walks through every source
-below, then Clean Up and Deduplicate, ticking off each one as it's done. File → Import Contacts (⌘I)
+below, then Clean Up and Look for Duplicates, ticking off each one as it's done. File → Import (⌘O)
 takes contacts from:
 
 | Source | What to export |
@@ -75,7 +75,7 @@ Or drag files onto the window. Every import shows a preview first:
   duplicates among the people just imported are offered for review.
 - **Safety:** a backup is saved before every import.
 
-**Clean Up (Tools).** Phones and emails are checked against what's known:
+**Clean Up (Card menu).** Phones and emails are checked against what's known:
 
 - **Phones:** 00 → +, +965 added to Kuwaiti numbers, stray zeros removed (+44 (0)20…,
   +966 05…, an extra 0 on a Kuwaiti number), and Arabic digits converted. A number with no
@@ -91,9 +91,9 @@ Or drag files onto the window. Every import shows a preview first:
 - **Safety:** 171, 112 and 7-digit 180… service lines are left alone, and a backup is saved
   before applying.
 
-**Notes clean-up and Deduplicate.** Clean Up also tidies notes: repeated lines, runs of blank
+**Notes clean-up and duplicates.** Clean Up also tidies notes: repeated lines, runs of blank
 lines, HTML and `\n` left by exports, and lines that only repeat a number or email on the card.
-Tools → Deduplicate (⌘⇧D) does both kinds of de-duplication: the same person on several cards
+Card → Look for Duplicates (⇧⌘D) does both kinds of de-duplication: the same person on several cards
 (merged into the fullest card) and repeats inside a card (numbers, emails, links, addresses, note
 lines).
 
@@ -102,7 +102,7 @@ Message, WhatsApp, Email, FaceTime, plus LinkedIn, Telegram, Instagram (DM), Mes
 Signal, Snapchat, TikTok, GitHub or Skype when there's a profile link or handle. *More* offers
 number-based options (Telegram or Signal by number, FaceTime Audio, Teams chat).
 
-**Calendar log.** Tools → Calendar Log (⌘⇧L) reads the Mac Calendar app (including Google, Outlook
+**Calendar log.** View → Calendar Log (⇧⌘L) reads the Mac Calendar app (including Google, Outlook
 and iCloud calendars added to the Mac) or an .ics file. Each card then lists the meetings the
 person attended (by email or full name) or was mentioned in (full name, Arabic or English, in the
 title, place or notes), upcoming ones first, and shows "last met".
@@ -117,22 +117,28 @@ one — and the image is kept on the card under *Business Cards*.
 finds people in either language.
 
 **Undo everything (⌘Z / ⌘⇧Z).** Every change — an edit, an import, a clean-up, a merge, a
-delete — can be undone and redone. Contact → History lists this session's changes ("Undo back to
+delete — can be undone and redone. Edit → History lists this session's changes ("Undo back to
 here") and the saved restore points (before each import, clean-up and de-duplication, and daily).
 
 **Many at once.** The tick button above the list turns on Select mode: tick people, then add or
-remove a group, favourite, merge, export or delete them together.
+remove a group, favorite, merge, export or delete them together.
 
-**Backups you control.** Tools → Back Up To… writes one .zip of everything (contacts, photos,
+**Backups you control.** File → Back Up To… writes one .zip of everything (contacts, photos,
 business cards, calendar log) to a drive or folder you pick. The OpenRouter key is left out, and
 it warns you if the folder syncs to the cloud.
+
+**A Mac app, by Apple's rules.** Light and dark mode with the system colours, a tinted sidebar,
+13-point text, Contacts-style cards (round message / call / video / mail buttons, grey labels
+beside each value, Edit and Share at the bottom), the standard File, Edit, View, Card and Help
+menus with Contacts' shortcuts, right-click menus on people, buttons named for what they do
+("Delete", not "Yes"), and Esc / Return in every dialog.
 
 **Everything else**
 
 - **Three panes** — groups and sources on the left, a searchable list, the contact card on the right.
 - **Search that forgives** — any script, with or without accents or hamza (أحمد = احمد), Persian
   letters, part of a phone number with or without spaces (`9999 8888`, `٩٩٩٩`), company, notes.
-- **Smart Add** (⌘⇧N) — paste one person's signature or business card; read on this Mac
+- **Smart Add** (⌥⌘N) — paste one person's signature or business card; read on this Mac
   (optional Cloud AI). It warns if they're already in your contacts.
 - **Quick actions** — Call, Message, WhatsApp, Email, Maps (the Mac's own apps); last contacted.
 - **Birthdays** — `1990-03-14`, `14/03/1990` or `14/03`; next 30 days with the age they turn.
@@ -176,24 +182,31 @@ it warns you if the folder syncs to the cloud.
 
 ## Keyboard
 
+The shortcuts follow Apple's Contacts app where there's an equivalent.
+
 | Keys | Action |
 |---|---|
-| ⌘N | new contact |
-| ⌘⇧N | Smart Add |
-| ⌘F | search |
-| ⌘E / Return | edit |
+| ⌘N | new card |
+| ⇧⌘N | new group |
+| ⌥⌘N | Smart Add |
+| ⌘O | import |
+| ⇧⌘R | import from Mac Contacts |
+| ⌘F | find |
+| ⌘L / Return | edit card |
 | ⌘S | save |
-| ⌘⌫ | delete (to Trash) |
-| ⌘Z / ⌘⇧Z | undo / redo |
-| ⌘⇧R | refresh from Mac Contacts |
-| ⌘⇧F | favourite |
-| ⌘K | connect to someone |
-| ⌘⇧K | how are they connected? |
-| ⌘I | import contacts (all sources) |
-| ⌘⇧D | deduplicate |
-| ⌘⇧L | calendar log |
-| ⌘O | import a file |
+| ⌘⌫ | delete card (to Trash) |
+| ⌘Z / ⇧⌘Z | undo / redo |
+| ⌘C | copy (the whole card as text when nothing is being typed) |
+| ⌘A | select all cards shown |
+| ⇧⌘S | select cards |
+| ⇧⌘M | merge selected cards |
+| ⌘1 – ⌘4 | All Contacts, Favorites, Upcoming Birthdays, Recently Added |
+| ⇧⌘F | mark as favorite |
+| ⌘K / ⇧⌘K | connect to… / how are they connected? |
+| ⇧⌘D | look for duplicates |
+| ⇧⌘L | calendar log |
 | ⌘, | settings |
+| Esc / Return | cancel / confirm a dialog |
 
 ## Roadmap
 

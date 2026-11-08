@@ -217,7 +217,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	}
 	e.first, e.last = ent(c.First, "First name"), ent(c.Last, "Last name")
 	e.nick = ent(c.Nickname, "Nickname")
-	e.alt = ent(c.AltName, "Name in other language (Arabic ↔ English)")
+	e.alt = ent(c.AltName, "Name in the other language (Arabic or English)")
 	e.company, e.title = ent(c.Company, "Company"), ent(c.Title, "Job title")
 	e.birthday = ent(c.Birthday, "e.g. 1990-03-14, 14/03/1990 or 14/03")
 	e.bdayHint = caption("")
@@ -414,18 +414,18 @@ func (e *editor) save() {
 	c := e.c
 	if c.Birthday != "" {
 		if _, ok := CanonicalBirthday(c.Birthday); !ok {
-			dialog.ShowError(errors.New("the birthday isn't a date I understand — try 1990-03-14 or 14/03"), e.u.win)
+			showErr(errors.New("the birthday isn't a date I understand — try 1990-03-14 or 14/03"), e.u.win)
 			return
 		}
 	}
 	c.Tidy()
 	if c.DisplayName() == "No Name" {
-		dialog.ShowInformation("Nothing to save", "Give the contact a name, a company, a phone number or an email.", e.u.win)
+		showInfo("Nothing to save", "Give the contact a name, a company, a phone number or an email.", e.u.win)
 		return
 	}
 	if e.photoSet {
 		if err := e.u.store.SetPhoto(c, e.photo); err != nil {
-			dialog.ShowError(err, e.u.win)
+			showErr(err, e.u.win)
 			return
 		}
 		delete(e.u.photoCache, c.ID)
@@ -444,7 +444,7 @@ func (e *editor) save() {
 	if e.card != nil {
 		c.AddEvent(time.Now(), "Business card scanned ("+e.cardNote+")", "Business card")
 		if err := e.u.store.AddCardImage(c, e.card, e.cardNote); err != nil {
-			dialog.ShowError(err, e.u.win)
+			showErr(err, e.u.win)
 		}
 		e.card = nil
 	}
@@ -469,7 +469,7 @@ func (e *editor) save() {
 	if isNew {
 		e.u.flash("Added " + c.DisplayName())
 		if dupes := e.u.lookalikes(c); len(dupes) > 0 {
-			e.u.flash(fmt.Sprintf("Added %s — looks like %s, already in your contacts (Tools → Find Duplicates)", c.DisplayName(), dupes[0].DisplayName()))
+			e.u.flash(fmt.Sprintf("Added %s — looks like %s, already in your contacts (Card → Look for Duplicates)", c.DisplayName(), dupes[0].DisplayName()))
 		}
 	}
 }
@@ -513,11 +513,11 @@ func (e *editor) choosePhoto() {
 		defer r.Close()
 		b, err := io.ReadAll(io.LimitReader(r, 40<<20))
 		if err != nil {
-			dialog.ShowError(err, e.u.win)
+			showErr(err, e.u.win)
 			return
 		}
 		if !CanDecodeImage(b) {
-			dialog.ShowError(errors.New("that picture couldn't be read — use a JPEG or PNG (iPhone HEIC photos: open in Preview and export as JPEG)"), e.u.win)
+			showErr(errors.New("that picture couldn't be read — use a JPEG or PNG (iPhone HEIC photos: open in Preview and export as JPEG)"), e.u.win)
 			return
 		}
 		small := ShrinkPhoto(b, 512)

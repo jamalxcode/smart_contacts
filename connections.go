@@ -105,7 +105,7 @@ func (u *ui) connectionsSection(c *Contact) []fyne.CanvasObject {
 		jump.Importance = widget.LowImportance
 		oid := o.ID
 		remove := widget.NewButtonWithIcon("", theme.ContentRemoveIcon(), func() {
-			dialog.ShowConfirm("Remove connection?", fmt.Sprintf("%s and %s will no longer be linked as %s.", c.DisplayName(), o.DisplayName(), strings.ToLower(l.Label)), func(ok bool) {
+			u.confirmCB("Remove connection?", fmt.Sprintf("%s and %s will no longer be linked as %s.", c.DisplayName(), o.DisplayName(), strings.ToLower(l.Label)), "Remove", true, func(ok bool) {
 				if ok {
 					u.store.RemoveLink(c.ID, oid)
 					u.save()
@@ -187,7 +187,7 @@ func (u *ui) connectDialog(c *Contact) {
 			return
 		}
 		if pick.chosen == nil {
-			dialog.ShowInformation("Pick someone", "Choose a person from the list first.", u.win)
+			showInfo("Pick someone", "Choose a person from the list first.", u.win)
 			return
 		}
 		u.store.AddLink(c.ID, pick.chosen.ID, rel.Text)

@@ -114,7 +114,7 @@ func (u *ui) bulkRemoveGroup(cs []*Contact) {
 		}
 	}
 	if len(groups) == 0 {
-		dialog.ShowInformation("No groups", "None of the selected people are in a group.", u.win)
+		showInfo("No groups", "None of the selected people are in a group.", u.win)
 		return
 	}
 	sel := widget.NewSelect(groups, nil)
@@ -151,7 +151,7 @@ func (u *ui) bulkMerge(cs []*Contact) {
 	for _, c := range cs {
 		names = append(names, c.DisplayName())
 	}
-	dialog.ShowConfirm(fmt.Sprintf("Merge %d cards?", len(cs)), "They become one card (the fullest one keeps its details and gains the others'):\n"+strings.Join(names, "\n")+"\n\nYou can undo this (⌘Z).", func(ok bool) {
+	u.confirmCB(fmt.Sprintf("Merge %d cards?", len(cs)), "They become one card (the fullest one keeps its details and gains the others'):\n"+strings.Join(names, "\n")+"\n\nYou can undo this (⌘Z).", "Merge", false, func(ok bool) {
 		if !ok {
 			return
 		}
@@ -192,7 +192,7 @@ func (u *ui) bulkMerge(cs []*Contact) {
 }
 
 func (u *ui) bulkDelete(cs []*Contact) {
-	dialog.ShowConfirm(fmt.Sprintf("Delete %d contacts?", len(cs)), "They go to the Trash for 30 days, and ⌘Z undoes it.", func(ok bool) {
+	u.confirmCB(fmt.Sprintf("Delete %d contacts?", len(cs)), "They go to the Trash for 30 days, and ⌘Z undoes it.", "Delete", true, func(ok bool) {
 		if !ok {
 			return
 		}

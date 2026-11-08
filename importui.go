@@ -87,7 +87,7 @@ func (u *ui) importFile() {
 		defer r.Close()
 		b, err := io.ReadAll(io.LimitReader(r, 512<<20))
 		if err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			return
 		}
 		u.importData(r.URI().Name(), b)
@@ -102,7 +102,7 @@ func (u *ui) importDropped(_ fyne.Position, uris []fyne.URI) {
 	for _, uri := range uris {
 		b, err := os.ReadFile(uri.Path())
 		if err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			continue
 		}
 		if IsImageFile(uri.Name()) { // a dropped picture is read as a business card
@@ -120,7 +120,7 @@ func (u *ui) importData(name string, data []byte) {
 	}
 	b, err := ReadImport(name, data, u.cfg.CountryCode)
 	if err != nil {
-		dialog.ShowError(err, u.win)
+		showErr(err, u.win)
 		return
 	}
 	u.previewImport(b)
@@ -145,7 +145,7 @@ func (u *ui) pasteImport() {
 // previewImport shows what an import will do and lets the user adjust it before anything changes.
 func (u *ui) previewImport(b *Batch) {
 	if len(b.Cards) == 0 && b.Table == nil {
-		dialog.ShowInformation("Nothing to import", "No contacts with a name, number or email were found in this file.", u.win)
+		showInfo("Nothing to import", "No contacts with a name, number or email were found in this file.", u.win)
 		return
 	}
 	cc := u.cfg.CountryCode
@@ -299,7 +299,7 @@ func (u *ui) previewImport(b *Batch) {
 			}
 			backup, err := u.store.SnapshotBackup("before-import")
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("couldn't save a backup first, so nothing was imported: %w", err), u.win)
+				showErr(fmt.Errorf("couldn't save a backup first, so nothing was imported: %w", err), u.win)
 				return
 			}
 			src := strings.TrimSpace(source.Text)
@@ -453,8 +453,8 @@ func (u *ui) checkNewDuplicates(touched []*Contact) {
 	if n == 0 {
 		return
 	}
-	dialog.ShowConfirm("Possible duplicates", fmt.Sprintf("%d of the people just imported look like someone already on another card. Review them in Deduplicate?", n),
-		func(ok bool) {
+	u.confirmCB("Possible duplicates", fmt.Sprintf("%d of the people just imported look like someone already on another card. Review them now?", n),
+		"Review", false, func(ok bool) {
 			if ok {
 				u.duplicates()
 			}

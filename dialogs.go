@@ -20,73 +20,95 @@ import (
 )
 
 func (u *ui) mainMenu() *fyne.MainMenu {
-	cmd := func(k fyne.KeyName) fyne.Shortcut {
-		return &desktop.CustomShortcut{KeyName: k, Modifier: fyne.KeyModifierShortcutDefault}
+	mod := func(k fyne.KeyName, m fyne.KeyModifier) fyne.Shortcut {
+		return &desktop.CustomShortcut{KeyName: k, Modifier: fyne.KeyModifierShortcutDefault | m}
 	}
-	cmdShift := func(k fyne.KeyName) fyne.Shortcut {
-		return &desktop.CustomShortcut{KeyName: k, Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift}
-	}
+	cmd := func(k fyne.KeyName) fyne.Shortcut { return mod(k, 0) }
+	cmdShift := func(k fyne.KeyName) fyne.Shortcut { return mod(k, fyne.KeyModifierShift) }
+	cmdOpt := func(k fyne.KeyName) fyne.Shortcut { return mod(k, fyne.KeyModifierAlt) }
 	item := func(label string, sc fyne.Shortcut, f func()) *fyne.MenuItem {
 		m := fyne.NewMenuItem(label, f)
 		m.Shortcut = sc
 		return m
 	}
-	current := func() *Contact { return u.store.Get(u.selectedID) }
+	sep := fyne.NewMenuItemSeparator
+	current := func() *Contact {
+		if u.ed != nil {
+			return nil
+		}
+		return u.store.Get(u.selectedID)
+	}
+	// Cut, Copy, Paste and Select All go to the text field being typed in. The menu catches the
+	// keys first, so they're passed on here.
+	pass := func(sc fyne.Shortcut) bool {
+		if f, ok := u.win.Canvas().Focused().(fyne.Shortcutable); ok {
+			f.TypedShortcut(sc)
+			return true
+		}
+		return false
+	}
+	clip := u.app.Clipboard()
 
+	// File — as in Contacts: new card, new group, import, export.
+	export := fyne.NewMenuItem("Export", nil)
+	export.ChildMenu = fyne.NewMenu("",
+		fyne.NewMenuItem("vCard…", func() { u.exportVCF(u.filtered, u.groupTitle()) }),
+		fyne.NewMenuItem("Spreadsheet (CSV)…", u.exportCSV),
+		fyne.NewMenuItem("Copy to Apple Contacts…", func() {
+			if len(u.filtered) > 0 {
+				u.sendToMacContacts(u.filtered)
+			}
+		}),
+	)
 	file := fyne.NewMenu("File",
-		item("New Contact", cmd(fyne.KeyN), func() { u.editContact(nil) }),
-		item("Smart Add from Text…", cmdShift(fyne.KeyN), u.smartAdd),
-		item("Save Contact", cmd(fyne.KeyS), func() {
+		item("New Card", cmd(fyne.KeyN), func() { u.editContact(nil) }),
+		item("New Group", cmdShift(fyne.KeyN), u.newGroupDialog),
+		item("Smart Add…", cmdOpt(fyne.KeyN), u.smartAdd),
+		sep(),
+		item("Import…", cmd(fyne.KeyO), u.importHub),
+		fyne.NewMenuItem("Bring Everything In…", u.bringEverythingIn),
+		item("Import from Mac Contacts", cmdShift(fyne.KeyR), u.importMac),
+		fyne.NewMenuItem("Paste People from Text…", u.pasteImport),
+		sep(),
+		export,
+		fyne.NewMenuItem("Back Up To…", u.backupTo),
+		fyne.NewMenuItem("Show Data Folder in Finder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
+		sep(),
+		item("Save", cmd(fyne.KeyS), func() {
 			if u.ed != nil {
 				u.ed.save()
 			}
 		}),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Bring Everything In…", u.bringEverythingIn),
-		item("Import Contacts…", cmd(fyne.KeyI), u.importHub),
-		fyne.NewMenuItem("Import from Mac Contacts…", u.importMac),
-		item("Refresh from Mac Contacts", cmdShift(fyne.KeyR), u.importMac),
-		item("Import a File…", cmd(fyne.KeyO), u.importFile),
-		fyne.NewMenuItem("Paste People from Text…", u.pasteImport),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Export Shown Contacts as vCard…", func() { u.exportVCF(u.filtered, u.groupTitle()) }),
-		fyne.NewMenuItem("Export Shown Contacts as CSV…", u.exportCSV),
-		fyne.NewMenuItem("Copy Shown Contacts to Apple Contacts…", func() {
-			if len(u.filtered) == 0 {
-				return
-			}
-			u.sendToMacContacts(u.filtered)
-		}),
+		item("Settings…", cmd(fyne.KeyComma), u.settings), // macOS moves this into the app menu
 	)
-	edit := fyne.NewMenu("Contact",
+
+	// Edit — the standard items first, then the card ones.
+	edit := fyne.NewMenu("Edit",
 		item("Undo", cmd(fyne.KeyZ), u.undo),
 		item("Redo", cmdShift(fyne.KeyZ), u.redo),
-		fyne.NewMenuItem("History…", u.historyDialog),
-		fyne.NewMenuItemSeparator(),
-		item("Find", cmd(fyne.KeyF), func() { u.win.Canvas().Focus(u.search) }),
-		item("Edit Contact", cmd(fyne.KeyE), func() {
-			if c := current(); c != nil && u.ed == nil {
+		sep(),
+		item("Cut", cmd(fyne.KeyX), func() { pass(&fyne.ShortcutCut{Clipboard: clip}) }),
+		item("Copy", cmd(fyne.KeyC), func() {
+			if !pass(&fyne.ShortcutCopy{Clipboard: clip}) {
+				if c := current(); c != nil { // nothing being typed in: copy the card
+					u.copyCard(c)
+				}
+			}
+		}),
+		item("Paste", cmd(fyne.KeyV), func() { pass(&fyne.ShortcutPaste{Clipboard: clip}) }),
+		item("Select All", cmd(fyne.KeyA), func() {
+			if !pass(&fyne.ShortcutSelectAll{}) {
+				u.selectAllCards()
+			}
+		}),
+		sep(),
+		item("Edit Card", cmd(fyne.KeyL), func() {
+			if c := current(); c != nil {
 				u.editContact(c)
 			}
 		}),
-		item("Toggle Favorite", cmdShift(fyne.KeyF), func() {
-			if c := current(); c != nil && u.ed == nil {
-				c.Favorite = !c.Favorite
-				u.store.Put(c)
-				u.save()
-			}
-		}),
-		fyne.NewMenuItemSeparator(),
-		item("Connect to Someone…", cmd(fyne.KeyK), func() {
-			if c := current(); c != nil && u.ed == nil {
-				u.connectDialog(c)
-			}
-		}),
-		item("How Are They Connected?…", cmdShift(fyne.KeyK), func() { u.pathDialog(current(), nil) }),
-		fyne.NewMenuItemSeparator(),
-		item("Delete Contact", cmd(fyne.KeyBackspace), func() {
-			// The menu catches ⌘⌫ before any text field does. In the search box it means
-			// "clear what I typed", and while editing it must never delete the contact.
+		item("Delete Card…", cmd(fyne.KeyBackspace), func() {
+			// In the search box ⌘⌫ clears what was typed; while typing it never deletes a card.
 			if u.win.Canvas().Focused() == u.search {
 				u.search.SetText("")
 				return
@@ -94,27 +116,102 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 			if _, typing := u.win.Canvas().Focused().(*widget.Entry); typing {
 				return
 			}
-			if c := current(); c != nil && u.ed == nil {
+			if u.selectMode && len(u.picked) > 0 {
+				u.bulkDelete(u.pickedContacts())
+				return
+			}
+			if c := current(); c != nil {
 				u.deleteContact(c)
 			}
 		}),
+		sep(),
+		item("Find", cmd(fyne.KeyF), func() { u.win.Canvas().Focus(u.search) }),
+		fyne.NewMenuItem("History…", u.historyDialog),
 	)
-	tools := fyne.NewMenu("Tools",
-		item("Deduplicate…", cmdShift(fyne.KeyD), u.duplicates),
-		fyne.NewMenuItem("Clean Up Numbers and Names…", u.cleanup),
+
+	// View — which list to show and how to sort it.
+	byFirst := fyne.NewMenuItem("Sort by First Name", nil)
+	byLast := fyne.NewMenuItem("Sort by Last Name", nil)
+	setSort := func(last bool) {
+		u.cfg.SortByLast = last
+		_ = u.cfg.Save(u.store.Dir())
+		byFirst.Checked, byLast.Checked = !last, last
+		u.win.MainMenu().Refresh()
+		u.refreshList()
+	}
+	byFirst.Action, byLast.Action = func() { setSort(false) }, func() { setSort(true) }
+	byFirst.Checked, byLast.Checked = !u.cfg.SortByLast, u.cfg.SortByLast
+	view := fyne.NewMenu("View",
+		item("All Contacts", cmd(fyne.Key1), func() { u.showGroup(grpAll) }),
+		item("Favorites", cmd(fyne.Key2), func() { u.showGroup(grpFavorites) }),
+		item("Upcoming Birthdays", cmd(fyne.Key3), func() { u.showGroup(grpBirthdays) }),
+		item("Recently Added", cmd(fyne.Key4), func() { u.showGroup(grpRecent) }),
+		sep(),
+		byFirst, byLast,
+		sep(),
+		item("Select Cards", cmdShift(fyne.KeyS), u.toggleSelectMode),
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
-		fyne.NewMenuItem("Trash…", u.trash),
-		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Back Up To…", u.backupTo),
-		fyne.NewMenuItem("Show Data Folder", func() { RevealInFinder(u.store.Dir() + "/contacts.json") }),
-		item("Settings…", cmd(fyne.KeyComma), u.settings),
+		fyne.NewMenuItem("Trash", u.trash),
 	)
+
+	// Card — what you do with people.
+	card := fyne.NewMenu("Card",
+		item("Mark as Favorite", cmdShift(fyne.KeyF), func() {
+			if c := current(); c != nil {
+				u.toggleFavorite(c)
+			}
+		}),
+		item("Connect to…", cmd(fyne.KeyK), func() {
+			if c := current(); c != nil {
+				u.connectDialog(c)
+			}
+		}),
+		item("How Are They Connected?", cmdShift(fyne.KeyK), func() { u.pathDialog(current(), nil) }),
+		sep(),
+		item("Merge Selected Cards", cmdShift(fyne.KeyM), func() {
+			if u.selectMode && len(u.picked) >= 2 {
+				u.bulkMerge(u.pickedContacts())
+				return
+			}
+			showInfo("Select the cards first", "Choose View → Select Cards (⇧⌘S), tick two or more people, then merge.", u.win)
+		}),
+		item("Look for Duplicates…", cmdShift(fyne.KeyD), u.duplicates),
+		fyne.NewMenuItem("Clean Up Numbers and Names…", u.cleanup),
+		sep(),
+		fyne.NewMenuItem("Copy Card as Text", func() {
+			if c := current(); c != nil {
+				u.copyCard(c)
+			}
+		}),
+		fyne.NewMenuItem("Save Card as vCard…", func() {
+			if c := current(); c != nil {
+				u.exportVCF([]*Contact{c}, c.DisplayName())
+			}
+		}),
+	)
+
 	help := fyne.NewMenu("Help",
-		fyne.NewMenuItem("Smart Contacts Help", u.help),
-		fyne.NewMenuItemSeparator(),
+		item("Smart Contacts Help", cmdShift(fyne.KeySlash), u.help),
+		sep(),
 		fyne.NewMenuItem("Check for Updates…", u.checkForUpdates),
-		fyne.NewMenuItem("About Smart Contacts", u.about))
-	return fyne.NewMainMenu(file, edit, tools, help)
+		fyne.NewMenuItem("About", u.about), // macOS moves this into the app menu
+	)
+	return fyne.NewMainMenu(file, edit, view, card, help)
+}
+
+// selectAllCards ticks everyone in the list (⌘A when not typing).
+func (u *ui) selectAllCards() {
+	if u.ed != nil {
+		return
+	}
+	if !u.selectMode {
+		u.toggleSelectMode()
+	}
+	for _, c := range u.filtered {
+		u.picked[c.ID] = true
+	}
+	u.list.Refresh()
+	u.updateBulkBar()
 }
 
 // ---------- Smart Add ----------
@@ -239,7 +336,7 @@ func (u *ui) chooseCardImage() {
 		defer r.Close()
 		b, err := io.ReadAll(io.LimitReader(r, 60<<20))
 		if err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 			return
 		}
 		u.readCardImage(r.URI().Name(), b)
@@ -253,7 +350,7 @@ func (u *ui) chooseCardImage() {
 func (u *ui) readCardImage(name string, data []byte) {
 	img, err := ToJPEG(data, name)
 	if err != nil {
-		dialog.ShowError(err, u.win)
+		showErr(err, u.win)
 		return
 	}
 	prog := dialog.NewCustomWithoutButtons("Reading the business card…", container.NewVBox(
@@ -264,7 +361,7 @@ func (u *ui) readCardImage(name string, data []byte) {
 		fyne.Do(func() {
 			prog.Hide()
 			if err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			u.runSmartAddCard(text, img)
@@ -283,7 +380,7 @@ func (u *ui) importMac() {
 		fyne.Do(func() {
 			prog.Hide()
 			if err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			u.previewImport(&Batch{Source: "Mac Contacts", Format: "Mac Contacts app", Cards: cards})
@@ -308,7 +405,7 @@ func (u *ui) sendToMacContacts(cs []*Contact) {
 	dialog.ShowCustomConfirm("Copy to Apple Contacts?", "Copy Anyway", "Cancel", msg, func(ok bool) {
 		if ok {
 			if err := OpenInMacContacts(u.store, cs); err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 			}
 		}
 	}, u.win)
@@ -360,7 +457,7 @@ func (u *ui) exportVCF(cs []*Contact, name string) {
 			defer w.Close()
 			for _, c := range cs {
 				if err := WriteVCard(w, c, u.store.Photo(c)); err != nil {
-					dialog.ShowError(err, u.win)
+					showErr(err, u.win)
 					return
 				}
 			}
@@ -384,7 +481,7 @@ func (u *ui) exportCSV() {
 		u.confirmExportPlace(w, func() {
 			defer w.Close()
 			if err := WriteCSV(w, cs); err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			u.flash(fmt.Sprintf("Saved %d contacts to %s", len(cs), w.URI().Name()))
@@ -424,7 +521,7 @@ func (u *ui) duplicates() {
 		}
 	}
 	if len(groups) == 0 && len(inside) == 0 {
-		dialog.ShowInformation("No duplicates", "Every contact is on one card, and no card repeats a number, email, link, address or note line.", u.win)
+		showInfo("No duplicates", "Every contact is on one card, and no card repeats a number, email, link, address or note line.", u.win)
 		return
 	}
 	box := container.NewVBox()
@@ -449,7 +546,7 @@ func (u *ui) duplicates() {
 		var rm *widget.Button
 		rm = widget.NewButtonWithIcon("Remove Repeats", theme.DeleteIcon(), func() {
 			if _, err := u.store.SnapshotBackup("before-dedupe"); err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			touched := map[*Contact]bool{}
@@ -548,7 +645,7 @@ func (u *ui) duplicates() {
 	}
 	mergeAll.Importance = widget.HighImportance
 	mergeAll.OnTapped = func() {
-		dialog.ShowConfirm("Merge all?", fmt.Sprintf("Merge %d sets? Each keeps the fullest card and adds the others' details; the extra cards go to the Trash.", len(groups)), func(ok bool) {
+		u.confirmCB("Merge all?", fmt.Sprintf("Merge %d sets? Each keeps the fullest card and adds the others' details; the extra cards go to the Trash.", len(groups)), "Merge All", false, func(ok bool) {
 			if !ok {
 				return
 			}
@@ -569,7 +666,7 @@ func (u *ui) duplicates() {
 		mergeAll.Hide()
 	}
 	content := container.NewBorder(note, container.NewHBox(layout.NewSpacer(), mergeAll), nil, nil, container.NewVScroll(box))
-	title := "Deduplicate"
+	title := "Look for Duplicates"
 	d = dialog.NewCustom(title, "Close", content, u.win)
 	d.Resize(fyne.NewSize(640, 520))
 	d.Show()
@@ -586,7 +683,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 	changes := PlanCleanup(cs, u.cfg.CountryCode)
 	if len(changes) == 0 {
 		if intro == "" {
-			dialog.ShowInformation("All tidy", "Numbers, emails, names and links already look right.", u.win)
+			showInfo("All tidy", "Numbers, emails, names and links already look right.", u.win)
 		}
 		return
 	}
@@ -674,7 +771,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 			}
 			backup, err := u.store.SnapshotBackup("before-cleanup")
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("couldn't save a backup first, so nothing was changed: %w", err), u.win)
+				showErr(fmt.Errorf("couldn't save a backup first, so nothing was changed: %w", err), u.win)
 				return
 			}
 			n := 0
@@ -709,7 +806,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 
 func (u *ui) trash() {
 	if len(u.store.Trash) == 0 {
-		dialog.ShowInformation("Trash is empty", "Deleted contacts stay here for 30 days.", u.win)
+		showInfo("Trash is empty", "Deleted contacts stay here for 30 days.", u.win)
 		return
 	}
 	box := container.NewVBox()
@@ -737,7 +834,7 @@ func (u *ui) trash() {
 	}
 	fill()
 	empty := widget.NewButtonWithIcon("Empty Trash", theme.DeleteIcon(), func() {
-		dialog.ShowConfirm("Empty the Trash?", "These contacts will be gone for good.", func(ok bool) {
+		u.confirmCB("Empty the Trash?", "These contacts will be gone for good.", "Empty Trash", true, func(ok bool) {
 			if ok {
 				u.store.EmptyTrash()
 				u.save()
@@ -793,7 +890,7 @@ func (u *ui) groupMenu(anchor fyne.CanvasObject) {
 			}),
 			fyne.NewMenuItem("Export “"+g+"” as vCard…", func() { u.exportVCF(u.filtered, g) }),
 			fyne.NewMenuItem("Delete “"+g+"”…", func() {
-				dialog.ShowConfirm("Delete group “"+g+"”?", "The people in it stay in your contacts; only the group goes.", func(ok bool) {
+				u.confirmCB("Delete group “"+g+"”?", "The people in it stay in your contacts; only the group goes.", "Delete Group", true, func(ok bool) {
 					if ok {
 						u.store.RemoveGroup(g)
 						u.group = grpAll
@@ -884,7 +981,7 @@ func (u *ui) settings() {
 			u.cfg.AIModel = DefaultAIModel
 		}
 		if err := u.cfg.Save(u.store.Dir()); err != nil {
-			dialog.ShowError(err, u.win)
+			showErr(err, u.win)
 		}
 		u.refreshAll()
 	}, u.win)
@@ -893,45 +990,39 @@ func (u *ui) settings() {
 }
 
 func (u *ui) help() {
-	text := `**Finding people.** Type in the search box: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears.
+	text := `**Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
 
-**Smart Add** (⌘⇧N). Paste an email signature, a business card's text or a WhatsApp contact message. By default it is read privately on this Mac. Only if you switch on Cloud AI in Settings (and add an OpenRouter key) is the pasted text sent to an AI model. You always check the result before it's saved.
+**Reaching people.** The round buttons under the name follow what the card holds: message, call, WhatsApp, mail, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle. *More* has number-based options. The app remembers when you last contacted someone.
 
-**Quick actions.** Call opens FaceTime/iPhone calling, Message opens Messages, WhatsApp opens the chat, Email opens Mail. The app remembers when you last contacted someone.
+**Editing.** Click Edit at the bottom of the card, or press ⌘L. Right-click a person in the list for Edit, Favorites, Connect, Share and Delete. Share (the arrow button beside Edit) copies the card as text, saves a vCard or copies it to Apple Contacts.
 
-**Groups.** Tick groups on a contact's Edit page, or make one with + Group. A new contact made while a group is open joins that group.
+**Smart Add** (⌥⌘N). Paste an email signature, a business card's text or a WhatsApp contact message, or choose a business card photo. It's read privately on this Mac unless you switch on Cloud AI in Settings. You check the result before it's saved.
 
-**Connections (six degrees).** On a contact's card choose Connect to… (⌘K) to link two people as friends, family, colleagues and so on. People at the same company count as connected automatically. Contact → How Are They Connected? (⌘⇧K) finds the shortest chain between any two people, up to six steps, and each card shows how many people are 1, 2 and 3 steps away. All of it stays on this Mac.
+**Bring Everything In.** File → Bring Everything In is a checklist of every source, then clean-up and duplicates; each step is ticked once done.
 
-**Birthdays.** Type a birthday as 1990-03-14, 14/03/1990, or 14/03 when you don't know the year. The Birthdays list shows the next 30 days and the age they turn.
+**Importing (⌘O).** File → Import brings people in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf, Bluetooth or AirDrop), Gmail, Outlook, Yahoo or iCloud, LinkedIn, Telegram, Facebook, Snapchat, any spreadsheet (.csv or .xlsx, English or Arabic headers) and notes. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name, in Arabic or English, and updated instead of duplicated. Anyone matched by name only is listed for you to check. Each phone, email, link and address shows where it came from, and the Timeline on each card records what happened without touching your notes.
 
-**Bring Everything In.** File → Bring Everything In is a checklist of every source, then Clean Up and Deduplicate; each step is ticked once done.
+**Undo (⌘Z, ⇧⌘Z).** Every change can be undone: edits, imports, clean-ups, merges, deletes. Edit → History lists this session's changes and the saved restore points.
 
-**Bringing contacts in (⌘I).** Smart Contacts is meant to be the one place all your contacts come together. File → Import Contacts brings them in from the Mac's Contacts app (and iPhone via iCloud), other phones (.vcf), Gmail, Outlook, Yahoo or iCloud (vCard or CSV), LinkedIn (Connections.csv), any spreadsheet (.csv or .xlsx — columns are matched automatically, in English or Arabic) and notes or pasted text with several people in it. You can also drag files onto the window. People you already have are recognised by number, email, profile link or name — in Arabic or English — and their cards are updated instead of duplicated. Anyone matched by name only is listed for you to check, with the likely answer pre-selected. Each phone, email, link and address shows where it came from, and the Timeline on each card records what happened ("Connected on LinkedIn", "Job changed…") without touching your notes.
+**Many at once.** View → Select Cards (⇧⌘S), the tick button above the list, or ⌘A for everyone shown. Then group, favorite, merge (⇧⌘M), export or delete them together.
 
-**Undo (⌘Z, ⌘⇧Z).** Every change can be undone — edits, imports, clean-ups, merges, deletes. Contact → History lists this session's changes and the saved restore points.
+**Duplicates and clean-up.** Card → Look for Duplicates (⇧⌘D) merges the same person on several cards and removes repeats inside cards. Card → Clean Up writes every number the same way (+965 9999 8888), fixes emails and links, and tidies notes.
 
-**Many at once.** The tick button above the list turns on Select mode: tick people, then group, favourite, merge, export or delete them together.
+**Groups.** File → New Group (⇧⌘N), then tick groups on a card's Edit page. A new card made while a group is open joins it.
 
-**Reaching people.** A card's buttons follow what it holds: Call, Message, WhatsApp, Email, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle (Edit → Web & Social). More has number-based options.
+**Connections (six degrees).** Card → Connect to… (⌘K) links two people as friends, family, colleagues and so on. Card → How Are They Connected? (⇧⌘K) finds the shortest chain between two people, up to six steps.
 
-**Calendar log (⌘⇧L).** Reads the Mac Calendar app or an .ics file; each card lists the meetings the person was in or mentioned in, and "last met".
+**Calendar log (⇧⌘L).** Reads the Mac Calendar app or an .ics file; each card lists the meetings the person was in or mentioned in, and "last met".
 
-**Photos and business cards.** Click the round picture to set the person's photo. Smart Add → Business Card Image (or drag a card photo onto the window) reads the card on this Mac and keeps the image on the contact.
+**Photos and business cards.** Click the round picture to set the person's photo. A business card photo is read on this Mac and kept on the card.
 
-**Deduplicate (⌘⇧D).** Merges the same person on several cards and removes repeats inside cards. Clean Up also tidies notes.
+**Names in two languages.** Each card can hold the name in the other language (محمد المطيري / Mohammed Al-Mutairi); Edit → Suggest fills common names.
 
-**Names in two languages.** Each contact can hold a second name in the other language (محمد المطيري / Mohammed Al-Mutairi). Edit → "Name in other language" has a Suggest button for common names. Search finds people in either language.
+**Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app goes online only for Cloud AI (if you switch it on) and Help → Check for Updates.
 
-**Tidying.** Tools → Clean Up writes every number the same way (+965 9999 8888), fixes emails and links, and moves automatic note lines to the timeline.
+**Safety.** Deleted cards stay in the Trash (View → Trash) for 30 days. A backup is kept for each of the last 30 days, and File → Back Up To… saves a .zip of everything to a drive you choose.
 
-**Privacy.** Your contacts live only on this Mac, in a folder only your user account can open, kept out of Spotlight. The app never uses the network unless you switch on Cloud AI. Copying to Apple's Contacts app or saving into iCloud Drive/Dropbox warns you first, because those sync off the Mac.
-
-**Updates.** Help → Check for Updates looks for a newer version on GitHub and, if you agree, downloads it, closes the app, swaps it in and reopens it. Your contacts aren't touched. The app never checks on its own.
-
-**Safety.** Deleted contacts sit in the Trash for 30 days. A backup of the whole address book is kept for each of the last 30 days, in the data folder. Tools → Back Up To… saves a .zip of everything to a drive you choose.
-
-**Keys:** ⌘N new · ⌘⇧N Smart Add · ⌘F search · ⌘E edit · ⌘S save · ⌘⌫ delete · ⌘⇧F favorite · ⌘Z undo · ⌘⇧Z redo · ⌘K connect · ⌘⇧K how connected · ⌘I import · ⌘⇧D deduplicate · ⌘⇧L calendar · ⌘, settings`
+**Keys:** ⌘N new card · ⇧⌘N new group · ⌥⌘N Smart Add · ⌘O import · ⌘F find · ⌘L edit card · ⌘S save · ⌘⌫ delete · ⌘Z undo · ⇧⌘Z redo · ⌘A select all · ⌘1–4 lists · ⇧⌘F favorite · ⌘K connect · ⇧⌘K how connected · ⇧⌘D duplicates · ⇧⌘M merge · ⇧⌘L calendar · ⌘, settings`
 	r := widget.NewRichTextFromMarkdown(text)
 	r.Wrapping = fyne.TextWrapWord
 	d := dialog.NewCustom("Smart Contacts Help", "Close", container.NewVScroll(r), u.win)

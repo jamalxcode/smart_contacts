@@ -69,12 +69,12 @@ func (u *ui) historyDialog() {
 			if i > 0 {
 				what = fmt.Sprintf("this change and the %d after it", i)
 			}
-			dialog.ShowConfirm("Undo "+what+"?", "“"+st.Label+"” and everything after it will be reversed. Redo (⌘⇧Z) can bring them back.", func(ok bool) {
+			u.confirmCB("Undo "+what+"?", "“"+st.Label+"” and everything after it will be reversed. Redo (⌘⇧Z) can bring them back.", "Undo", false, func(ok bool) {
 				if !ok {
 					return
 				}
 				if err := u.store.UndoTo(i); err != nil {
-					dialog.ShowError(err, u.win)
+					showErr(err, u.win)
 					return
 				}
 				u.afterRestore()
@@ -104,12 +104,12 @@ func (u *ui) historyDialog() {
 			when = fi.ModTime().Format("2 Jan 2006 · 15:04")
 		}
 		btn := widget.NewButtonWithIcon("Restore", theme.HistoryIcon(), func() {
-			dialog.ShowConfirm("Restore this copy?", "Your address book will be replaced with the copy from "+when+". You can undo this.", func(ok bool) {
+			u.confirmCB("Restore this copy?", "Your address book will be replaced with the copy from "+when+". You can undo this.", "Restore", false, func(ok bool) {
 				if !ok {
 					return
 				}
 				if err := u.store.RestoreFile(p); err != nil {
-					dialog.ShowError(err, u.win)
+					showErr(err, u.win)
 					return
 				}
 				u.afterRestore()

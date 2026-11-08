@@ -25,12 +25,12 @@ func (u *ui) checkForUpdates() {
 		fyne.Do(func() {
 			wait.Hide()
 			if err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			cur := u.appVersion()
 			if !r.NewerThan(cur) {
-				dialog.ShowInformation("You're up to date", fmt.Sprintf("Smart Contacts %s is the newest version.", cur), u.win)
+				showInfo("You're up to date", fmt.Sprintf("Smart Contacts %s is the newest version.", cur), u.win)
 				return
 			}
 			u.offerUpdate(r, cur)
@@ -78,13 +78,13 @@ func releaseNotes(s string) string {
 func (u *ui) installUpdate(r *Release) {
 	bundle := appBundle()
 	if bundle == "" {
-		dialog.ShowInformation("Can't update this copy",
+		showInfo("Can't update this copy",
 			"This copy isn't running as an installed app. Install with the command in the README:\n\n"+
 				"curl -fsSL https://raw.githubusercontent.com/jamalxcode/smart_contacts/main/install.sh | bash", u.win)
 		return
 	}
 	if !canWrite(filepath.Dir(bundle)) {
-		dialog.ShowInformation("Can't update here",
+		showInfo("Can't update here",
 			"Your user can't change "+filepath.Dir(bundle)+". Update from Terminal with the install command in the README.", u.win)
 		return
 	}
@@ -98,18 +98,18 @@ func (u *ui) installUpdate(r *Release) {
 		fyne.Do(func() {
 			if err != nil {
 				prog.Hide()
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			status.SetText("Installing — the app will reopen in a moment…")
 			if err := u.store.Save(); err != nil { // everything is saved already; this is belt and braces
 				prog.Hide()
-				dialog.ShowError(fmt.Errorf("couldn't save before updating: %w", err), u.win)
+				showErr(fmt.Errorf("couldn't save before updating: %w", err), u.win)
 				return
 			}
 			if err := InstallAndRelaunch(app, bundle); err != nil {
 				prog.Hide()
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			fyne.CurrentApp().Quit()

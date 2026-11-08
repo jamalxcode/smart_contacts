@@ -64,7 +64,7 @@ func (u *ui) readMacCalendar(daysBack int) {
 		fyne.Do(func() {
 			prog.Hide()
 			if err != nil {
-				dialog.ShowError(err, u.win)
+				showErr(err, u.win)
 				return
 			}
 			u.saveEvents(evs, "Mac Calendar")
@@ -75,7 +75,7 @@ func (u *ui) readMacCalendar(daysBack int) {
 func (u *ui) importICS(name string, data []byte) {
 	evs, err := ParseICS(bytes.NewReader(data))
 	if err != nil {
-		dialog.ShowError(err, u.win)
+		showErr(err, u.win)
 		return
 	}
 	u.saveEvents(evs, name)
@@ -85,7 +85,7 @@ func (u *ui) saveEvents(evs []CalEvent, from string) {
 	u.cal.Merge(evs, from)
 	u.calCache = nil
 	if err := u.cal.Save(u.store.Dir()); err != nil {
-		dialog.ShowError(err, u.win)
+		showErr(err, u.win)
 		return
 	}
 	linked := 0
@@ -95,7 +95,7 @@ func (u *ui) saveEvents(evs []CalEvent, from string) {
 		}
 	}
 	u.showDetail()
-	dialog.ShowInformation("Calendar read", fmt.Sprintf("%d events from %s. %d of your contacts appear in them — see the Calendar section on their cards.",
+	showInfo("Calendar read", fmt.Sprintf("%d events from %s. %d of your contacts appear in them — see the Calendar section on their cards.",
 		len(evs), from, linked), u.win)
 }
 
