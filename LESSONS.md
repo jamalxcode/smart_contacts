@@ -338,7 +338,11 @@ Twenty-five Card commands came down to ten by having one rule for what they act 
 - The paper hides input borders so fields read as ruled lines. Fyne draws tick boxes and radio buttons with that same colour, so `inkChoices` gives them back an ink outline.
 - File pickers (open, save, choose folder) stay Fyne's own.
 
-## 24. Ideas not done yet
+## 24. Don't call a menu item "About"
+
+Fyne moves menu items titled exactly "About", "Settings…" or "Preferences…" into the macOS app menu. For About it takes over Apple's own item. That didn't always hold: About sometimes did nothing until the app was reopened. The Help item is now "About Smart Contacts…", which Fyne leaves alone. The app menu keeps Apple's standard About panel, which shows the name, version and icon from the app bundle.
+
+## 25. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

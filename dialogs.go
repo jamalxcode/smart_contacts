@@ -246,7 +246,11 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Smart Contacts Help", cmdShift(fyne.KeySlash), u.help),
 		sep(),
 		fyne.NewMenuItem("Check for Updates…", u.checkForUpdates),
-		fyne.NewMenuItem("About", u.about), // macOS moves this into the app menu
+		// Not titled plain "About": Fyne moves an item called that into the app menu by taking
+		// over macOS's own About item, and that hand-over doesn't always hold (About would do
+		// nothing until the app was reopened). So the app menu keeps Apple's About panel (name,
+		// version, icon), and this one, in Help, opens the app's own with Check for Updates.
+		fyne.NewMenuItem("About Smart Contacts…", u.about),
 	)
 	return fyne.NewMainMenu(file, edit, view, card, help)
 }
