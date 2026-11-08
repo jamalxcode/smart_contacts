@@ -13,6 +13,7 @@ import (
 )
 
 func main() {
+	keepCrashLog()
 	a := app.NewWithID("company.sala.smartcontacts")
 	a.Settings().SetTheme(newAppTheme())
 	dir := DataDir()

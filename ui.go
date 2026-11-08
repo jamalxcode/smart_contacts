@@ -82,7 +82,7 @@ type ui struct {
 	recentFields  map[string][]string // what the last change altered on each card, for the pencil note
 	recent        map[string]bool     // cards the last change touched: a blue dot for a while
 	recentGen     int
-	menuSig       string
+	menu          *fyne.MainMenu // the menu bar, built once (see refreshMenu)
 	usedLetters   map[string]bool // the first letters people are filed under, for turning pages
 	actionVerb    string          // what the next save is doing ("Cleaned up"), for the banner
 	coverShown    bool
@@ -400,7 +400,7 @@ func (u *ui) build() {
 		u.win.SetContent(u.bookContent)
 	}
 	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)
-	u.win.SetMainMenu(u.mainMenu())
+	u.refreshMenu()
 	u.win.Canvas().SetOnTypedKey(func(k *fyne.KeyEvent) {
 		if u.coverShown { // any key opens the organiser
 			u.openBook()
@@ -857,7 +857,7 @@ func (u *ui) busy() bool {
 
 // showDetail shows the selected contact's card, editable in place.
 func (u *ui) showDetail() {
-	defer u.refreshMenu() // "This Card — <name>" in the Card menu
+	defer u.refreshMenu() // the Card menu's "This Card" commands can act now
 	if u.busy() {
 		return
 	}

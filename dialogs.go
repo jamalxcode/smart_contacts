@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"io"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
@@ -84,14 +85,9 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Settings…", cmd(fyne.KeyComma), u.settings), // macOS moves this into the app menu
 	)
 
-	// Edit → Delete says what it will delete, as Finder's "Move 3 Items to Trash" does.
-	delLabel := "Delete Card…"
-	if u.selectMode && len(u.picked) > 0 {
-		delLabel = fmt.Sprintf("Delete %d Clipped %s…", len(u.picked), pluralWords(len(u.picked), "Card", "Cards"))
-	} else if c := current(); c != nil {
-		delLabel = "Delete " + c.DisplayName() + "…"
-	}
-
+	// Edit → Delete deletes the clipped cards when there are any, otherwise the open card; its
+	// confirmation names exactly which. (Menu titles can't change once the menu bar is built: see
+	// refreshMenu.)
 	// Edit — the standard items first, then the card ones.
 	edit := fyne.NewMenu("Edit",
 		item("Undo", cmd(fyne.KeyZ), u.undo),
@@ -127,7 +123,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 				u.win.Canvas().Focus(u.ed.first)
 			}
 		}),
-		item(delLabel, cmd(fyne.KeyBackspace), func() {
+		item("Delete…", cmd(fyne.KeyBackspace), func() {
 			// In the search box ⌘⌫ clears what was typed; while typing it never deletes a card.
 			if u.win.Canvas().Focused() == u.search {
 				u.search.SetText("")
@@ -157,7 +153,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		u.cfg.SortByLast = last
 		_ = u.cfg.Save(u.store.Dir())
 		byFirst.Checked, byLast.Checked = !last, last
-		u.win.MainMenu().Refresh()
+		u.refreshMenu()
 		u.refreshList()
 	}
 	byFirst.Action, byLast.Action = func() { setSort(false) }, func() { setSort(true) }
@@ -178,7 +174,6 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		filofaxItem,
 		item("Close Organiser", cmdShift(fyne.KeyW), u.showCover),
 		sep(),
-		item("Clip Cards Together", cmdShift(fyne.KeyS), u.toggleSelectMode),
 		item("Calendar Log…", cmdShift(fyne.KeyL), u.calendarDialog),
 		fyne.NewMenuItem("Trash", u.trash),
 	)
@@ -198,13 +193,12 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		}))
 	}
 	keepMenu.ChildMenu = fyne.NewMenu("", keepItems...)
-	// Card — in three sections, each headed by what it acts on (Apple: a command's title says what
-	// it will act on, and commands that can't act are dimmed, not hidden):
-	//   the card that's open · the cards ticked in Select mode · the whole address book.
+	// Card — in three sections, each headed by what it acts on (Apple: commands that can't act
+	// are dimmed, not hidden): the card that's open · the clipped cards · the whole address book.
 	c := current()
-	picked := []*Contact{}
+	n := 0
 	if u.selectMode {
-		picked = u.pickedContacts()
+		n = len(u.picked)
 	}
 	header := func(s string) *fyne.MenuItem {
 		h := fyne.NewMenuItem(s, nil)
@@ -220,20 +214,14 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		m.Disabled = c == nil
 		return m
 	}
-	cardName := "No Card Open"
-	if c != nil {
-		cardName = "This Card — " + c.DisplayName()
-	}
-	fav := "Add to Favorites"
-	if c != nil && c.Favorite {
-		fav = "Remove from Favorites"
-	}
 	keepMenu.Disabled = c == nil
+	fav := onCard("Favorite", cmdShift(fyne.KeyF), u.toggleFavorite)
+	fav.Checked = c != nil && c.Favorite
 	section1 := []*fyne.MenuItem{
-		header(cardName),
+		header("This Card"),
 		onCard("Add Note…", cmd(fyne.KeyJ), u.addNote),
 		keepMenu,
-		onCard(fav, cmdShift(fyne.KeyF), u.toggleFavorite),
+		fav,
 		onCard("Connect to…", cmd(fyne.KeyK), u.connectDialog),
 		onCard("How Are They Connected?", cmdShift(fyne.KeyK), func(c *Contact) { u.pathDialog(c, nil) }),
 		onCard("Clean Up This Card…", nil, func(c *Contact) { u.cleanupFor([]*Contact{c}, "") }),
@@ -242,8 +230,6 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		onCard("Save Card as vCard…", nil, func(c *Contact) { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
 	}
 
-	n := len(picked)
-	sel := fmt.Sprintf("%d Clipped %s", n, pluralWords(n, "Card", "Cards"))
 	onPicked := func(label string, sc fyne.Shortcut, need int, f func([]*Contact)) *fyne.MenuItem {
 		m := item(label, sc, func() {
 			if cs := u.pickedContacts(); u.selectMode && len(cs) >= need {
@@ -253,49 +239,36 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		m.Disabled = n < need
 		return m
 	}
-	var section2 []*fyne.MenuItem
-	if !u.selectMode || n == 0 {
-		hint := "Clipped Cards — none clipped yet"
-		if !u.selectMode {
-			hint = "Clipped Cards — click a card's paper clip to start"
-		}
-		section2 = []*fyne.MenuItem{header(hint), item("Clip Cards Together", cmdShift(fyne.KeyS), func() {
-			if !u.selectMode {
-				u.toggleSelectMode()
-			}
-		})}
-	} else {
-		bulk := u.bulkMenu(picked) // the same submenus as right-clicking the selection
-		var group, keepN *fyne.MenuItem
-		for _, it := range bulk.Items {
-			switch it.Label {
-			case "Add to Group":
-				group = it
-			case "Keep in Touch":
-				keepN = it
-			}
-		}
-		section2 = []*fyne.MenuItem{header(sel)}
-		if group != nil {
-			section2 = append(section2, group)
-		}
-		if keepN != nil {
-			section2 = append(section2, keepN)
-		}
-		section2 = append(section2,
-			onPicked(fmt.Sprintf("Clean Up %s…", sel), nil, 1, func(cs []*Contact) { u.cleanupFor(cs, "") }),
-			onPicked(fmt.Sprintf("Tidy Jumbled Notes in %s…", sel), nil, 1, func(cs []*Contact) { u.tidyNotesAI(cs, false) }),
-			onPicked(fmt.Sprintf("Merge %s…", sel), cmdShift(fyne.KeyM), 2, u.bulkMerge),
-			onPicked(fmt.Sprintf("Delete %s…", sel), nil, 1, u.bulkDelete),
-		)
+	clipToggle := item("Clip Cards Together", cmdShift(fyne.KeyS), u.toggleSelectMode)
+	clipToggle.Checked = u.selectMode
+	keepN := fyne.NewMenuItem("Keep in Touch with Clipped Cards", nil)
+	var kItems []*fyne.MenuItem
+	for _, k := range append(keepChoices, struct {
+		Days  int
+		Label string
+	}{0, "No Reminder"}) {
+		k := k
+		kItems = append(kItems, onPicked(k.Label, nil, 1, func(cs []*Contact) { u.bulkKeep(cs, k.Days) }))
+	}
+	keepN.ChildMenu = fyne.NewMenu("", kItems...)
+	keepN.Disabled = n < 1
+	section2 := []*fyne.MenuItem{
+		header("Clipped Cards"),
+		clipToggle,
+		onPicked("Add Clipped Cards to a Group…", nil, 1, u.bulkAddGroup),
+		onPicked("Take Clipped Cards out of a Group…", nil, 1, u.bulkRemoveGroup),
+		keepN,
+		onPicked("Clean Up Clipped Cards…", nil, 1, func(cs []*Contact) { u.cleanupFor(cs, "") }),
+		onPicked("Tidy Jumbled Notes in Clipped Cards…", nil, 1, func(cs []*Contact) { u.tidyNotesAI(cs, false) }),
+		onPicked("Merge Clipped Cards…", cmdShift(fyne.KeyM), 2, u.bulkMerge),
+		onPicked("Delete Clipped Cards…", nil, 1, u.bulkDelete),
 	}
 
-	all := fmt.Sprintf("All %d Cards", len(u.store.Contacts))
 	section3 := []*fyne.MenuItem{
-		header("Whole Address Book — " + all),
-		fyne.NewMenuItem("Clean Up "+all+"…", u.cleanup),
-		fyne.NewMenuItem("Tidy Jumbled Notes in "+all+"…", func() { u.tidyNotesAI(u.store.Contacts, false) }),
-		item("Look for Duplicates in "+all+"…", cmdShift(fyne.KeyD), u.duplicates),
+		header("Whole Address Book"),
+		fyne.NewMenuItem("Clean Up All Cards…", u.cleanup),
+		fyne.NewMenuItem("Tidy Jumbled Notes in All Cards…", func() { u.tidyNotesAI(u.store.Contacts, false) }),
+		item("Look for Duplicates…", cmdShift(fyne.KeyD), u.duplicates),
 		item("Update Last Talked from Messages, Calls and Mail", cmdShift(fyne.KeyU), func() { u.readActivity(true) }),
 		fyne.NewMenuItem("Find People Not in Contacts…", u.unknownPeople),
 	}
@@ -316,31 +289,44 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 	return fyne.NewMainMenu(file, edit, view, card, help)
 }
 
-// refreshMenu rebuilds the menu bar when what the commands act on changes (another card opened,
-// cards ticked), so their titles stay true. It's skipped when nothing in the menus would change.
+// refreshMenu keeps the menu bar true to what's on screen: which commands can act now (dimmed
+// or not), which are ticked, and what they'll act on.
+//
+// The Mac menu bar is built once and never rebuilt: Fyne's Mac menu code releases each divider
+// once too often, so throwing a built menu away and making another crashed the app (opening one
+// card and then another did it, when the Card menu named the open card). So titles and layout
+// stay fixed, and only each item's dimmed/ticked state and action are updated, which the Mac
+// reads afresh every time a menu opens.
 func (u *ui) refreshMenu() {
 	if u.win == nil || u.list == nil {
 		return
 	}
 	m := u.mainMenu()
-	var sig strings.Builder
-	var walk func(items []*fyne.MenuItem)
-	walk = func(items []*fyne.MenuItem) {
-		for _, it := range items {
-			fmt.Fprintf(&sig, "%s|%v|%v;", it.Label, it.Disabled, it.Checked)
-			if it.ChildMenu != nil {
-				walk(it.ChildMenu.Items)
+	if u.menu == nil {
+		u.menu = m
+		u.win.SetMainMenu(m)
+		return
+	}
+	var sync func(old, now []*fyne.MenuItem)
+	sync = func(old, now []*fyne.MenuItem) {
+		for i := 0; i < len(old) && i < len(now); i++ {
+			o, n := old[i], now[i]
+			if o.Label != n.Label || o.IsSeparator != n.IsSeparator {
+				fyne.LogError("menu layout changed: "+o.Label+" → "+n.Label, nil)
+				continue
+			}
+			o.Action, o.Disabled, o.Checked = n.Action, n.Disabled, n.Checked
+			if o.ChildMenu != nil && n.ChildMenu != nil {
+				sync(o.ChildMenu.Items, n.ChildMenu.Items)
 			}
 		}
 	}
-	for _, mm := range m.Items {
-		walk(mm.Items)
+	for i := 0; i < len(u.menu.Items) && i < len(m.Items); i++ {
+		sync(u.menu.Items[i].Items, m.Items[i].Items)
 	}
-	if sig.String() == u.menuSig {
-		return
+	if runtime.GOOS != "darwin" { // elsewhere the menu bar is drawn by Fyne and needs redrawing
+		u.win.SetMainMenu(u.menu)
 	}
-	u.menuSig = sig.String()
-	u.win.SetMainMenu(m)
 }
 
 // selectAllCards ticks everyone in the list (⌘A when not typing).
@@ -1221,7 +1207,7 @@ func (u *ui) help() {
 
 **The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. Cards are printed pages: click a ruled line and write; the blue box shows where you're writing. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
-**What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right, by name), *Clipped Cards* (the people you've clipped together, with the count) and *Whole Address Book* (every card, with the count). Commands that can't act right now are dimmed. Right-click a person and the menu starts with their name.
+**What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right), *Clipped Cards* (the people you've clipped together; the sticky note shows how many) and *Whole Address Book* (every card). Commands that can't act right now are dimmed. Edit → Delete deletes the clipped cards if there are any, otherwise the open card, and always asks first, naming them. Right-click a person and the menu starts with their name.
 
 **Seeing what changed.** After any change a banner at the bottom says what was done (“Clean Up applied to 3 Clipped Cards — 1 fix”), with *Show Changes* (each card, how it was in grey and how it is now in bold) and *Undo*. Cards that just changed have a blue dot in the list for a short while.
 

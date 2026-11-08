@@ -314,6 +314,8 @@ mv "$dest" "$old" || { open "$dest"; exit 1; }
 if mv "$new" "$dest"; then
   rm -rf "$old"
   xattr -dr com.apple.quarantine "$dest" 2>/dev/null
+  touch "$dest" # so Finder and the Dock show the new icon
+  /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$dest" 2>/dev/null
 else
   mv "$old" "$dest"
 fi

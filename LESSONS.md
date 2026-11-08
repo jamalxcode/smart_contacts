@@ -291,7 +291,21 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - Hints on the book are drawn objects, not pop-ups: a pop-up would take the click meant for the
   object under it.
 
-## 18. Ideas not done yet
+## 18. Never rebuild the Mac menu bar
+
+Opening one card and then another made the app vanish. Since 1.0.33 the Card menu named the open card, so every card change threw the menu bar away and built a new one. Fyne's Mac menu code releases each divider one time too many, so a rebuilt menu bar eventually touches freed memory and the app dies (a Go exit, so macOS writes no crash report). It never showed on the Linux test screen, where Fyne draws its own menus.
+
+- The menu bar is now built once. `refreshMenu` only updates each item's action, dimmed state and tick; the Mac reads those afresh every time a menu opens.
+- Titles and layout are fixed: "This Card", "Clipped Cards", "Whole Address Book", "Delete…". Counts and names live on screen instead (the sticky note, the banner, the confirmation).
+- `TestMenuLayoutNeverChanges` fails if a title depends on which card is open, what is clipped, or the groups.
+- `menu.Refresh()` and `SetMainMenu` rebuild too, so don't call them.
+- The app now writes `~/Library/Logs/Smart Contacts/crash.log` (and `app.log`) if it ever quits unexpectedly. The previous crash is kept as `crash-previous.log`. Neither contains contacts.
+
+## 19. The icon
+
+`Icon.png` is drawn in code by `TestMakeIcon` (`MAKE_ICON=Icon.png go test -run TestMakeIcon .`), with the same leather, brass and serif fonts as the cover, so it matches the closed organiser. After an update, `touch` and `lsregister` make Finder and the Dock show the new icon instead of a cached one.
+
+## 20. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

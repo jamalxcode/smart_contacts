@@ -29,6 +29,8 @@ pkill -x "Smart Contacts" 2>/dev/null || true
 rm -rf "/Applications/Smart Contacts.app"
 ditto -x -k "$TMP/sc.zip" /Applications
 xattr -dr com.apple.quarantine "/Applications/Smart Contacts.app" 2>/dev/null || true
+touch "/Applications/Smart Contacts.app" # so Finder and the Dock show the new icon
+/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "/Applications/Smart Contacts.app" 2>/dev/null || true
 rm -rf "$TMP"
 echo "Installed in /Applications. Opening…"
 open "/Applications/Smart Contacts.app"
