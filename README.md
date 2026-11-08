@@ -170,7 +170,8 @@ key is never in a backup. Undo history now survives quitting the app.
 gilt title, strap and brass snap. Click it (or press any key) and it opens at the page you left:
 a chrome pen in its loop, coloured index tabs for your lists and groups coming out of the left
 page, white pages with grey title bars on a stack of page edges, the chrome six-ring binder, and
-cream A–Z tabs (AB, CD … ع, #) down the right edge. View → Close Organiser (⇧⌘W) shuts it again.
+cream A–Z tabs (AB, CD … ع, #) down the right edge. To close it, click the strap on the right (a hint
+appears when you point at it, and it asks first) or press ⇧⌘W.
 Settings choose whether it opens at the last page or the first, and whether to show the closed
 cover at all. View → Filofax Look switches back to plain Mac panes. Everything is drawn by the
 app; the printed parts are set in Libre Baskerville, names and fields in a font with Arabic.

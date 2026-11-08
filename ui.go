@@ -52,35 +52,36 @@ type ui struct {
 	right     *fyne.Container
 	status    *widget.Label
 
-	ed          *editor // non-nil while a contact is being edited
-	cal         *Calendar
-	graph       *Graph               // cached connections graph (nil = rebuild)
-	calCache    map[string][]Mention // cached calendar matches per contact
-	openSec     map[string]bool      // which folding card sections are open
-	selectMode  bool                 // list shows tick boxes for bulk actions
-	picked      map[string]bool      // contacts ticked in Select mode
-	bulkBar     *fyne.Container
-	listPane    *fyne.Container
-	flashGen    int
-	photoCache  map[string]fyne.Resource
-	sideBusy    bool
-	act         *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
-	actBusy     bool
-	saveSearch  *widget.Button // "Save as Smart Group", shown while searching
-	attention   map[string]int // clean-up suggestions per contact (worked out in the background)
-	qf          *quickFind     // the menu bar's Quick Find window
-	trayMenuSig string
-	selAnchor   string          // where a Shift-click range starts
-	tabBox      *fyne.Container // Filofax look: the coloured index tabs
-	letterBox   *fyne.Container // Filofax look: the A–Z tabs
-	letter      string          // chosen A–Z tab ("" = All)
-	leftPage    *paperPage      // Filofax look: the page of names
-	rightPage   *paperPage      // Filofax look: the person's page
-	bookContent fyne.CanvasObject
-	coverShown  bool
-	openSize    fyne.Size // the window size with the organiser open
-	filter      *contactFilter
-	attnGen     int
+	ed            *editor // non-nil while a contact is being edited
+	cal           *Calendar
+	graph         *Graph               // cached connections graph (nil = rebuild)
+	calCache      map[string][]Mention // cached calendar matches per contact
+	openSec       map[string]bool      // which folding card sections are open
+	selectMode    bool                 // list shows tick boxes for bulk actions
+	picked        map[string]bool      // contacts ticked in Select mode
+	bulkBar       *fyne.Container
+	listPane      *fyne.Container
+	flashGen      int
+	photoCache    map[string]fyne.Resource
+	sideBusy      bool
+	act           *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
+	actBusy       bool
+	saveSearch    *widget.Button // "Save as Smart Group", shown while searching
+	attention     map[string]int // clean-up suggestions per contact (worked out in the background)
+	qf            *quickFind     // the menu bar's Quick Find window
+	trayMenuSig   string
+	selAnchor     string          // where a Shift-click range starts
+	tabBox        *fyne.Container // Filofax look: the coloured index tabs
+	letterBox     *fyne.Container // Filofax look: the A–Z tabs
+	letter        string          // chosen A–Z tab ("" = All)
+	leftPage      *paperPage      // Filofax look: the page of names
+	rightPage     *paperPage      // Filofax look: the person's page
+	bookContent   fyne.CanvasObject
+	coverShown    bool
+	openSize      fyne.Size // the window size with the organiser open
+	filter        *contactFilter
+	closeTipShown bool
+	attnGen       int
 }
 
 // searchEntry passes arrow keys, Return and Escape to the list so you can search and pick without the mouse.

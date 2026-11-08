@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/rand"
 	"strings"
+	"time"
 	"unicode"
 
 	"fyne.io/fyne/v2"
@@ -198,33 +199,97 @@ func chrome(t float64) float64 {
 	return v
 }
 
-// ringImage is one binder ring from above: a chrome loop crossing the spine into both pages.
+// ringImage is one ring of the binder seen from above: a thick chrome loop whose two ends go
+// down through punched holes in the left and right pages, with its shadow on the paper.
 func ringImage(w, h int) image.Image {
 	img := image.NewNRGBA(image.Rect(0, 0, w, h))
 	cx, cy := float64(w)/2, float64(h)/2
-	ax, ay := float64(w)/2-2, float64(h)/2-2
-	thick := 0.30 // tube thickness as part of the radius
+	ax, ay := float64(w)/2-6, float64(h)/2-3
+	const tube = 5.5 // the wire's thickness in pixels, the same all the way round
+	set := func(i int, r, g, b, a float64) {
+		oa := float64(img.Pix[i+3]) / 255
+		na := a / 255
+		out := na + oa*(1-na)
+		if out == 0 {
+			return
+		}
+		mix := func(o uint8, n float64) uint8 { return clamp8((n*na + float64(o)*oa*(1-na)) / out) }
+		img.Pix[i], img.Pix[i+1], img.Pix[i+2] = mix(img.Pix[i], r), mix(img.Pix[i+1], g), mix(img.Pix[i+2], b)
+		img.Pix[i+3] = clamp8(out * 255)
+	}
+	inRing := func(dx, dy float64) (bool, float64) {
+		dOut := math.Sqrt((dx/ax)*(dx/ax) + (dy/ay)*(dy/ay))
+		dIn := math.Sqrt((dx/(ax-tube))*(dx/(ax-tube)) + (dy/(ay-tube))*(dy/(ay-tube)))
+		if dOut > 1 || dIn < 1 || dOut == 0 {
+			return false, 0
+		}
+		f := (1 - 1/dIn) / (1/dOut - 1/dIn) // 0 inner edge .. 1 outer edge
+		return true, f
+	}
 	for y := 0; y < h; y++ {
 		for x := 0; x < w; x++ {
-			dx, dy := (float64(x)-cx)/ax, (float64(y)-cy)/ay
-			d := math.Sqrt(dx*dx + dy*dy)
 			i := y*img.Stride + x*4
-			if d > 1 || d < 1-thick {
-				// shadow on the paper just below the ring
-				sd := math.Sqrt(dx*dx + (dy-0.18)*(dy-0.18))
-				if sd <= 1.04 && sd >= 1-thick-0.04 && d > 1 {
-					img.Pix[i+3] = 60
+			fx, fy := float64(x)+0.5, float64(y)+0.5
+			// punched holes where the ring goes into the pages
+			for _, hx := range []float64{7, float64(w) - 7} {
+				if hd := math.Hypot((fx-hx)/5, (fy-cy)/4.2); hd < 1 {
+					set(i, 0x4A, 0x30, 0x1C, 220*math.Min(1, (1-hd)*4))
 				}
+			}
+			if ok, _ := inRing(fx-cx-1.5, fy-cy-3); ok { // shadow on the paper
+				set(i, 0x30, 0x20, 0x10, 60)
+			}
+			ok, f := inRing(fx-cx, fy-cy)
+			if !ok {
 				continue
 			}
-			t := (d - (1 - thick)) / thick // across the tube
-			v := chrome(t)
-			if dy > 0 {
-				v *= 0.86 // the lower half is in shade
+			v := chrome(f)
+			if fy > cy {
+				v *= 0.84 // the far side of the loop is in shade
 			}
-			edge := math.Min(1, math.Min(t, 1-t)*10)
-			img.Pix[i], img.Pix[i+1], img.Pix[i+2] = clamp8(v), clamp8(v), clamp8(v*1.02)
-			img.Pix[i+3] = clamp8(255 * edge)
+			edge := math.Min(1, math.Min(f, 1-f)*6)
+			set(i, v, v, v*1.02, 255*edge)
+		}
+	}
+	return img
+}
+
+// plateImage is the binder's spine plate in cross-section: two chrome rods side by side,
+// stretched to any height.
+func plateImage(w int) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, w, 4))
+	for x := 0; x < w; x++ {
+		half := float64(w) / 2
+		t := math.Mod(float64(x), half) / half
+		v := chrome(t)
+		if math.Abs(float64(x)-half) < 1.2 {
+			v *= 0.45 // the seam between the rods
+		}
+		for y := 0; y < 4; y++ {
+			i := y*img.Stride + x*4
+			img.Pix[i], img.Pix[i+1], img.Pix[i+2], img.Pix[i+3] = clamp8(v), clamp8(v), clamp8(v*1.03), 255
+		}
+	}
+	return img
+}
+
+// capImage is a domed chrome end cap of the ring mechanism.
+func capImage(w, h int) image.Image {
+	img := image.NewNRGBA(image.Rect(0, 0, w, h))
+	cx, cy := float64(w)/2, float64(h)/2
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			dx, dy := (float64(x)-cx)/(cx-1), (float64(y)-cy)/(cy-1)
+			d := math.Sqrt(dx*dx + dy*dy)
+			if d > 1 {
+				continue
+			}
+			v := chrome((dx + 1) / 2)
+			v += 90 * math.Exp(-((dx+0.25)*(dx+0.25)+(dy+0.35)*(dy+0.35))/0.04)
+			v *= 0.85 + 0.15*(1-d)
+			i := y*img.Stride + x*4
+			img.Pix[i], img.Pix[i+1], img.Pix[i+2] = clamp8(v), clamp8(v), clamp8(v*1.03)
+			img.Pix[i+3] = clamp8(255 * math.Min(1, (1-d)*12))
 		}
 	}
 	return img
@@ -293,14 +358,16 @@ func brassImage(d int) image.Image {
 	return img
 }
 
-var texCover, texLip, texGrain, texRing, texPen, texBrass image.Image
+var texCover, texLip, texGrain, texRing, texPen, texBrass, texPlate, texCap image.Image
 
 func loadTextures() {
 	if texCover == nil {
 		texCover = leatherImage(1000, 720, [3]float64{0x86, 0x45, 0x22}, 7)
 		texLip = leatherImage(600, 600, [3]float64{0x5A, 0x2C, 0x16}, 9)
 		texGrain = paperGrain(400, 560)
-		texRing = ringImage(96, 30)
+		texRing = ringImage(ringW, ringH)
+		texPlate = plateImage(44)
+		texCap = capImage(60, 40)
 		texPen = penImage(30, 560)
 		texBrass = brassImage(44)
 	}
@@ -611,59 +678,63 @@ func newBinderRings() *binderRings { b := &binderRings{}; b.ExtendBaseWidget(b);
 func (b *binderRings) CreateRenderer() fyne.WidgetRenderer {
 	loadTextures()
 	r := &ringsRenderer{b: b}
-	r.plate = canvas.NewHorizontalGradient(color.NRGBA{0x88, 0x8C, 0x92, 0xFF}, color.NRGBA{0xE8, 0xEA, 0xEE, 0xFF})
-	r.plate2 = canvas.NewHorizontalGradient(color.NRGBA{0xF2, 0xF3, 0xF5, 0xFF}, color.NRGBA{0x7A, 0x7E, 0x84, 0xFF})
-	r.capTop = canvas.NewRadialGradient(color.NRGBA{0xF6, 0xF7, 0xF9, 0xFF}, color.NRGBA{0x80, 0x84, 0x8A, 0xFF})
-	r.capBot = canvas.NewRadialGradient(color.NRGBA{0xF6, 0xF7, 0xF9, 0xFF}, color.NRGBA{0x80, 0x84, 0x8A, 0xFF})
+	r.plateShadow = canvas.NewRectangle(color.NRGBA{0x20, 0x10, 0x05, 0x50})
+	r.plateShadow.CornerRadius = 10
+	r.plate = img(texPlate, canvas.ImageFillStretch)
+	r.capTop = img(texCap, canvas.ImageFillStretch)
+	r.capBot = img(texCap, canvas.ImageFillStretch)
 	return r
 }
 
 type ringsRenderer struct {
 	b              *binderRings
-	plate, plate2  *canvas.LinearGradient
-	capTop, capBot *canvas.RadialGradient
+	plateShadow    *canvas.Rectangle
+	plate          *canvas.Image
+	capTop, capBot *canvas.Image
 	rings          []fyne.CanvasObject
 	lastH          float32
 }
 
 func (r *ringsRenderer) Layout(s fyne.Size) {
-	pw := float32(22)
+	pw := float32(40)
 	x := (s.Width - pw) / 2
-	r.plate.Move(fyne.NewPos(x, 8))
-	r.plate.Resize(fyne.NewSize(pw/2, s.Height-16))
-	r.plate2.Move(fyne.NewPos(x+pw/2, 8))
-	r.plate2.Resize(fyne.NewSize(pw/2, s.Height-16))
-	r.capTop.Move(fyne.NewPos(x-6, -6))
-	r.capTop.Resize(fyne.NewSize(pw+12, 26))
-	r.capBot.Move(fyne.NewPos(x-6, s.Height-20))
-	r.capBot.Resize(fyne.NewSize(pw+12, 26))
+	r.plateShadow.Move(fyne.NewPos(x+3, 14))
+	r.plateShadow.Resize(fyne.NewSize(pw, s.Height-24))
+	r.plate.Move(fyne.NewPos(x, 10))
+	r.plate.Resize(fyne.NewSize(pw, s.Height-20))
+	r.capTop.Move(fyne.NewPos(x-8, -4))
+	r.capTop.Resize(fyne.NewSize(pw+16, 34))
+	r.capBot.Move(fyne.NewPos(x-8, s.Height-30))
+	r.capBot.Resize(fyne.NewSize(pw+16, 34))
 	if s.Height == r.lastH {
 		return
 	}
 	r.lastH = s.Height
 	r.rings = r.rings[:0]
-	n := int((s.Height - 60) / 110)
+	n := int((s.Height - 120) / 105)
 	if n > 6 {
 		n = 6
 	}
 	if n < 2 {
 		n = 2
 	}
-	gap := (s.Height - 60) / float32(n-1)
+	gap := (s.Height - 150) / float32(n-1)
 	for i := 0; i < n; i++ {
-		ring := img(texRing, canvas.ImageFillStretch)
-		w := s.Width + 56 // reaches into the punched holes of both pages
-		ring.Move(fyne.NewPos(-28, 30+gap*float32(i)-15))
-		ring.Resize(fyne.NewSize(w, 30))
+		ring := img(texRing, canvas.ImageFillOriginal) // drawn at its real size: no stretching
+		ring.Move(fyne.NewPos((s.Width-ringW)/2, 75+gap*float32(i)-ringH/2))
+		ring.Resize(fyne.NewSize(ringW, ringH))
 		r.rings = append(r.rings, ring)
 	}
 }
-func (r *ringsRenderer) MinSize() fyne.Size { return fyne.NewSize(44, 200) }
+func (r *ringsRenderer) MinSize() fyne.Size { return fyne.NewSize(56, 240) }
 func (r *ringsRenderer) Refresh()           { r.lastH = -1; r.Layout(r.b.Size()); canvas.Refresh(r.b) }
 func (r *ringsRenderer) Objects() []fyne.CanvasObject {
-	return append([]fyne.CanvasObject{r.plate, r.plate2, r.capTop, r.capBot}, r.rings...)
+	return append([]fyne.CanvasObject{r.plateShadow, r.plate, r.capTop, r.capBot}, r.rings...)
 }
 func (r *ringsRenderer) Destroy() {}
+
+// a ring's size: just wider than the gutter, so it dips into each page's punched hole
+const ringW, ringH = 104, 30
 
 // ---------- coloured index tabs (lists and groups), out of the left page ----------
 
@@ -1024,7 +1095,7 @@ func (f *fixedWidth) Layout(objs []fyne.CanvasObject, size fyne.Size) {
 type organiserLayout struct {
 	cover                        *leatherCover
 	tabs, left, rings, right, az fyne.CanvasObject
-	status                       fyne.CanvasObject
+	status, strap                fyne.CanvasObject
 	pagesPos                     fyne.Position
 	pagesSize                    fyne.Size
 }
@@ -1044,12 +1115,12 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	x += tabsW
 	pagesRight := s.Width - m - 22 - 58 - azW // room for the A–Z tabs and the strap
 	total := pagesRight - x
-	ringsW := float32(46)
+	ringsW := float32(56)
 	leftW := float32(math.Max(260, math.Min(400, float64(total)*0.42)))
 	l.left.Move(fyne.NewPos(x, top))
 	l.left.Resize(fyne.NewSize(leftW, h))
-	l.rings.Move(fyne.NewPos(x+leftW, top-10))
-	l.rings.Resize(fyne.NewSize(ringsW, h+20))
+	l.rings.Move(fyne.NewPos(x+leftW, top-14))
+	l.rings.Resize(fyne.NewSize(ringsW, h+28))
 	rx := x + leftW + ringsW
 	l.right.Move(fyne.NewPos(rx, top))
 	l.right.Resize(fyne.NewSize(pagesRight-rx, h))
@@ -1063,6 +1134,17 @@ func (l *organiserLayout) Layout(_ []fyne.CanvasObject, s fyne.Size) {
 	l.pagesSize = fyne.NewSize(pagesRight-x, h)
 	l.cover.Move(fyne.NewPos(0, 0))
 	l.cover.Resize(s)
+	if l.strap != nil { // over the drawn strap (same sums as the cover's)
+		cw, ch := s.Width-2*m-26, s.Height-2*m-2
+		sw, sh := float32(86), float32(118)
+		l.strap.Move(fyne.NewPos(m+cw-50, m+ch/2-sh/2))
+		l.strap.Resize(fyne.NewSize(sw, sh))
+		if h, ok := l.strap.(*strapHit); ok {
+			hs := h.hint.MinSize()
+			h.hint.Move(fyne.NewPos(m+cw-58-hs.Width, m+ch/2-hs.Height/2))
+			h.hint.Resize(hs)
+		}
+	}
 }
 
 // filofaxLayout builds the open organiser around the list and the card.
@@ -1074,12 +1156,13 @@ func (u *ui) filofaxLayout(listPane fyne.CanvasObject) fyne.CanvasObject {
 	rings := newBinderRings()
 	az := u.letterStrip()
 	status := container.NewThemeOverride(u.status, &leatherTextTheme{&filofaxTheme{newAppTheme()}})
-	lay := &organiserLayout{tabs: tabs, left: u.leftPage, rings: rings, right: u.rightPage, az: az, status: status}
+	strap := newStrapHit(u)
+	lay := &organiserLayout{tabs: tabs, left: u.leftPage, rings: rings, right: u.rightPage, az: az, status: status, strap: strap}
 	cover := &leatherCover{pageArea: func() (fyne.Position, fyne.Size) { return lay.pagesPos, lay.pagesSize }}
 	cover.ExtendBaseWidget(cover)
 	lay.cover = cover
 	// order matters: the A–Z and index tabs sit under the page edges, the rings over them
-	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status)
+	return container.New(lay, cover, tabs, az, u.leftPage, u.rightPage, rings, status, strap, strap.hint)
 }
 
 // toggleLook switches between the Filofax organiser and the classic Mac panes.
@@ -1269,14 +1352,22 @@ func (u *ui) openBook() {
 		u.group, u.letter, u.selectedID = grpAll, "", ""
 	}
 	u.win.SetContent(u.bookContent)
-	if u.openSize.Width > 0 {
-		u.win.Resize(u.openSize)
+	if sz := u.openSize; sz.Width > 0 {
+		u.win.Resize(sz)
+		go func() { // some window managers apply a resize only after the new content is laid out
+			time.Sleep(150 * time.Millisecond)
+			fyne.Do(func() { u.win.Resize(sz) })
+		}()
 	}
 	u.refreshAll()
 	if i := u.indexOf(u.selectedID); i >= 0 {
 		u.list.ScrollTo(i)
 	}
 	u.win.Canvas().Focus(u.search)
+	if !u.closeTipShown {
+		u.closeTipShown = true
+		u.flash("To close the organiser, click the strap on the right (or press ⇧⌘W)")
+	}
 }
 
 // restorePage puts back the list, A–Z tab and person the organiser was left at.
@@ -1310,4 +1401,44 @@ func closedSize(h float32) fyne.Size {
 		h = 480
 	}
 	return fyne.NewSize(h*0.70+40, h)
+}
+
+// ---------- closing the book with the strap ----------
+
+// strapHit sits over the strap on the open organiser: the pointer turns into a hand, a hint pops
+// up, and a click asks to close the book.
+type strapHit struct {
+	widget.BaseWidget
+	u    *ui
+	hint fyne.CanvasObject // drawn on the book, beside the strap (a pop-up would swallow the click)
+}
+
+func newStrapHit(u *ui) *strapHit {
+	s := &strapHit{u: u}
+	bg := canvas.NewRectangle(color.NRGBA{0x2A, 0x1A, 0x10, 0xE8})
+	bg.CornerRadius = 6
+	t := canvas.NewText("Click the strap to close the organiser", color.NRGBA{0xF6, 0xE6, 0xCC, 0xFF})
+	t.TextSize = 12
+	t.TextStyle = serif("x", false, true)
+	s.hint = container.NewStack(bg, container.NewPadded(t))
+	s.hint.Hide()
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *strapHit) CreateRenderer() fyne.WidgetRenderer {
+	return widget.NewSimpleRenderer(canvas.NewRectangle(color.Transparent))
+}
+func (s *strapHit) Cursor() desktop.Cursor         { return desktop.PointerCursor }
+func (s *strapHit) MouseIn(*desktop.MouseEvent)    { s.hint.Show() }
+func (s *strapHit) MouseMoved(*desktop.MouseEvent) {}
+func (s *strapHit) MouseOut()                      { s.hint.Hide() }
+
+func (s *strapHit) Tapped(*fyne.PointEvent) {
+	s.MouseOut()
+	s.u.confirmCB("Close the organiser?", "It will open again at this page.", "Close", false, func(ok bool) {
+		if ok {
+			s.u.showCover()
+		}
+	}, s.u.win)
 }
