@@ -2,14 +2,15 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
+	"image/color"
 	"io"
 	"path/filepath"
 	"strings"
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -83,6 +84,14 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Settings…", cmd(fyne.KeyComma), u.settings), // macOS moves this into the app menu
 	)
 
+	// Edit → Delete says what it will delete, as Finder's "Move 3 Items to Trash" does.
+	delLabel := "Delete Card…"
+	if u.selectMode && len(u.picked) > 0 {
+		delLabel = fmt.Sprintf("Delete %d Selected %s…", len(u.picked), pluralWords(len(u.picked), "Card", "Cards"))
+	} else if c := current(); c != nil {
+		delLabel = "Delete " + c.DisplayName() + "…"
+	}
+
 	// Edit — the standard items first, then the card ones.
 	edit := fyne.NewMenu("Edit",
 		item("Undo", cmd(fyne.KeyZ), u.undo),
@@ -118,7 +127,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 				u.win.Canvas().Focus(u.ed.first)
 			}
 		}),
-		item("Delete Card…", cmd(fyne.KeyBackspace), func() {
+		item(delLabel, cmd(fyne.KeyBackspace), func() {
 			// In the search box ⌘⌫ clears what was typed; while typing it never deletes a card.
 			if u.win.Canvas().Focused() == u.search {
 				u.search.SetText("")
@@ -161,6 +170,7 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		item("Upcoming Birthdays", cmd(fyne.Key3), func() { u.showGroup(grpBirthdays) }),
 		item("Recently Added", cmd(fyne.Key4), func() { u.showGroup(grpRecent) }),
 		item("Reach Out", cmd(fyne.Key5), func() { u.showGroup(grpReachOut) }),
+		item("Needs Attention", cmd(fyne.Key6), func() { u.showGroup(grpAttention) }),
 		fyne.NewMenuItem("Save Search as Smart Group…", u.saveSmartGroup),
 		sep(),
 		byFirst, byLast,
@@ -188,62 +198,114 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		}))
 	}
 	keepMenu.ChildMenu = fyne.NewMenu("", keepItems...)
-	card := fyne.NewMenu("Card",
-		item("Add Note…", cmd(fyne.KeyJ), func() {
+	// Card — in three sections, each headed by what it acts on (Apple: a command's title says what
+	// it will act on, and commands that can't act are dimmed, not hidden):
+	//   the card that's open · the cards ticked in Select mode · the whole address book.
+	c := current()
+	picked := []*Contact{}
+	if u.selectMode {
+		picked = u.pickedContacts()
+	}
+	header := func(s string) *fyne.MenuItem {
+		h := fyne.NewMenuItem(s, nil)
+		h.Disabled = true
+		return h
+	}
+	onCard := func(label string, sc fyne.Shortcut, f func(*Contact)) *fyne.MenuItem {
+		m := item(label, sc, func() {
 			if c := current(); c != nil {
-				u.addNote(c)
+				f(c)
 			}
-		}),
+		})
+		m.Disabled = c == nil
+		return m
+	}
+	cardName := "No Card Open"
+	if c != nil {
+		cardName = "This Card — " + c.DisplayName()
+	}
+	fav := "Add to Favorites"
+	if c != nil && c.Favorite {
+		fav = "Remove from Favorites"
+	}
+	keepMenu.Disabled = c == nil
+	section1 := []*fyne.MenuItem{
+		header(cardName),
+		onCard("Add Note…", cmd(fyne.KeyJ), u.addNote),
 		keepMenu,
-		item("Update Last Talked", cmdShift(fyne.KeyU), func() { u.readActivity(true) }),
-		fyne.NewMenuItem("People Not in Contacts…", u.unknownPeople),
-		sep(),
-		item("Mark as Favorite", cmdShift(fyne.KeyF), func() {
-			if c := current(); c != nil {
-				u.toggleFavorite(c)
+		onCard(fav, cmdShift(fyne.KeyF), u.toggleFavorite),
+		onCard("Connect to…", cmd(fyne.KeyK), u.connectDialog),
+		onCard("How Are They Connected?", cmdShift(fyne.KeyK), func(c *Contact) { u.pathDialog(c, nil) }),
+		onCard("Clean Up This Card…", nil, func(c *Contact) { u.cleanupFor([]*Contact{c}, "") }),
+		onCard("Tidy This Note with AI…", nil, func(c *Contact) { u.tidyNotesAI([]*Contact{c}, true) }),
+		onCard("Copy Card as Text", nil, u.copyCard),
+		onCard("Save Card as vCard…", nil, func(c *Contact) { u.exportVCF([]*Contact{c}, c.DisplayName()) }),
+	}
+
+	n := len(picked)
+	sel := fmt.Sprintf("%d Selected %s", n, pluralWords(n, "Card", "Cards"))
+	onPicked := func(label string, sc fyne.Shortcut, need int, f func([]*Contact)) *fyne.MenuItem {
+		m := item(label, sc, func() {
+			if cs := u.pickedContacts(); u.selectMode && len(cs) >= need {
+				f(cs)
 			}
-		}),
-		item("Connect to…", cmd(fyne.KeyK), func() {
-			if c := current(); c != nil {
-				u.connectDialog(c)
+		})
+		m.Disabled = n < need
+		return m
+	}
+	var section2 []*fyne.MenuItem
+	if !u.selectMode || n == 0 {
+		hint := "Selected Cards — none ticked"
+		if !u.selectMode {
+			hint = "Selected Cards — choose Select Cards first"
+		}
+		section2 = []*fyne.MenuItem{header(hint), item("Select Cards", cmdShift(fyne.KeyS), func() {
+			if !u.selectMode {
+				u.toggleSelectMode()
 			}
-		}),
-		item("How Are They Connected?", cmdShift(fyne.KeyK), func() { u.pathDialog(current(), nil) }),
-		sep(),
-		item("Merge Selected Cards", cmdShift(fyne.KeyM), func() {
-			if u.selectMode && len(u.picked) >= 2 {
-				u.bulkMerge(u.pickedContacts())
-				return
+		})}
+	} else {
+		bulk := u.bulkMenu(picked) // the same submenus as right-clicking the selection
+		var group, keepN *fyne.MenuItem
+		for _, it := range bulk.Items {
+			switch it.Label {
+			case "Add to Group":
+				group = it
+			case "Keep in Touch":
+				keepN = it
 			}
-			showInfo("Select the cards first", "Choose View → Select Cards (⇧⌘S), tick two or more people, then merge.", u.win)
-		}),
-		item("Look for Duplicates…", cmdShift(fyne.KeyD), u.duplicates),
-		item("Needs Attention", cmd(fyne.Key6), func() { u.showGroup(grpAttention) }),
-		fyne.NewMenuItem("Clean Up Numbers and Names…", u.cleanup),
-		fyne.NewMenuItem("Tidy Jumbled Notes with AI…", func() {
-			if u.selectMode && len(u.picked) > 0 {
-				u.tidyNotesAI(u.pickedContacts(), false)
-				return
-			}
-			u.tidyNotesAI(u.store.Contacts, false)
-		}),
-		fyne.NewMenuItem("Tidy This Note with AI…", func() {
-			if c := current(); c != nil {
-				u.tidyNotesAI([]*Contact{c}, true)
-			}
-		}),
-		sep(),
-		fyne.NewMenuItem("Copy Card as Text", func() {
-			if c := current(); c != nil {
-				u.copyCard(c)
-			}
-		}),
-		fyne.NewMenuItem("Save Card as vCard…", func() {
-			if c := current(); c != nil {
-				u.exportVCF([]*Contact{c}, c.DisplayName())
-			}
-		}),
-	)
+		}
+		section2 = []*fyne.MenuItem{header(sel)}
+		if group != nil {
+			section2 = append(section2, group)
+		}
+		if keepN != nil {
+			section2 = append(section2, keepN)
+		}
+		section2 = append(section2,
+			onPicked(fmt.Sprintf("Clean Up %s…", sel), nil, 1, func(cs []*Contact) { u.cleanupFor(cs, "") }),
+			onPicked(fmt.Sprintf("Tidy Jumbled Notes in %s…", sel), nil, 1, func(cs []*Contact) { u.tidyNotesAI(cs, false) }),
+			onPicked(fmt.Sprintf("Merge %s…", sel), cmdShift(fyne.KeyM), 2, u.bulkMerge),
+			onPicked(fmt.Sprintf("Delete %s…", sel), nil, 1, u.bulkDelete),
+		)
+	}
+
+	all := fmt.Sprintf("All %d Cards", len(u.store.Contacts))
+	section3 := []*fyne.MenuItem{
+		header("Whole Address Book — " + all),
+		fyne.NewMenuItem("Clean Up "+all+"…", u.cleanup),
+		fyne.NewMenuItem("Tidy Jumbled Notes in "+all+"…", func() { u.tidyNotesAI(u.store.Contacts, false) }),
+		item("Look for Duplicates in "+all+"…", cmdShift(fyne.KeyD), u.duplicates),
+		item("Update Last Talked from Messages, Calls and Mail", cmdShift(fyne.KeyU), func() { u.readActivity(true) }),
+		fyne.NewMenuItem("Find People Not in Contacts…", u.unknownPeople),
+	}
+	var cardItems []*fyne.MenuItem
+	cardItems = append(cardItems, section1...)
+	cardItems = append(cardItems, sep())
+	cardItems = append(cardItems, section2...)
+	cardItems = append(cardItems, sep())
+	cardItems = append(cardItems, section3...)
+	card := fyne.NewMenu("Card", cardItems...)
 
 	help := fyne.NewMenu("Help",
 		item("Smart Contacts Help", cmdShift(fyne.KeySlash), u.help),
@@ -252,6 +314,33 @@ func (u *ui) mainMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("About", u.about), // macOS moves this into the app menu
 	)
 	return fyne.NewMainMenu(file, edit, view, card, help)
+}
+
+// refreshMenu rebuilds the menu bar when what the commands act on changes (another card opened,
+// cards ticked), so their titles stay true. It's skipped when nothing in the menus would change.
+func (u *ui) refreshMenu() {
+	if u.win == nil || u.list == nil {
+		return
+	}
+	m := u.mainMenu()
+	var sig strings.Builder
+	var walk func(items []*fyne.MenuItem)
+	walk = func(items []*fyne.MenuItem) {
+		for _, it := range items {
+			fmt.Fprintf(&sig, "%s|%v|%v;", it.Label, it.Disabled, it.Checked)
+			if it.ChildMenu != nil {
+				walk(it.ChildMenu.Items)
+			}
+		}
+	}
+	for _, mm := range m.Items {
+		walk(mm.Items)
+	}
+	if sig.String() == u.menuSig {
+		return
+	}
+	u.menuSig = sig.String()
+	u.win.SetMainMenu(m)
 }
 
 // selectAllCards ticks everyone in the list (⌘A when not typing).
@@ -755,9 +844,10 @@ func (u *ui) cleanup() { u.cleanupFor(u.store.Contacts, "") }
 // ticked only when clearly junk; numbers whose country is unclear get a country picker.
 func (u *ui) cleanupFor(cs []*Contact, intro string) {
 	changes := PlanCleanup(cs, u.cfg.CountryCode)
+	scope := u.scopeName(cs)
 	if len(changes) == 0 {
 		if intro == "" {
-			showInfo("All tidy", "Numbers, emails, names and links already look right.", u.win)
+			showInfo("Nothing to clean up in "+scope, "Numbers, emails, names and links already look right. Nothing was changed.", u.win)
 		}
 		return
 	}
@@ -838,7 +928,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 	}
 	note := caption(top)
 	note.Wrapping = fyne.TextWrapWord
-	d := dialog.NewCustomConfirm(fmt.Sprintf("Clean up — %d suggestions", len(changes)), "Apply", "Skip",
+	d := dialog.NewCustomConfirm(fmt.Sprintf("Clean Up %s — %d %s", scope, len(changes), pluralWords(len(changes), "suggestion", "suggestions")), "Apply", "Skip",
 		container.NewBorder(note, nil, nil, nil, container.NewVScroll(box)), func(ok bool) {
 			if !ok {
 				return
@@ -870,7 +960,7 @@ func (u *ui) cleanupFor(cs []*Contact, intro string) {
 			u.cfg.LastCleanup = time.Now()
 			_ = u.cfg.Save(u.store.Dir())
 			u.save()
-			u.flash(fmt.Sprintf("Applied %d changes · backup: %s", n, filepath.Base(backup)))
+			u.flash(fmt.Sprintf("Clean Up applied to %s — %d %s (backup %s saved first)", scope, n, pluralWords(n, "fix", "fixes"), filepath.Base(backup)))
 		}, u.win)
 	d.Resize(fyne.NewSize(860, 620))
 	d.Show()
@@ -1049,30 +1139,44 @@ func (u *ui) settings() {
 	coverChk.SetChecked(!u.cfg.NoCover)
 	openAt := widget.NewRadioGroup([]string{"The last page I was on", "The first page (All Contacts)"}, nil)
 	openAt.SetSelected(map[bool]string{false: "The last page I was on", true: "The first page (All Contacts)"}[u.cfg.OpenAtFirst])
-	form := []*widget.FormItem{
-		widget.NewFormItem("Your country code", cc),
-		widget.NewFormItem("Sort by", sortBy),
-		widget.NewFormItem("History", autoAct),
-		widget.NewFormItem("Reminders", notify),
-		widget.NewFormItem("Organiser", coverChk),
-		widget.NewFormItem("Open at", openAt),
-		widget.NewFormItem("Cloud AI", allow),
-		widget.NewFormItem("OpenRouter key", key),
-		widget.NewFormItem("AI model", model),
-		widget.NewFormItem("", container.NewVBox(keyNote, container.NewHBox(test), result)),
-		widget.NewFormItem("Privacy", container.NewVBox(caption(privacyText(u.store.Dir())), container.NewHBox(folder))),
+	// Laid out like a Mac settings window: titled groups on a light panel, the whole thing
+	// scrolling, and Cancel / Save always in their own row at the bottom.
+	section := func(title string, items ...*widget.FormItem) fyne.CanvasObject {
+		head := widget.NewLabelWithStyle(title, fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+		bg := canvas.NewRectangle(color.NRGBA{0xFF, 0xFF, 0xFF, 0x80})
+		bg.CornerRadius = 10
+		bg.StrokeColor = color.NRGBA{0, 0, 0, 0x18}
+		bg.StrokeWidth = 1
+		return container.NewVBox(head, container.NewStack(bg, container.NewPadded(widget.NewForm(items...))))
 	}
-	cc.Validator = func(s string) error {
-		if d := digitsOnly(s); d == "" || len(d) > 4 || d != strings.TrimPrefix(strings.TrimSpace(s), "+") {
-			return errors.New("digits only, like 965")
-		}
-		return nil
-	}
-	d := dialog.NewForm("Settings", "Save", "Cancel", form, func(ok bool) {
+	privacy := caption(privacyText(u.store.Dir()))
+	privacy.Wrapping = fyne.TextWrapWord
+	content := container.NewVBox(
+		section("General",
+			widget.NewFormItem("Your country code", cc),
+			widget.NewFormItem("Sort by", sortBy),
+			widget.NewFormItem("History", autoAct),
+			widget.NewFormItem("Reminders", notify)),
+		section("Organiser",
+			widget.NewFormItem("When the app opens", coverChk),
+			widget.NewFormItem("Open at", openAt)),
+		section("Cloud AI",
+			widget.NewFormItem("Cloud AI", allow),
+			widget.NewFormItem("OpenRouter key", key),
+			widget.NewFormItem("AI model", model),
+			widget.NewFormItem("", container.NewVBox(keyNote, container.NewHBox(test, result)))),
+		section("Privacy",
+			widget.NewFormItem("", container.NewVBox(privacy, container.NewHBox(folder, layout.NewSpacer())))),
+	)
+	d := dialog.NewCustomConfirm("Settings", "Save", "Cancel", container.NewVScroll(container.NewPadded(content)), func(ok bool) {
 		if !ok {
 			return
 		}
-		u.cfg.CountryCode = digitsOnly(cc.Text)
+		if code := digitsOnly(cc.Text); code != "" && len(code) <= 4 {
+			u.cfg.CountryCode = code
+		} else {
+			showInfo("Country code not changed", "The country code should be digits only, like 965. The other settings were saved.", u.win)
+		}
 		u.cfg.SortByLast = sortBy.Selected == "Last name"
 		u.cfg.OpenRouterKey = strings.TrimSpace(key.Text)
 		u.cfg.AllowCloudAI = allow.Checked
@@ -1088,8 +1192,11 @@ func (u *ui) settings() {
 			showErr(err, u.win)
 		}
 		u.refreshAll()
+		u.flash("Settings saved")
 	}, u.win)
-	d.Resize(fyne.NewSize(620, 520))
+	d.SetConfirmImportance(widget.HighImportance)
+	trackDialog(d, d.Confirm)
+	d.Resize(fyne.NewSize(700, 640))
 	d.Show()
 }
 
@@ -1111,6 +1218,10 @@ func (u *ui) help() {
 **Quick Find.** The person icon in the menu bar opens Quick Find (also ⇧⌘O): type a name, press Return to copy the number. Your favorites are in that menu too, with call and message.
 
 **Search filters.** company:boubyan · title:engineer · group:family · source:linkedin · city:salmiya · country:kuwait · code:965 · has:email · no:phone · talked:<30d · talked:>1y · is:favorite · is:due — and a minus in front reverses one (-group:work). Save any search as a Smart Group in the sidebar.
+
+**What a command acts on.** The Card menu has three parts, each headed by its target: *This Card* (the person open on the right, by name), *Selected Cards* (the people ticked in Select mode, with the count) and *Whole Address Book* (every card, with the count). Commands that can't act right now are dimmed. Right-click a person and the menu starts with their name.
+
+**Seeing what changed.** After any change a banner at the bottom says what was done (“Clean Up applied to 3 Selected Cards — 1 fix”), with *Show Changes* (each card, how it was in grey and how it is now in bold) and *Undo*. Cards that just changed have a blue dot in the list for a short while.
 
 **Needs Attention** lists cards with something to tidy (a number without its country code, a typo in an email…); the card shows a Review button.
 

@@ -40,6 +40,7 @@ func (u *ui) pickedContacts() []*Contact {
 
 // updateBulkBar shows the actions for the ticked people.
 func (u *ui) updateBulkBar() {
+	defer u.refreshMenu() // "3 Selected Cards" in the Card menu
 	if !u.selectMode {
 		return
 	}

@@ -263,7 +263,19 @@ Notes from building Smart Contacts in one cloud session (2026-11-07). Builds on 
 - The same helper gives the title bar the dark grey of the "desk" behind the book, so no white shows.
   Other systems just resize (window_other.go).
 
-## 16. Ideas not done yet
+## 16. Saying what a command acts on, and what it did (2026-11-08)
+
+- Commands were ambiguous: some used the ticked cards, some the open card, Clean Up always everything.
+  The Card menu now has three headed sections (This Card — name / N Selected Cards / All N Cards) and
+  every title names its target, as Finder's "Move 3 Items to Trash" does. The menu bar is rebuilt
+  when the open card or the selection changes (skipped when nothing would differ).
+- Feedback comes from one place: every save that records an undo step compares the step's "before"
+  cards with the cards now (changes.go), so any command, old or new, gets the same banner, the
+  Show Changes list and blue dots without its own code. A command's flash text becomes the banner title.
+- Fyne pads window content with the theme background by default; SetPadded(false) removes the
+  cream frame round the dark grey.
+
+## 17. Ideas not done yet
 
 - Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
 - A menu-bar quick search.

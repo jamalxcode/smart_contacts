@@ -77,6 +77,11 @@ type ui struct {
 	leftPage      *paperPage      // Filofax look: the page of names
 	rightPage     *paperPage      // Filofax look: the person's page
 	bookContent   fyne.CanvasObject
+	toast         *toast
+	recent        map[string]bool // cards the last change touched: a blue dot for a while
+	recentGen     int
+	menuSig       string
+	actionVerb    string // what the next save is doing ("Cleaned up"), for the banner
 	coverShown    bool
 	openSize      fyne.Size // the window size with the organiser open
 	filter        *contactFilter
@@ -120,6 +125,7 @@ func newUI(a fyne.App, s *Store, cfg *Config) *ui {
 	}
 	u.act = LoadActivity(s.Dir())
 	u.win = a.NewWindow("Smart Contacts")
+	u.win.SetPadded(false) // no cream border round the window's contents: the dark grey runs to the edge
 	u.restorePage()
 	u.build()
 	if i := u.indexOf(u.selectedID); i >= 0 {
@@ -261,7 +267,9 @@ func (u *ui) build() {
 			texts := container.New(&tightVBox{}, name, container.NewBorder(nil, nil, container.NewCenter(fl), nil, sub))
 			tick := widget.NewIcon(theme.CheckButtonIcon()) // shown in Select mode
 			tick.Hide()
-			row := container.NewBorder(nil, nil, container.NewHBox(tick, newAvatar(34)), star, texts)
+			dot := newChangedDot() // "this card just changed"; its slot is always there so rows don't shift
+			dot.Objects[0].Hide()
+			row := container.NewBorder(nil, nil, container.NewHBox(dot, tick, newAvatar(34)), star, texts)
 			var ca *contextArea
 			ca = newContextArea(row, u.win, func() *fyne.Menu { return u.rowMenu(ca.data) })
 			ca.onTap = func() {
@@ -298,8 +306,13 @@ func (u *ui) build() {
 				fl.Hide()
 			}
 			left := b.Objects[1].(*fyne.Container)
-			left.Objects[1].(*avatar).set(c, u.photo(c))
-			tick := left.Objects[0].(*widget.Icon)
+			left.Objects[2].(*avatar).set(c, u.photo(c))
+			if dot := left.Objects[0].(*fyne.Container).Objects[0]; u.recent[c.ID] {
+				dot.Show()
+			} else {
+				dot.Hide()
+			}
+			tick := left.Objects[1].(*widget.Icon)
 			if u.selectMode {
 				tick.Show()
 				if u.picked[c.ID] {
@@ -372,10 +385,12 @@ func (u *ui) build() {
 		u.tabBox, u.letterBox, u.letter = nil, nil, ""
 		u.app.Settings().SetTheme(newAppTheme())
 		panes := container.NewThemeOverride(outer, &paneTheme{newAppTheme()})
-		u.win.SetContent(container.NewBorder(nil, u.status, nil, nil, panes))
+		u.toast = u.newToast()
+		u.win.SetContent(container.NewStack(container.NewBorder(nil, u.status, nil, nil, panes), u.toast.box))
 	} else {
 		u.app.Settings().SetTheme(&filofaxTheme{newAppTheme()})
-		u.bookContent = onGrey(u.filofaxLayout(listPane))
+		u.toast = u.newToast()
+		u.bookContent = container.NewStack(onGrey(u.filofaxLayout(listPane)), u.toast.box)
 		u.win.SetContent(u.bookContent)
 	}
 	darkChrome(u.win, !u.cfg.ClassicLook) // dark grey title bar with the organiser (no effect before the window shows)
@@ -787,10 +802,17 @@ func (u *ui) searchKey(k *fyne.KeyEvent) bool {
 func (u *ui) save() {
 	u.invalidate()
 	defer u.checkAttention()
+	before := u.store.StepSerial()
+	verb := u.actionVerb
+	u.actionVerb = ""
 	if err := u.store.Save(); err != nil {
 		showErr(fmt.Errorf("couldn't save your contacts: %w", err), u.win)
 	}
 	u.refreshAll()
+	if u.store.StepSerial() != before { // an undoable change was made: say what it did
+		u.afterChange(u.store.LastChanges(), verb)
+	}
+	u.refreshMenu()
 }
 
 func (u *ui) photo(c *Contact) fyne.Resource {
@@ -819,6 +841,7 @@ func (u *ui) busy() bool {
 
 // showDetail shows the selected contact's card, editable in place.
 func (u *ui) showDetail() {
+	defer u.refreshMenu() // "This Card — <name>" in the Card menu
 	if u.busy() {
 		return
 	}
@@ -916,6 +939,11 @@ func (u *ui) toggleFavorite(c *Contact) {
 	c.Favorite = !c.Favorite
 	u.store.Put(c)
 	u.save()
+	if c.Favorite {
+		u.flash("Added " + c.DisplayName() + " to Favorites")
+	} else {
+		u.flash("Removed " + c.DisplayName() + " from Favorites")
+	}
 }
 
 // showGroup switches the list to a group or smart list.
@@ -1010,6 +1038,7 @@ func (u *ui) open(c *Contact, link string) {
 func (u *ui) flash(msg string) {
 	u.flashGen++
 	gen := u.flashGen
+	u.retitleToast(msg)
 	u.status.SetText(msg)
 	go func() {
 		time.Sleep(3 * time.Second)

@@ -208,7 +208,11 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 	if c.Favorite {
 		fav = "Remove from Favorites"
 	}
+	head := fyne.NewMenuItem(c.DisplayName(), nil) // says which card these commands act on
+	head.Disabled = true
 	return fyne.NewMenu("",
+		head,
+		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem(fav, func() { u.toggleFavorite(c) }),
 		fyne.NewMenuItem("Connect to…", func() { u.connectDialog(c) }),
 		fyne.NewMenuItemSeparator(),
@@ -219,7 +223,8 @@ func (u *ui) rowMenu(id string) *fyne.Menu {
 		fyne.NewMenuItem(selectLabel(u, id), func() { u.clickWithKeys(id, fyne.KeyModifierShortcutDefault) }),
 		fyne.NewMenuItem("Select All", u.selectAllCards),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Delete Card…", func() { u.deleteContact(c) }),
+		fyne.NewMenuItem("Clean Up This Card…", func() { u.cleanupFor([]*Contact{c}, "") }),
+		fyne.NewMenuItem("Delete "+c.DisplayName()+"…", func() { u.deleteContact(c) }),
 	)
 }
 

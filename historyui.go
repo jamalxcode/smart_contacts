@@ -27,6 +27,7 @@ func (u *ui) undo() {
 	}
 	u.afterRestore()
 	u.flash("Undid: " + label + "   (⌘⇧Z to redo)")
+	u.afterChange(u.store.UndoneChanges(), "Undid")
 }
 
 func (u *ui) redo() {
@@ -41,6 +42,7 @@ func (u *ui) redo() {
 	}
 	u.afterRestore()
 	u.flash("Redid: " + label)
+	u.afterChange(u.store.LastChanges(), "Redid")
 }
 
 func (u *ui) afterRestore() {
@@ -50,6 +52,7 @@ func (u *ui) afterRestore() {
 		u.selectedID = ""
 	}
 	u.refreshAll()
+	u.refreshMenu()
 }
 
 // historyDialog lists this session's changes (each can be undone back to) and the saved

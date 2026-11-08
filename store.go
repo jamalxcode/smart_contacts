@@ -29,6 +29,7 @@ type Store struct {
 	Trash    []TrashItem
 	// ExtraGroups are groups the user created that have no members yet.
 	ExtraGroups []string
+	stepSerial  int // counts recorded undo steps (see StepSerial)
 	// Links are the relationships the user recorded between two contacts.
 	Links []Link
 
@@ -182,6 +183,7 @@ func (s *Store) save(record bool) error {
 		if label := describeStep(step, js, meta); label != "" {
 			step.Label, step.Time = label, time.Now()
 			s.undo = append(s.undo, step)
+			s.stepSerial++
 			if len(s.undo) > maxUndo {
 				s.undo = s.undo[len(s.undo)-maxUndo:]
 			}
