@@ -66,8 +66,8 @@ type ui struct {
 	sideBusy      bool
 	act           *ActivityBook // when you were last in touch, from Messages, calls, Mail, WhatsApp
 	actBusy       bool
-	sortFirst     *sortPill // the sort switch in the organiser's tab column
-	sortLast      *sortPill
+	sortFirst     *cardLine // the sort switch in the organiser's tab column
+	sortLast      *cardLine
 	sortRadio     *widget.RadioGroup // the same in the plain look's sidebar
 	modalLayer    *fyne.Container    // where the clipboard and stamp windows go (paperdialog.go)
 	tools         *toolbarParts      // the organiser toolbar (nil in the plain look)

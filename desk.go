@@ -253,8 +253,8 @@ func (p *cardPocket) CreateRenderer() fyne.WidgetRenderer {
 	r.card.StrokeColor = color.NRGBA{0xB8, 0xB0, 0xA0, 0xFF}
 	r.card.StrokeWidth = 1
 	r.card.CornerRadius = 2
-	r.name = canvas.NewText("Business Cards", color.NRGBA{0x3A, 0x2A, 0x1E, 0xFF})
-	r.name.TextSize = 11
+	r.name = canvas.NewText("Business Cards", color.NRGBA{0x14, 0x10, 0x0C, 0xFF})
+	r.name.TextSize = 12
 	r.name.TextStyle = serif("x", true, false)
 	for i := 0; i < 2; i++ {
 		l := canvas.NewRectangle(color.NRGBA{0xA8, 0xA4, 0x98, 0xFF})
@@ -266,10 +266,10 @@ func (p *cardPocket) CreateRenderer() fyne.WidgetRenderer {
 	r.edge.StrokeColor = color.NRGBA{0x2A, 0x12, 0x06, 0xC0}
 	r.edge.StrokeWidth = 2
 	r.edge.CornerRadius = 6
-	r.label = canvas.NewText("drop or click to add", color.NRGBA{0xE8, 0xC8, 0x82, 0xE0})
+	// what to do, printed in black on the card itself
+	r.label = canvas.NewText("drop or click to add", color.NRGBA{0x14, 0x10, 0x0C, 0xFF})
 	r.label.TextSize = 11
 	r.label.TextStyle = serif("x", false, true)
-	r.label.Alignment = fyne.TextAlignCenter
 	return r
 }
 
@@ -292,12 +292,13 @@ func (r *pocketRenderer) Layout(s fyne.Size) {
 		lift = 8
 	}
 	cw := s.Width - 34
-	r.card.Move(fyne.NewPos(17, py-30-lift))
-	r.card.Resize(fyne.NewSize(cw, 60))
-	r.name.Move(fyne.NewPos(26, py-26-lift))
-	for i, l := range r.lines {
-		l.Move(fyne.NewPos(26, py-8-lift+float32(i)*6))
-		l.Resize(fyne.NewSize(cw*0.55-float32(i)*14, 1.4))
+	r.card.Move(fyne.NewPos(17, py-42-lift))
+	r.card.Resize(fyne.NewSize(cw, 70))
+	r.name.Move(fyne.NewPos(26, py-38-lift))
+	r.label.Move(fyne.NewPos(26, py-20-lift))
+	r.label.Resize(r.label.MinSize())
+	for _, l := range r.lines {
+		l.Hide() // the card's words say it now
 	}
 	r.leather.Move(fyne.NewPos(6, py))
 	r.leather.Resize(fyne.NewSize(s.Width-12, ph))
@@ -305,8 +306,6 @@ func (r *pocketRenderer) Layout(s fyne.Size) {
 	r.shade.Resize(fyne.NewSize(s.Width-12, ph))
 	r.edge.Move(fyne.NewPos(6, py))
 	r.edge.Resize(fyne.NewSize(s.Width-12, ph))
-	r.label.Move(fyne.NewPos(0, s.Height-15))
-	r.label.Resize(fyne.NewSize(s.Width, 14))
 	if s != r.last {
 		r.last = s
 		r.stitches = r.stitches[:0]
@@ -323,12 +322,11 @@ func (r *pocketRenderer) Layout(s fyne.Size) {
 func (r *pocketRenderer) MinSize() fyne.Size { return fyne.NewSize(140, 104) }
 func (r *pocketRenderer) Refresh()           { r.Layout(r.p.Size()); canvas.Refresh(r.p) }
 func (r *pocketRenderer) Objects() []fyne.CanvasObject {
-	objs := []fyne.CanvasObject{r.card, r.name}
+	objs := []fyne.CanvasObject{r.card, r.name, r.label} // the card, under the pocket's leather
 	for _, l := range r.lines {
 		objs = append(objs, l)
 	}
 	objs = append(objs, r.leather, r.shade, r.edge)
-	objs = append(objs, r.stitches...)
-	return append(objs, r.label)
+	return append(objs, r.stitches...)
 }
 func (r *pocketRenderer) Destroy() {}
