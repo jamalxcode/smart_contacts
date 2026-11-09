@@ -36,6 +36,11 @@ func main() {
 		_ = os.WriteFile(d+"/ocr.js", []byte(ocrScript), 0o644)
 		return
 	}
+	if len(os.Args) > 1 && os.Args[1] == "--bt-status" { // for the build check: what the Bluetooth guide will say
+		text, ok, known := bluetoothReady()
+		fmt.Printf("known=%v ok=%v power=%v sharing=%v: %s\n", known, ok, bluetoothPower(), bluetoothSharing(), text)
+		return
+	}
 	if len(os.Args) > 2 && os.Args[1] == "--read-card" { // for the build check: OCR an image and print the contact
 		data, err := os.ReadFile(os.Args[2])
 		if err == nil {

@@ -74,6 +74,9 @@ jobs:
           "$BIN" --read-card testdata/business-card.png | tee "$RUNNER_TEMP/card.txt"
           grep -q "Khalid" "$RUNNER_TEMP/card.txt"
           grep -q "khalid.m@example.com" "$RUNNER_TEMP/card.txt"
+          # Bluetooth Sharing check (issue #6): runs the real `defaults` reads; a runner has it off
+          "$BIN" --bt-status | tee "$RUNNER_TEMP/bt.txt"
+          grep -q "known=true" "$RUNNER_TEMP/bt.txt" || echo "::warning::Bluetooth state not readable on this runner"
 
       - name: Launch test (informational)
         run: |

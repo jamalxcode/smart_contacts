@@ -443,6 +443,15 @@ func (u *ui) newImportWizard() *importWizard {
 		if g.intro != "" {
 			box.Add(para(g.intro))
 		}
+		if g.finish == finishReceive { // Bluetooth: say straight away whether the Mac will take the file
+			st := newBTStatus()
+			again := widget.NewButtonWithIcon("Check Again", theme.ViewRefreshIcon(), func() { go st.check() })
+			again.Importance = widget.LowImportance
+			row := container.NewBorder(nil, nil, nil, again, st.obj)
+			if st.obj.Visible() { // shown wherever macOS says; elsewhere there's nothing to check
+				box.Add(row)
+			}
+		}
 		if len(g.steps) > 0 {
 			head("Steps")
 		}

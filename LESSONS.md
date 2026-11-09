@@ -462,3 +462,16 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
   as a row is over the allowance. 10,000 cards take ~45 ms on the test machine; exact searches
   cost nothing extra.
 - No guessing under 4 letters (Ali / Ala / Alia are different people) and never for numbers.
+
+## 38. Say what the Mac will do, don't just warn
+
+- Bluetooth Sharing is a per-user setting: `defaults -currentHost read com.apple.Bluetooth
+  PrefKeyServicesEnabled` gives 1 (on), 0 (off), or "does not exist" (never switched on, so off) —
+  the same check the macOS 15 security benchmarks use. Bluetooth's power is
+  `ControllerPowerState` in /Library/Preferences/com.apple.Bluetooth. The guide and the waiting
+  window read both and say so in red or green; the waiting window re-reads every 1.5 s, so flipping
+  the switch shows at once. "Accept and Save" isn't readable this way.
+- `--bt-status` prints the check, and CI runs it on the real Mac runner: the only place the
+  `defaults` call itself can be tested.
+- A status built on the UI thread sets itself directly; later checks from goroutines go through
+  `fyne.Do` (Fyne 2.6 refuses UI changes from other goroutines).

@@ -421,7 +421,9 @@ func (u *ui) receiveFromPhone() {
 	settings := widget.NewButtonWithIcon("Open Sharing Settings", theme.SettingsIcon(), func() {
 		u.openLink("x-apple.systempreferences:com.apple.Sharing-Settings.extension")
 	})
-	d := newCustom("Receive from a Phone", "Cancel", container.NewVBox(how, container.NewHBox(settings), widget.NewProgressBarInfinite()), u.win)
+	// whether the Mac will take the file right now, checked again as you change the setting
+	ready := newBTStatus()
+	d := newCustom("Receive from a Phone", "Cancel", container.NewVBox(ready.obj, how, container.NewHBox(settings), widget.NewProgressBarInfinite()), u.win)
 	d.SetOnClosed(func() {
 		select {
 		case <-stop:
@@ -445,6 +447,7 @@ func (u *ui) receiveFromPhone() {
 				return
 			case <-tick.C:
 			}
+			ready.check()
 			for _, dir := range dirs {
 				entries, err := os.ReadDir(dir)
 				if err != nil {

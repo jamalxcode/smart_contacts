@@ -61,6 +61,8 @@ that haven't been built yet.
 - macOS can't pull contacts from a phone over Bluetooth by itself; the phone has to send a .vcf
   (Bluetooth Sharing or AirDrop), which the Import wizard's Bluetooth guide picks up from Downloads.
   Bluetooth Sharing must be on and set to Accept and Save, or the phone reports the Mac refused it.
+  The guide and the waiting window show whether Bluetooth Sharing is on (read live from macOS);
+  "Accept and Save" can't be read, so the guide still asks you to check it.
 - WhatsApp has no contacts export (it uses the phone's address book) — import the phone instead.
 - LinkedIn messages open the person's LinkedIn page (where the Message button is); LinkedIn has no
   direct "message this person" link. X opens the profile for the same reason.

@@ -17,7 +17,6 @@ When you fix one, close the issue and move the line to *Done recently* with the 
 | # | Idea | Notes |
 |---|---|---|
 | [#5](https://github.com/jamalxcode/smart_contacts/issues/5) | Developer ID signing and notarisation | So a browser-downloaded zip opens; today use the curl install. |
-| [#6](https://github.com/jamalxcode/smart_contacts/issues/6) | Show whether Bluetooth Sharing is on | The phone just says "refused" when it's off. |
 
 ## Small technical debt
 
@@ -36,6 +35,7 @@ sync with Mac Contacts (the app stands on its own).
 
 | Version | What |
 |---|---|
+| 1.0.59 | The Bluetooth guide and the waiting window say whether Bluetooth Sharing (and Bluetooth) is on, live (#6) |
 | 1.0.58 | Typo-tolerant search (#7); anniversaries and other dates (#8); prefix, middle name, suffix, phonetic (#9); related people in vCards (#10); merging keeps own lines, dates and follow-ups |
 | 1.0.57 | Builds pinned (go.sum committed, no `go mod tidy` in CI, fyne tool pinned); dialogs.go and filofax.go split by feature |
 | 1.0.55 | Import opens at once (#1 fix); LinkedIn guide uses the larger archive |
