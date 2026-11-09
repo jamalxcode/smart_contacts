@@ -3,7 +3,7 @@
 A fast, native Mac address book written in Go ([Fyne](https://fyne.io)), built to be **the one place
 all your contacts come together**: your Mac and iPhone, other phones, Gmail, Outlook, LinkedIn,
 spreadsheets and notes are imported, matched and merged into a single, clean card per person.
-Everything stays on your Mac, in one readable file, with backups and a 30-day trash. Names work in
+Everything stays on your Mac, in one readable file, with daily backups and a Trash that keeps cards until you empty it. Names work in
 Arabic and English, and numbers are tidied into one international format.
 
 <p align="center"><img src="Icon.png" width="128" alt="Smart Contacts icon"></p>
@@ -34,24 +34,32 @@ are untouched. The app never checks by itself; running the install line again al
 
 ## What it does
 
-**Bring Everything In (File menu, and the first screen).** A checklist walks through every source
-below, then Clean Up and Look for Duplicates, ticking off each one as it's done. File → Import (⌘O)
-takes contacts from:
+**Import Contacts (File → Import… ⌘O, or the funnel under the business-card pocket).** A short
+question-and-answer wizard on a clipboard: *where are the contacts?* → (for phones) *are they in
+Google? how will you send them?* → a guide. Every guide has the same shape: what this does,
+numbered steps each with **"You should see…"**, **Check before you continue**, **If it doesn't
+work**, and the buttons it mentions (Open Google Contacts, Choose File…, Start Waiting…) pinned at
+the bottom so they're always in sight.
 
-| Source | What to export |
+| Source | How the guide gets them |
 |---|---|
-| Mac & iPhone | nothing — read straight from the Mac's Contacts app (iPhone via iCloud) |
-| Another phone | Android: Contacts → Export → .vcf · old iPhone: icloud.com → Export vCard |
-| Gmail / Google | contacts.google.com → Export (Google CSV or vCard) |
-| Outlook / Hotmail | outlook.com → People → Manage → Export contacts (CSV) |
-| LinkedIn | Settings & Privacy → Data privacy → Get a copy of your data → Connections |
-| Yahoo, iCloud, others | the account's export, as vCard or CSV |
-| Spreadsheets | any .csv or .xlsx — columns matched automatically (English or Arabic headers), adjustable |
-| Notes / text | a .txt or pasted text with several people (one per line, or blocks) |
-| Telegram | Telegram Desktop → Export Telegram data → Contacts list (JSON) — includes numbers |
-| Facebook / Snapchat friends | their data downloads (JSON) — names only, so matched to people you have |
-| A phone over Bluetooth / AirDrop | *Receive from a Phone* waits for the .vcf the phone sends |
-| Business cards | Smart Add → Business Card Image, or drag a photo/screenshot onto the window |
+| iPhone (same Apple Account) | read straight from this Mac's Contacts (iCloud sync) — Import Now |
+| iPhone (other account) | icloud.com → Select → Select All Contacts → Actions → Export vCard |
+| Android, in Google | contacts.google.com → ⋮ More actions → Export → vCard |
+| Android, not in Google | make a .vcf on the phone (Samsung / Pixel paths given), then send it to yourself, AirDrop (some newer phones) or Bluetooth (needs Bluetooth Sharing on this Mac) |
+| Gmail / Google | as Android, in Google |
+| Outlook / Hotmail | outlook.com People → Manage contacts → Export contacts (CSV) |
+| LinkedIn | Data privacy → Get a copy of your data → **larger data archive** (Connections is only there now) → Connections.csv, up to 24 h later |
+| Another email account | the account's export, as vCard or CSV |
+| Spreadsheet | any .csv or .xlsx — columns matched automatically (English or Arabic headers), adjustable under Column matching |
+| Note or text | Paste Text… — one person per line, or blocks |
+| Telegram | Telegram Desktop (desktop.telegram.org) → Export Telegram data → Contacts list, JSON |
+| Facebook / Snapchat | their data downloads (JSON) — names only, matched to people you have |
+| Instagram / X | can't be imported (usernames only); add the link to a card |
+| Business cards | drop a photo on the pocket, or Smart Add → Business Card Image |
+
+**Bring Everything In** (File menu) is a checklist through every source, then Clean Up and Look for
+Duplicates; its "Show Me How…" buttons open the same wizard guides.
 
 Or drag files onto the window. Every import shows a preview first:
 
@@ -273,8 +281,8 @@ The shortcuts follow Apple's Contacts app where there's an equivalent.
 
 ## Roadmap
 
-Planned: organisation / "how I know them" / "met at" fields linked into connections, a menu-bar
-quick search, birthday notifications, and encrypted backups.
+Open work and known issues are in [ISSUES.md](ISSUES.md) (mirrored as GitHub issues). The design
+decisions and the rules the code relies on are in [DESIGN.md](DESIGN.md).
 
 Not planned, by design: online lookup or enrichment of contacts (searching Google, X or LinkedIn
 for people, reverse lookup by phone or email), cloud sync, or accounts.
@@ -297,5 +305,11 @@ photos) · `vcard.go` · `tools.go` (CSV, duplicates, clean-up) · `smart.go` (S
 `importers.go` (vCard/CSV/Excel/notes readers, import planning) · `phone.go` (numbers by country, emails) · `cleanup.go` · `names.go` (Arabic ↔ English names) · `graph.go` (connections, six-degrees paths) · `social.go` (profiles, ways to reach) ·
 `socialimport.go` (Telegram, Facebook, Snapchat) · `calendar.go` · `cards.go` (business cards, text recognition) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
 
-See [LIMITATIONS.md](LIMITATIONS.md) for what the app deliberately won't do and what's next, and
-[LESSONS.md](LESSONS.md) for notes from building it.
+The full, current code map is in [DESIGN.md](DESIGN.md#code-map).
+
+| Document | What's in it |
+|---|---|
+| [DESIGN.md](DESIGN.md) | design decisions, the rules the code relies on, code map, how to add things, how to release |
+| [ISSUES.md](ISSUES.md) | known issues and open work, with GitHub issue numbers |
+| [LESSONS.md](LESSONS.md) | what was learned building it (Fyne, macOS, CI, import sources) |
+| [LIMITATIONS.md](LIMITATIONS.md) | what the app deliberately won't do, and current limits |

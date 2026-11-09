@@ -348,7 +348,18 @@ func (u *ui) importHub() {
 // importWizard is built once and kept, so opening Import again is instant.
 type importWizard struct {
 	d     *paperDialog
-	start func() // back to the first question
+	start func()             // back to the first question
+	jump  func(label string) // straight to an answer, e.g. "LinkedIn" (Back still walks the path)
+}
+
+// importGuide opens the wizard at one source's guide, so other places (Bring Everything In) give
+// the same, up-to-date steps instead of keeping their own.
+func (u *ui) importGuide(label string) {
+	if u.importWiz == nil {
+		u.importWiz = u.newImportWizard()
+	}
+	u.importWiz.jump(label)
+	u.importWiz.d.Show()
 }
 
 // prewarmImport builds the wizard and lays it out while the app is idle, so the first press of
@@ -516,7 +527,33 @@ func (u *ui) newImportWizard() *importWizard {
 	d.clipboard = true // you're answering questions
 	d.SetButtons([]fyne.CanvasObject{backBtn, closeBtn})
 	d.Resize(fyne.NewSize(700, 560))
-	return &importWizard{d: d, start: start}
+	// jump finds the answer by its label anywhere in the questions and replays the path to it.
+	var find func(q *wizQuestion, label string) []wizAnswer
+	find = func(q *wizQuestion, label string) []wizAnswer {
+		for _, a := range q.answers {
+			if a.label == label {
+				return []wizAnswer{a}
+			}
+			if a.next != nil {
+				if p := find(a.next, label); p != nil {
+					return append([]wizAnswer{a}, p...)
+				}
+			}
+		}
+		return nil
+	}
+	jump := func(label string) {
+		start()
+		for _, a := range find(first, label) {
+			a := a
+			if a.next != nil {
+				go1(func() { showQ(a.next) })
+			} else if a.guide != nil {
+				go1(func() { showG(a.guide) })
+			}
+		}
+	}
+	return &importWizard{d: d, start: start, jump: jump}
 }
 
 func downloadsDir() string {

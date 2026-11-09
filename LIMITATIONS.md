@@ -59,7 +59,8 @@ that haven't been built yet.
   and never create cards unless you tick them. Instagram and X exports hold only usernames or
   account numbers, so they can't be matched at all; add those links by hand.
 - macOS can't pull contacts from a phone over Bluetooth by itself; the phone has to send a .vcf
-  (Bluetooth Sharing or AirDrop), which *Receive from a Phone* picks up from Downloads.
+  (Bluetooth Sharing or AirDrop), which the Import wizard's Bluetooth guide picks up from Downloads.
+  Bluetooth Sharing must be on and set to Accept and Save, or the phone reports the Mac refused it.
 - WhatsApp has no contacts export (it uses the phone's address book) — import the phone instead.
 - LinkedIn messages open the person's LinkedIn page (where the Message button is); LinkedIn has no
   direct "message this person" link. X opens the profile for the same reason.
@@ -75,7 +76,7 @@ that haven't been built yet.
   others are typed by hand.
 - Clean Up knows the numbering rules of about 25 countries; numbers from others are kept as written.
 - Contact photos: iPhone HEIC needs converting to JPEG; photos are shrunk to 512 px.
-- Undoing an edit to a contact isn't possible; only deleted contacts can be restored (Trash, 30 days).
+- Cards in the Trash stay until you empty it; edits can be undone with Edit → Undo (history kept between launches).
 - No prefix, suffix, middle name or phonetic spelling fields.
 - Birthday is the only date: no anniversaries or other dates.
 - No custom fields beyond the built-in ones (labels can be renamed).
@@ -88,7 +89,7 @@ that haven't been built yet.
   messaging handles.
 - Arabic and English names sort as one list, so the A–Z letter headings mix.
 - Every save rewrites the whole file; very large books (around 50,000 contacts) are untested.
-- Trash items and daily backups are kept for 30 days, then deleted.
+- Daily backups are kept for 30 days, then deleted. The Trash keeps cards until you empty it.
 
 ## Not built yet (could be)
 
@@ -131,7 +132,7 @@ that haven't been built yet.
 - **Calendar log**, **business card images**, **one-click personal photo**, **notes clean-up**,
   **Deduplicate** (cards and repeats inside cards), and **contact buttons** for every app the card
   has a link or handle for.
-- **Telegram, Facebook and Snapchat exports**, **Receive from a Phone** (Bluetooth / AirDrop), notes
+- **Telegram, Facebook and Snapchat exports**, phones over Bluetooth / AirDrop (Import wizard), notes
   saying where details came from, and automatic clean-up during import.
 
 - **Import from every source:** Mac/iPhone, other phones, Gmail, Outlook, Yahoo, iCloud, LinkedIn,

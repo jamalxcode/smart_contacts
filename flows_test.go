@@ -7,7 +7,10 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 )
 
 // TestEveryWindowOpens drives the app the way a person does — opens cards, writes on one,
@@ -88,6 +91,42 @@ func TestEveryWindowOpens(t *testing.T) {
 	step("Trash window", u.trash)
 	step("Empty Trash", u.cmdEmptyTrash)
 	step("Import wizard", u.importHub)
+	// Every source's guide opens from outside the wizard (Bring Everything In uses this).
+	var labels func(q *wizQuestion) []wizAnswer
+	labels = func(q *wizQuestion) []wizAnswer {
+		var out []wizAnswer
+		for _, a := range q.answers {
+			out = append(out, a)
+			if a.next != nil {
+				out = append(out, labels(a.next)...)
+			}
+		}
+		return out
+	}
+	all := labels(u.importQuestions())
+	seen := map[string]int{}
+	for _, a := range all {
+		seen[a.label]++
+	}
+	for _, a := range all {
+		a := a
+		if seen[a.label] > 1 { // "Yes…" / "No, or I'm not sure" are reached through their question
+			continue
+		}
+		step("import guide "+a.label, func() {
+			u.importGuide(a.label)
+			want := ""
+			if a.guide != nil {
+				want = a.guide.title
+			} else {
+				want = a.next.ask
+			}
+			if !strings.Contains(allText(u.importWiz.d.content), want) {
+				t.Errorf("import guide %q didn't open at %q", a.label, want)
+			}
+		})
+	}
+	step("Bring Everything In", u.bringEverythingIn)
 	step("About", u.about)
 	step("Settings", u.settings)
 	step("a question in search", func() { u.search.SetText("who do I know at Gulf Bank?") })
@@ -95,4 +134,30 @@ func TestEveryWindowOpens(t *testing.T) {
 	step("plain look", u.toggleLook)
 	step("organiser look", u.toggleLook)
 	_ = fyne.CurrentApp()
+}
+
+// allText is every label's and text's words inside o, to check what a window shows.
+func allText(o fyne.CanvasObject) string {
+	var b strings.Builder
+	var walk func(o fyne.CanvasObject)
+	walk = func(o fyne.CanvasObject) {
+		switch t := o.(type) {
+		case *widget.Label:
+			b.WriteString(t.Text + "\n")
+		case *canvas.Text:
+			b.WriteString(t.Text + "\n")
+		case *fyne.Container:
+			for _, c := range t.Objects {
+				walk(c)
+			}
+		case *container.Scroll:
+			walk(t.Content)
+		case fyne.Widget:
+			for _, c := range test.WidgetRenderer(t).Objects() {
+				walk(c)
+			}
+		}
+	}
+	walk(o)
+	return b.String()
 }

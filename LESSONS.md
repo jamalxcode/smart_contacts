@@ -395,21 +395,21 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 - **Drawn textures** take about 0.15 s, so they aren't cached to disk.
 - **No real window on GitHub's Mac**: it has no OpenGL. `TestEveryWindowOpens` drives every flow and window with Fyne's test driver on every build instead. It catches Go-side crashes, not macOS menu bugs.
 
-- Every import guide has the same shape: what it does, numbered steps each with "You should see…", "Check before you continue", "If it doesn't work". A step without a visible result is a step people get lost on.
-- macOS refuses Bluetooth files until Bluetooth Sharing is on — the guide puts that first, not last.
+## 31. Import guides people can follow
 
-- A step that says "press X" must have X in sight. Guide buttons are pinned under the steps, outside the scroll, and steps say "at the bottom of this window" — never "below".
-- Check every menu path against the vendor's current help page; they move (Google now: ⋮ More actions → Export; iCloud: Select → Select All Contacts, then Actions → Export vCard).
+- **One shape for every guide** (`wizGuide` in `importwizard.go`): what it does (`intro`), numbered steps each with "You should see…" (`wizStep{do, see}`), "Check before you continue" (`check`), "If it doesn't work" (`trouble`), what you'll have (`expect`). A step with no visible result is where people get lost.
+- **A step that says "press X" must have X in sight.** The guide's buttons are pinned under the steps, outside the scroll, and the steps say "at the bottom of this window" — never "below". The step that opens a page also carries the link itself.
+- **Put the blocking setting first.** macOS refuses Bluetooth files until Bluetooth Sharing is on *and* set to Accept and Save; the phone just says "refused". That is now steps 1–3, before anything is sent.
+- **Vendor menus move.** Check each path against the vendor's current help page before shipping, and again when a user says "there's no …". Seen in one week: Google's Export is under ⋮ More actions; iCloud is Select → Select All Contacts, then Actions → Export vCard; LinkedIn took Connections out of "Want something in particular?" — it's only in the larger archive now (up to 24 hours); Facebook's download moved into Accounts Center → Export your information.
+- **Only one copy of the instructions.** Bring Everything In kept its own (stale) wording. It now opens the wizard at that source's guide (`u.importGuide(label)`), and `TestEveryWindowOpens` opens every guide that way and checks its title appears.
+- Prefer vCard to CSV where both exist: it keeps photos and notes.
 
-- Never refresh a whole window to animate it — move the sheet. A container Refresh re-draws every label and picture inside, every frame.
-- Big windows that open often (Import) are built once, while idle, and reused.
-- LinkedIn moved Connections out of "Want something in particular?" — it is only in the larger archive now (up to 24 hours).
+## 32. Speed
 
-## 31. Ideas not done yet
+- **Never refresh a whole window to animate it.** The paper window's slide-in called `overlay.Refresh()` every frame; a container Refresh re-draws every label and picture inside. Now only the sheet is moved (`sheetPlacer.Layout`).
+- **Build big windows once.** The Import wizard is built about two seconds after start, while idle (`prewarmImport`), kept in `u.importWiz`, and reset to its first question on each open.
+- A user-reported delay that doesn't show on the Linux test screen (3 s on the Mac vs 0.3 s here) needs a measurement on the Mac; see ISSUES.md.
 
-- Organisation / "how I know them" / "met at" fields the user fills in, feeding connections.
-- A menu-bar quick search.
-- Birthday reminders as Mac notifications.
-- Encrypted backups (Back Up To… writes a plain .zip).
-- Two-way sync with Mac Contacts (today: import, and "Copy to Apple Contacts" with a warning).
-- Notarised signing (Apple Developer ID) so a downloaded zip opens with a double-click.
+## 33. Writing it down
+
+- `DESIGN.md` holds the decisions and the rules the code relies on (static menus, one command rule, paper windows); `ISSUES.md` and GitHub issues hold what's open. Ideas that used to sit at the end of this file moved there.

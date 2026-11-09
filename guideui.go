@@ -39,12 +39,12 @@ func (u *ui) bringEverythingIn() {
 	}
 	steps := []step{
 		{"Mac & iPhone contacts", "Everything in the Mac's Contacts app, including your iPhone through iCloud.", has("Mac Contacts"), "Import", u.importMac},
-		{"Google / Gmail", "contacts.google.com → Export → Google CSV or vCard, then choose the file.", has("Google Contacts", "Gmail"), "Choose File…", u.importFile},
-		{"Outlook / work email", "outlook.com → People → Manage → Export contacts.", has("Outlook"), "Choose File…", u.importFile},
-		{"LinkedIn", "Settings & Privacy → Data privacy → Get a copy of your data → Connections.", has("LinkedIn"), "Choose File…", u.importFile},
-		{"Other phones", "Send the phone's contacts over Bluetooth or AirDrop; the app picks them up.", has("File:", "Android phone"), "Receive…", u.receiveFromPhone},
-		{"Telegram", "Telegram Desktop → Export Telegram data → Contacts list (JSON).", has("Telegram"), "Choose File…", u.importFile},
-		{"Facebook / Snapchat friends", "Their data downloads (JSON); names are matched to people you have.", has("Facebook", "Snapchat"), "Choose File…", u.importFile},
+		{"Google / Gmail", "Download them from contacts.google.com — step by step.", has("Google Contacts", "Gmail"), "Show Me How…", func() { u.importGuide("Gmail / Google") }},
+		{"Outlook / work email", "Download them from Outlook's People page — step by step.", has("Outlook"), "Show Me How…", func() { u.importGuide("Outlook / Hotmail") }},
+		{"LinkedIn", "Ask LinkedIn for your data archive, then bring in Connections.csv — step by step.", has("LinkedIn"), "Show Me How…", func() { u.importGuide("LinkedIn") }},
+		{"Other phones", "Android and other phones — through Google, or by sending the contacts file.", has("File:", "Android phone"), "Show Me How…", func() { u.importGuide("Android phone") }},
+		{"Telegram", "Export your contacts from Telegram Desktop — step by step.", has("Telegram"), "Show Me How…", func() { u.importGuide("Telegram") }},
+		{"Facebook / Snapchat friends", "Their data downloads; names are matched to people you have.", has("Facebook", "Snapchat"), "Show Me How…", func() { u.importGuide("Facebook or Snapchat friends") }},
 		{"Calendar", "Links meetings to the people in them.", len(u.cal.Events) > 0, "Read…", u.calendarDialog},
 		{"Clean up", "Fix numbers, emails and notes across everyone.", !u.cfg.LastCleanup.IsZero(), "Clean Up…", u.cleanup},
 		{"Look for duplicates", "Merge anyone who ended up on two cards.", !u.cfg.LastDedupe.IsZero(), "Look…", u.duplicates},

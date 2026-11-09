@@ -18,24 +18,6 @@ import (
 	"fyne.io/fyne/v2/widget"
 )
 
-// importSources are the places contacts come from, with how to get the file out of each.
-var importSources = []struct {
-	title, how string
-	mac        bool
-}{
-	{"Mac & iPhone contacts", "Everything in the Mac's Contacts app, including iPhone contacts synced through iCloud and any Google or Exchange accounts added in System Settings → Internet Accounts.", true},
-	{"Another phone", "Android: Contacts app → Settings → Export → .vcf file. Old iPhone: icloud.com → Contacts → select all → Export vCard. Then AirDrop or email the file to this Mac — or use Receive from a Phone below.", false},
-	{"Gmail / Google", "contacts.google.com → Export → Google CSV or vCard.", false},
-	{"Outlook / Hotmail", "outlook.com → People → Manage contacts → Export contacts (CSV).", false},
-	{"LinkedIn", "linkedin.com → Me → Settings & Privacy → Data privacy → Get a copy of your data → Connections → Request archive. Open Connections.csv from the email LinkedIn sends.", false},
-	{"Yahoo, iCloud or another email", "Use the account's Export contacts option and choose vCard or CSV.", false},
-	{"Spreadsheet", "Any .csv or .xlsx file. Columns are matched automatically (English or Arabic headers) and you can change the matching before importing.", false},
-	{"Notes or text", "A .txt file or text from Notes with several people in it — one per line (\"Ali 9999 8888\") or in blocks separated by an empty line.", false},
-	{"Telegram", "Telegram Desktop → Settings → Advanced → Export Telegram data → tick Contacts list, format JSON. Import result.json — contacts come with their phone numbers.", false},
-	{"Facebook / Snapchat friends", "Facebook: Settings → Download your information → Friends, format JSON (your_friends.json). Snapchat: Settings → My Data → friends.json. Names only, so they're matched to people you already have.", false},
-}
-
-// importHub is the one place to bring contacts in from anywhere.
 // importFile picks any supported file.
 func (u *ui) importFile() {
 	d := dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
