@@ -62,7 +62,7 @@ rule was learned; this file states the rule.
 - **One command rule:** every Card command acts on the **clipped cards if any, otherwise the open
   card** (`targets()`, `targetText()` in `cardcmds.go`). The toolbar shows "acting on …".
 - The Card menu, toolbar tabs and right-click menu call the same `cmd*` functions. Add a command
-  once in `cardcmds.go`, then list it in `mainMenu` (dialogs.go), `toolbar.go`, `rowMenu`
+  once in `cardcmds.go`, then list it in `mainMenu` (menus.go), `toolbar.go`, `rowMenu`
   (macui.go) and `cardMenuIcons` (menuicons.go).
 - Card menu order: Today · Add Note, Favorite, Keep in Touch ▸, Groups, Connections · Tidy Up,
   Find Duplicates, Share ▸, Send Greetings · Clip Cards · Check Messages · Move to Trash, Show
@@ -91,7 +91,7 @@ rule was learned; this file states the rule.
 | Company pages | `company.go` | the › after the company on a card |
 | Tidy one by one | `tidysession.go` | queue of cards needing work; skips remembered for the session |
 | Questions in search | `ask.go` | regex rules → filter syntax; Return sends only the question to AI |
-| Trash | `store.go`, `dialogs.go` (`trash`, `cmdEmptyTrash`) | |
+| Trash | `store.go`, `trashui.go` (`trash`, `cmdEmptyTrash`) | |
 | Import wizard | `importwizard.go`, `importui.go`, `importers.go`, `socialimport.go`, `vcard.go` | see §7 |
 | Clean Up / duplicates | `cleanup.go`, `tools.go`, `mergeui.go`, `names.go` | |
 | Last talked | `activity.go`, `activityui.go` | read from Messages/calls on this Mac only |
@@ -128,6 +128,9 @@ rule was learned; this file states the rule.
 
 ## 9. Build and release
 
+- **Everything is pinned:** `go.mod` + `go.sum` are committed, Go comes from `go.mod`, the packager
+  is `fyne.io/tools/cmd/fyne@v1.26.1`. CI never runs `go mod tidy`; upgrade on purpose, in a
+  commit of its own (LESSONS §34).
 - Push to `main` → `.github/workflows/build.yml` on `macos-15`: vet, tests, `fyne package`,
   Info.plist privacy strings added with PlistBuddy, ad-hoc `codesign`, smoke test, then the rolling
   `latest` release named "Smart Contacts 1.0.N" (N = run number).
@@ -145,7 +148,7 @@ rule was learned; this file states the rule.
 4. New window → a paper window helper, and a `step` in `TestEveryWindowOpens`.
 5. Menu labels unchanged after it runs (the test checks).
 6. New `Contact` field → `Clone`, `searchText`, `Tidy`, vCard if it maps.
-7. Help text (`dialogs.go` help), README, LESSONS (what you learned), ISSUES (what's left).
+7. Help text (`helpui.go`), README, LESSONS (what you learned), ISSUES (what's left).
 8. Screenshot it on the test screen; push; watch CI; check the release.
 
 ## Code map
@@ -154,11 +157,17 @@ rule was learned; this file states the rule.
 |---|---|
 | `main.go` | start-up; where data lives |
 | `ui.go` | the main `ui` struct, sidebar groups, list, detail, refresh |
-| `filofax.go` | the organiser look: leather, tabs, pages, cover, status line |
+| `filofax.go` | the organiser look: theme and fonts, open cover, pages, rings, layout, status line |
+| `textures.go` | leather, paper, chrome, pen, brass and felt, drawn in code |
+| `tabs.go` | coloured index tabs and the A–Z letter tabs |
+| `closedbook.go` | the closed cover, opening the book, the strap |
 | `paperdialog.go` | clipboard and stamp windows, paper buttons |
 | `toolbar.go`, `cardcmds.go` | Card commands and their tab toolbar |
 | `viewcmds.go` | View menu ↔ sidebar, sort, organiser footer |
-| `dialogs.go` | menus, About, Settings, help, Trash, many small windows |
+| `menus.go` | the menu bar (built once), `refreshMenu`, About |
+| `settingsui.go`, `helpui.go` | Settings; Help and privacy text |
+| `trashui.go`, `groupsui.go` | Trash; new group and the group menu |
+| `smartaddui.go`, `exportui.go`, `cleanupui.go` | Smart Add and business-card windows; import from Mac, export; Clean Up and duplicates windows |
 | `menuicons.go`, `icons.go`, `flags.go` | icons and flags |
 | `macui.go`, `window_darwin.go`, `window_other.go` | Mac behaviour, right-click menu, native window/menu calls |
 | `readcard.go`, `livecard.go`, `ruled.go`, `editor.go` | reading and writing a card |

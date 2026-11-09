@@ -20,19 +20,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Go and every library are pinned: go.mod + go.sum are committed, so a new upstream
+      # release can't change the app without a commit here. Never run `go mod tidy` in CI.
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version-file: go.mod
 
-      - name: Resolve modules
-        run: go mod tidy
+      - name: Check modules
+        run: go mod verify
 
       - name: Test
         run: go vet ./... && go test ./...
 
       - name: Package
         run: |
-          go install fyne.io/tools/cmd/fyne@latest
+          go install fyne.io/tools/cmd/fyne@v1.26.1   # pinned; "@latest" picks this stray tag anyway (LESSONS)
           VERSION="1.0.${GITHUB_RUN_NUMBER}"
           fyne package --os darwin --release --app-version "$VERSION" --app-build "$GITHUB_RUN_NUMBER"
           APP="Smart Contacts.app"

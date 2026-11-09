@@ -413,3 +413,27 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
 ## 33. Writing it down
 
 - `DESIGN.md` holds the decisions and the rules the code relies on (static menus, one command rule, paper windows); `ISSUES.md` and GitHub issues hold what's open. Ideas that used to sit at the end of this file moved there.
+
+## 34. Pin everything the build pulls in
+
+- **`go.sum` is committed and CI never runs `go mod tidy`.** Before, every push re-resolved the
+  libraries, so a new upstream release could change the app (or bring back the menu crash, §4 of
+  DESIGN) with no commit here. Now `go.mod`/`go.sum` decide; CI runs `go mod verify`. Go comes
+  from `go-version-file: go.mod`, not "stable".
+- **`fyne@latest` was not the latest.** `fyne.io/tools` has a stray tag `v1.26.1` (April 2025,
+  Fyne 2.6.0) that outranks the real current release `v1.7.4` by number, so `@latest` always
+  installed it. Every working build used it, so it is pinned (`@v1.26.1`). Move to 1.7.x together
+  with a Fyne upgrade, not on its own.
+- **Getting `go.sum` without the module proxy.** Cloud sessions may not reach proxy.golang.org.
+  The exact `go.sum` was made by a throwaway branch whose workflow ran `go mod tidy` on GitHub and
+  committed the result back (artifacts can't be downloaded from the session). To compile locally,
+  a scratch go.mod with `replace` lines pointing each `golang.org/x/…`, `fyne.io/…` and `gopkg.in/…`
+  module at its GitHub mirror, used with `GOPROXY=direct GOSUMDB=off -modfile=…`, builds and tests
+  the app; it is never committed.
+
+## 35. Split big files by feature, as pure moves
+
+- `dialogs.go` (1,330 lines) became `menus.go`, `settingsui.go`, `helpui.go`, `trashui.go`,
+  `groupsui.go`, `smartaddui.go`, `exportui.go`, `cleanupui.go`; `filofax.go` (1,690) gave
+  `textures.go`, `tabs.go` and `closedbook.go`. Each function moved with the comment above it,
+  `goimports` fixed imports, and a sorted line-by-line comparison proved nothing else changed.

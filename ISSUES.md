@@ -27,8 +27,6 @@ When you fix one, close the issue and move the line to *Done recently* with the 
 
 - Import answers are found by label (`u.importGuide(label)`); labels must stay unique except the
   repeated "Yes…" / "No, or I'm not sure". The flow test skips repeated labels.
-- `dialogs.go` (1,300+ lines) and `filofax.go` (1,700) are large; split by feature when next
-  touched (e.g. help text and Settings out of `dialogs.go`).
 - `importui.go` still holds file picking, preview and Receive from a Phone; the old source list
   was removed in favour of the wizard.
 

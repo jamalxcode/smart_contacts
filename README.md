@@ -303,7 +303,7 @@ cd smart_contacts
 Code map: `model.go` (contacts, search, phones, birthdays) · `store.go` (file, backups, trash,
 photos) · `vcard.go` · `tools.go` (CSV, duplicates, clean-up) · `smart.go` (Smart Add) ·
 `importers.go` (vCard/CSV/Excel/notes readers, import planning) · `phone.go` (numbers by country, emails) · `cleanup.go` · `names.go` (Arabic ↔ English names) · `graph.go` (connections, six-degrees paths) · `social.go` (profiles, ways to reach) ·
-`socialimport.go` (Telegram, Facebook, Snapchat) · `calendar.go` · `cards.go` (business cards, text recognition) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `dialogs.go` (the window) · `model_test.go`.
+`socialimport.go` (Telegram, Facebook, Snapchat) · `calendar.go` · `cards.go` (business cards, text recognition) · `mac.go` (Mac Contacts) · `ui.go`, `editor.go`, `menus.go` (the window) · `model_test.go`.
 
 The full, current code map is in [DESIGN.md](DESIGN.md#code-map).
 

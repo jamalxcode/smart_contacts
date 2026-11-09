@@ -5,9 +5,9 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 export PATH="$PATH:$(go env GOPATH)/bin"
-go mod tidy
+go mod download
 go test ./...
-command -v fyne >/dev/null || go install fyne.io/tools/cmd/fyne@latest
+command -v fyne >/dev/null || go install fyne.io/tools/cmd/fyne@v1.26.1
 fyne package --os darwin --release
 codesign --force --deep --sign - "Smart Contacts.app"
 pkill -x smartcontacts 2>/dev/null || true
