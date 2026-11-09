@@ -254,9 +254,18 @@ func (u *ui) cardFront(c *Contact) fyne.CanvasObject {
 
 	// who they are, beside the picture
 	var who []fyne.CanvasObject
+	formal := c.FormalName()
 	if u.rightPage == nil { // the plain look has no page heading to carry the name
-		n := u.printed(c.DisplayName(), 22, true, false, ink)
-		who = append(who, n)
+		name := c.DisplayName()
+		if formal != "" {
+			name = formal
+		}
+		who = append(who, u.printed(name, 22, true, false, ink))
+	} else if formal != "" && formal != c.DisplayName() { // Dr., a middle name, PhD: the page heading has only first and last
+		who = append(who, u.printed(formal, 17, false, false, ink))
+	}
+	if say := c.PhoneticName(); say != "" {
+		who = append(who, u.printed("say “"+say+"”", 14, false, true, soft))
 	}
 	if c.AltName != "" {
 		who = append(who, u.printed(c.AltName, 17, false, false, ink))
@@ -389,6 +398,24 @@ func (u *ui) cardFront(c *Contact) fyne.CanvasObject {
 		box.Add(newInkLine("birthday", []string{s}, nil, func(at fyne.Position) {
 			u.lineMenu(at, u.copyItem(BirthdayText(c.Birthday)), u.writeItem(func(e *editor) fyne.Focusable { return e.birthday }))
 		}, func() { u.writeCard(func(e *editor) fyne.Focusable { return e.birthday }) }))
+	}
+	for i, f := range c.Dates { // anniversary and other dates
+		i, f := i, f
+		s := BirthdayText(f.Value)
+		if d, years, ok := nextYearly(f.Value, time.Now()); ok && d <= 31 {
+			when := map[int]string{0: "today", 1: "tomorrow"}[d]
+			if when == "" {
+				when = "in " + plural(d, "day")
+			}
+			if years > 0 {
+				s += " — " + plural(years, "year") + " " + when
+			} else {
+				s += " — " + when
+			}
+		}
+		box.Add(newInkLine(strings.ToLower(nonBlank(f.Label, "date")), []string{s}, nil, func(at fyne.Position) {
+			u.lineMenu(at, u.copyItem(BirthdayText(f.Value)), u.writeItem(func(e *editor) fyne.Focusable { return e.dateEntry(i) }))
+		}, func() { u.writeCard(func(e *editor) fyne.Focusable { return e.dateEntry(i) }) }))
 	}
 	for i, f := range c.Custom { // your own lines
 		i, f := i, f
@@ -573,6 +600,13 @@ func (e *editor) urlEntry(i int) fyne.Focusable {
 	}
 	return e.urls.add(Field{}).value
 }
+func (e *editor) dateEntry(i int) fyne.Focusable {
+	if i < len(e.dates.rows) {
+		return e.dates.rows[i].value
+	}
+	return e.dates.add(Field{}).value
+}
+
 func (e *editor) customEntry(i int) fyne.Focusable {
 	if i < len(e.custom.rows) {
 		return e.custom.rows[i].value

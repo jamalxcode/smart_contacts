@@ -11,7 +11,7 @@ func (u *ui) help() {
 
 **The organiser.** It opens closed: click the cover or press any key. The coloured tabs on the left are your lists and groups; the A–Z tabs down the right edge show only the people filed under those letters (All shows everyone, ع holds Arabic names, # the rest). Click the strap on the right (or press ⇧⌘W) to close it; next time it opens at the same page, unless Settings → Open at says the first page. View → Filofax Look switches to the plain Mac look and back. Each phone number shows its country's flag.
 
-**Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
+**Finding people.** Type in the search field: names (Arabic or English, with or without hamza and accents), part of a phone number, a company, a note. If nobody matches exactly, the list tries again forgiving typos ("Mohamad Al-Mutari", "boubian") and its title says "no exact match, N close". ↑ and ↓ move through the results, Return edits, Esc clears. View → All Contacts, Favorites, Upcoming Birthdays and Recently Added are ⌘1 to ⌘4.
 
 **Reaching people.** The round buttons under the name follow what the card holds: message, call, WhatsApp, mail, FaceTime, and LinkedIn, Telegram, Instagram, Messenger, X, Signal, Snapchat, TikTok, GitHub or Skype when there's a link or handle. *More* has number-based options. The app remembers when you last contacted someone.
 
@@ -27,7 +27,7 @@ func (u *ui) help() {
 
 **The organiser does what it looks like.** The pen in its loop writes a new card. The turned-up corner at the bottom of each page turns to the previous or next letter. The pocket inside the front cover takes business cards: click it, or drop a photo of a card anywhere on the window. The strap closes the book. Each lifts a little under the pointer and says what it does. A card shows only what's written on it. Click a line for what it's for (call, message, email, open, copy). Double-click a line, or press Write, to write on the card: every field opens, and the one you clicked is ready to type in. Done or Esc puts the pen down and saves. Turn Over shows the back of the card: notes, how you met, keeping in touch and the history. On a card with several numbers, the star marks the main one; × crosses a line out. When the open card changes it gets an UPDATED stamp and a pencil note of what changed. The To Tidy tabs (with a red flag) are cards waiting for you to fix something.
 
-**Today.** The first tab, Today (⌘0, also first in the Card menu and the toolbar), is the day's page: birthdays this week (call, message or WhatsApp them), people due a call from Keep in Touch (with Done to mark you've been in touch), people you met in the last two weeks from the calendar log (with Note), and cards waiting to be tidied (with Review). Click anyone to open their card. Typing a search shows the list again. Settings → Open at the first page now opens on Today.
+**Today.** The first tab, Today (⌘0, also first in the Card menu and the toolbar), is the day's page: birthdays and anniversaries this week (call, message or WhatsApp them), people due a call from Keep in Touch (with Done to mark you've been in touch), people you met in the last two weeks from the calendar log (with Note), and cards waiting to be tidied (with Review). Click anyone to open their card. Typing a search shows the list again. Settings → Open at the first page now opens on Today.
 
 **Follow-ups.** Keep in Touch → Follow Up on a Date… (Card menu, the Keep in Touch tab, right-click, or the back of a card) notes what to do for someone and when: "send the proposal", next Tuesday. On the day it's on the Today page with Later and Done; the Follow-ups tab lists everyone with one open, soonest first.
 
@@ -40,6 +40,8 @@ func (u *ui) help() {
 **Tidy one by one.** Tidy Up → "Go through the cards that need it, one at a time" (or Tidy One by One on the Today page) shows each card that needs fixing with what's wrong, and Fix, Move to Trash, Skip or Stop, with a counter.
 
 **Your own lines.** Write on a card and use "add a line of your own" under More About Them: Spouse, Children, Diwaniya, Office, or any label you type. They show on the card and are found by search.
+
+**Names and dates.** Under the name, "prefix, middle name, suffix, how to say it" opens a row for Dr. or Eng., a middle name, Jr. or PhD, and the name spelled the way it's said; the card's heading then shows the whole name. Under Birthday, "add a date" keeps an anniversary or any date of your own; dates coming up this week are on Today. All of these go out in vCards and spreadsheets and come back in from Apple, Google and Outlook.
 
 **Questions.** Type a question in the search field — "who do I know at Gulf Bank in marketing?", "people I haven't talked to in a year", "favorites in Kuwait without an email". It's turned into search filters on this Mac, shown under the field. With Cloud AI on, Return lets the AI read the question; only the question is sent, never a contact.
 
@@ -55,7 +57,7 @@ func (u *ui) help() {
 
 **Tidy notes with AI.** Card → Tidy Jumbled Notes with AI finds notes that are run together, full of export codes or repeats, and rewrites them readably, keeping every fact. It only runs with Cloud AI on (the note text goes to your OpenRouter model), asks first, and shows each rewrite before and after; one that seems to have lost a number, email or date isn't ticked.
 
-**Merging.** Find Duplicates with cards clipped offers to merge them into one. The merge window shows where the cards disagree (name, job, birthday, photo) so you pick; every number, email and note is kept.
+**Merging.** Find Duplicates with cards clipped offers to merge them into one. The merge window shows where the cards disagree (name, job, birthday, photo) so you pick; every number, email, note, line of your own, date and follow-up is kept.
 
 **Smart Add** (⌥⌘N). Paste an email signature, a business card's text or a WhatsApp contact message, or choose a business card photo. It's read privately on this Mac unless you switch on Cloud AI in Settings. You check the result before it's saved.
 
@@ -71,7 +73,7 @@ func (u *ui) help() {
 
 **Groups.** File → New Group (⇧⌘N), then tick groups on a card's Edit page. A new card made while a group is open joins it.
 
-**Connections (six degrees).** Card → Connect to… (⌘K) links two people as friends, family, colleagues and so on. Card → How Are They Connected? (⇧⌘K) finds the shortest chain between two people, up to six steps.
+**Connections (six degrees).** Card → Connect to… (⌘K) links two people as friends, family, colleagues and so on. Card → How Are They Connected? (⇧⌘K) finds the shortest chain between two people, up to six steps. A vCard export (and Copy to Apple Contacts) carries each person's connections and Spouse / Children lines as related names; importing one links a related name to the person it names when only one card has that name, and otherwise keeps it as a line on the card.
 
 **Calendar log (⇧⌘L).** Reads the Mac Calendar app or an .ics file; each card lists the meetings the person was in or mentioned in, and "last met".
 

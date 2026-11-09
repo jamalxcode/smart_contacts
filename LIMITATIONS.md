@@ -52,8 +52,8 @@ that haven't been built yet.
 
 - Contacts live on one Mac only; there is no conflict handling if the file is edited elsewhere.
 - Contact data has no encryption of its own; it relies on FileVault.
-- Connections between people are not included in vCard exports.
-- Search needs the exact spelling (no typo tolerance) — Arabic letter forms and accents are matched.
+- Typo tolerance in search starts at 4 letters and only kicks in when nothing matches exactly;
+  numbers, job titles, notes and addresses are matched exactly.
 - Google, Outlook and LinkedIn come in through files you export (vCard / CSV), not a live link.
 - Facebook and Snapchat exports list friends by name only: they enrich people already in the book
   and never create cards unless you tick them. Instagram and X exports hold only usernames or
@@ -77,27 +77,22 @@ that haven't been built yet.
 - Clean Up knows the numbering rules of about 25 countries; numbers from others are kept as written.
 - Contact photos: iPhone HEIC needs converting to JPEG; photos are shrunk to 512 px.
 - Cards in the Trash stay until you empty it; edits can be undone with Edit → Undo (history kept between launches).
-- No prefix, suffix, middle name or phonetic spelling fields.
-- Birthday is the only date: no anniversaries or other dates.
-- No custom fields beyond the built-in ones (labels can be renamed).
 - One photo per contact and no attachments or documents.
-- No interaction history or timeline of calls and meetings, only notes.
-- Connections have no direction (no manager → report or parent → child).
+- Connections have no direction (no manager → report or parent → child); in vCards a connection
+  goes out as a related name with its label, and a related name comes back as a connection only
+  when exactly one card has that name.
 - Groups are flat; no nesting.
 - CSV exports keep up to 3 phones, 2 emails and 1 address per contact.
-- Some Apple fields don't survive import or export: phonetic names, related names, other dates,
-  messaging handles.
+- Apple's instant-messaging handles (IMPP) don't survive import or export; profile links do.
+- CSV export writes one Anniversary column and the other dates together in one "Other Dates" column.
 - Arabic and English names sort as one list, so the A–Z letter headings mix.
 - Every save rewrites the whole file; very large books (around 50,000 contacts) are untested.
 - Daily backups are kept for 30 days, then deleted. The Trash keeps cards until you empty it.
 
 ## Not built yet (could be)
 
-- Organisation, "how I know them" and "met at" fields you fill in yourself, linked into connections
-- A quick search from the menu bar
-- An encrypted backup (Back Up To… writes a plain .zip; keep it on a drive you control)
-- Birthday reminders as Mac notifications
-- Undo history that survives quitting (restore points do; the step-by-step list is per session)
+- Directed connections (manager → report, parent → child)
+- Instant-messaging handles from Apple vCards (IMPP)
 
 ## Current limits of the newest features
 
@@ -116,6 +111,12 @@ that haven't been built yet.
   next opens); there's no background helper.
 
 ## Done
+
+- **Typo-tolerant search**, **anniversaries and other dates** (on the card and on Today),
+  **prefix, middle name, suffix and phonetic names**, and **related people in vCards** (connections
+  out, related names in), all round-tripping through Apple, Google and Outlook files. Your own
+  lines (Spouse, Children, Diwaniya…), the timeline, Quick Find, encrypted backups, reminders and
+  undo across restarts were already in, below.
 
 - **Last talked** from Messages, calls, Mail, WhatsApp exports and Calendar; **People Not in
   Contacts**; **keep-in-touch reminders** with a Reach Out list; dated notes; How we met; birthday

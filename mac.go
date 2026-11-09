@@ -55,7 +55,7 @@ func OpenInMacContacts(s *Store, cs []*Contact) error {
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("Smart Contacts %s.vcf", time.Now().Format("2006-01-02 1504")))
 	var b bytes.Buffer
 	for _, c := range cs {
-		if err := WriteVCard(&b, c, s.Photo(c)); err != nil {
+		if err := WriteVCardRelated(&b, c, s.Photo(c), s.RelatedFor(c)); err != nil {
 			return err
 		}
 	}

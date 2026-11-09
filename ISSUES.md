@@ -18,10 +18,6 @@ When you fix one, close the issue and move the line to *Done recently* with the 
 |---|---|---|
 | [#5](https://github.com/jamalxcode/smart_contacts/issues/5) | Developer ID signing and notarisation | So a browser-downloaded zip opens; today use the curl install. |
 | [#6](https://github.com/jamalxcode/smart_contacts/issues/6) | Show whether Bluetooth Sharing is on | The phone just says "refused" when it's off. |
-| [#7](https://github.com/jamalxcode/smart_contacts/issues/7) | Typo-tolerant search | Keep 10,000-card searches fast. |
-| [#8](https://github.com/jamalxcode/smart_contacts/issues/8) | More dates (anniversary, other) | Show them in Today's Coming up. |
-| [#9](https://github.com/jamalxcode/smart_contacts/issues/9) | Prefix, middle name, suffix, phonetic | Keep them through vCard round-trips. |
-| [#10](https://github.com/jamalxcode/smart_contacts/issues/10) | Connections in vCard export | RELATED / X-ABRELATEDNAMES. |
 
 ## Small technical debt
 
@@ -40,6 +36,8 @@ sync with Mac Contacts (the app stands on its own).
 
 | Version | What |
 |---|---|
+| 1.0.58 | Typo-tolerant search (#7); anniversaries and other dates (#8); prefix, middle name, suffix, phonetic (#9); related people in vCards (#10); merging keeps own lines, dates and follow-ups |
+| 1.0.57 | Builds pinned (go.sum committed, no `go mod tidy` in CI, fyne tool pinned); dialogs.go and filofax.go split by feature |
 | 1.0.55 | Import opens at once (#1 fix); LinkedIn guide uses the larger archive |
 | 1.0.54 | The step that opens a page carries the link |
 | 1.0.53 | Guide buttons pinned in sight; every guide checked against vendor pages |

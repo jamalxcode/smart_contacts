@@ -78,11 +78,23 @@ type Contact struct {
 	FollowUps []FollowUp `json:"followUps,omitempty"`
 	// Custom are the user's own labelled lines: Spouse, Children, Diwaniya, Office…
 	Custom []Field `json:"custom,omitempty"`
+	// Dates are other dates worth remembering: Anniversary, Other, or a label of your own.
+	// Values are written like Birthday (YYYY-MM-DD, or --MM-DD when the year is unknown).
+	Dates []Field `json:"dates,omitempty"`
+	// The rest of the name, kept so vCards from Apple, Google and Outlook come back whole:
+	// "Dr." / "Eng.", middle names, "Jr." / "PhD", and how to say the name (phonetic spelling).
+	Prefix         string `json:"prefix,omitempty"`
+	Middle         string `json:"middle,omitempty"`
+	Suffix         string `json:"suffix,omitempty"`
+	PhoneticFirst  string `json:"phoneticFirst,omitempty"`
+	PhoneticMiddle string `json:"phoneticMiddle,omitempty"`
+	PhoneticLast   string `json:"phoneticLast,omitempty"`
 
 	// Folded search text and sort keys, rebuilt whenever Updated changes. Anything that
 	// edits a contact goes through Store.Put or sets Updated, which invalidates these.
 	cacheStamp                         time.Time
 	cacheSearch, cacheFirst, cacheLast string
+	cacheWords                         []string // folded words for typo-tolerant search (fuzzy.go)
 }
 
 // PhoneLabels, EmailLabels and URLLabels are the choices offered in the editor.
@@ -119,6 +131,7 @@ func (c *Contact) Clone() *Contact {
 	n.Timeline = append([]TimelineEntry(nil), c.Timeline...)
 	n.FollowUps = append([]FollowUp(nil), c.FollowUps...)
 	n.Custom = append([]Field(nil), c.Custom...)
+	n.Dates = append([]Field(nil), c.Dates...)
 	if c.Origins != nil {
 		n.Origins = make(map[string]Origin, len(c.Origins))
 		for k, v := range c.Origins {
@@ -131,6 +144,25 @@ func (c *Contact) Clone() *Contact {
 // FullName is "First Last" (either may be missing).
 func (c *Contact) FullName() string {
 	return strings.TrimSpace(strings.TrimSpace(c.First) + " " + strings.TrimSpace(c.Last))
+}
+
+// DateLabels are offered for a card's other dates; any other word can be typed.
+var DateLabels = []string{"Anniversary", "Other"}
+
+// FormalName is the whole name for a card's heading and exports: "Dr. Yousef Ahmed Al-Kandari, PhD".
+// Matching and sorting keep using FullName (first and last), so adding a middle name or "Dr."
+// never makes a card stop matching its other copies.
+func (c *Contact) FormalName() string {
+	n := strings.Join(nonEmpty([]string{c.Prefix, c.First, c.Middle, c.Last}), " ")
+	if c.Suffix != "" && n != "" {
+		n += ", " + c.Suffix
+	}
+	return n
+}
+
+// PhoneticName is how to say the name, when it's written down: "Yoo-sef Al-Kan-da-ri".
+func (c *Contact) PhoneticName() string {
+	return strings.Join(nonEmpty([]string{c.PhoneticFirst, c.PhoneticMiddle, c.PhoneticLast}), " ")
 }
 
 // DisplayName is what the list shows: the name, else the company, else the first way to reach them.
@@ -225,6 +257,9 @@ func (c *Contact) Tidy() {
 	c.First = strings.TrimSpace(c.First)
 	c.Last = strings.TrimSpace(c.Last)
 	c.Nickname = strings.TrimSpace(c.Nickname)
+	for _, p := range []*string{&c.Prefix, &c.Middle, &c.Suffix, &c.PhoneticFirst, &c.PhoneticMiddle, &c.PhoneticLast} {
+		*p = strings.TrimSpace(*p)
+	}
 	c.AltName = strings.TrimSpace(c.AltName)
 	if fold(c.AltName) == fold(c.FullName()) {
 		c.AltName = ""
@@ -271,6 +306,25 @@ func (c *Contact) Tidy() {
 		custom = append(custom, f)
 	}
 	c.Custom = custom
+	var dates []Field // other dates: written the way birthdays are, one per label and day
+	seenDate := map[string]bool{}
+	for _, f := range c.Dates {
+		f.Label, f.Value = strings.TrimSpace(f.Label), strings.TrimSpace(f.Value)
+		if f.Value == "" {
+			continue
+		}
+		if v, ok := CanonicalBirthday(f.Value); ok {
+			f.Value = v
+		}
+		if f.Label == "" {
+			f.Label = "Other"
+		}
+		if k := strings.ToLower(f.Label) + "|" + f.Value; !seenDate[k] {
+			seenDate[k] = true
+			dates = append(dates, f)
+		}
+	}
+	c.Dates = dates
 	addrs := []Address{}
 	for _, a := range c.Addresses {
 		if !a.IsEmpty() {
@@ -345,6 +399,7 @@ func (c *Contact) fillCache() {
 		return
 	}
 	c.cacheSearch = c.searchText() + " " // never empty once filled
+	c.cacheWords = c.wordsForFuzzy()
 	c.cacheFirst = c.sortKey(false)
 	c.cacheLast = c.sortKey(true)
 	c.cacheStamp = c.Updated
@@ -357,7 +412,11 @@ func (c *Contact) SearchText() string {
 }
 
 func (c *Contact) searchText() string {
-	parts := []string{c.First, c.Last, c.AltName, c.Nickname, c.Company, c.Title, c.Notes, c.HowWeMet, strings.Join(c.Groups, " ")}
+	parts := []string{c.First, c.Middle, c.Last, c.AltName, c.Nickname, c.Prefix, c.Suffix,
+		c.PhoneticFirst, c.PhoneticMiddle, c.PhoneticLast, c.Company, c.Title, c.Notes, c.HowWeMet, strings.Join(c.Groups, " ")}
+	for _, f := range c.Dates { // "anniversary" finds everyone with one
+		parts = append(parts, f.Label)
+	}
 	for _, f := range c.Custom { // your own lines are searchable, label and value
 		parts = append(parts, f.Label, f.Value)
 	}
@@ -601,7 +660,34 @@ func CanonicalBirthday(s string) (string, bool) {
 
 // NextBirthday returns how many days until the next birthday (0 = today) and the age they turn (0 if the year is unknown).
 func (c *Contact) NextBirthday(now time.Time) (days, turns int, ok bool) {
-	m, d, y, ok := ParseBirthday(c.Birthday)
+	return nextYearly(c.Birthday, now)
+}
+
+// UpcomingDate is one of a card's other dates coming round again.
+type UpcomingDate struct {
+	Label string // "Anniversary"
+	Value string // as stored: 2015-05-01 or --05-01
+	Days  int    // 0 = today
+	Years int    // how many years it will be (0 if the year is unknown)
+}
+
+// UpcomingDates lists the card's other dates (anniversary…) falling within the next `within`
+// days, soonest first.
+func (c *Contact) UpcomingDates(now time.Time, within int) []UpcomingDate {
+	var out []UpcomingDate
+	for _, f := range c.Dates {
+		if d, y, ok := nextYearly(f.Value, now); ok && d <= within {
+			out = append(out, UpcomingDate{f.Label, f.Value, d, y})
+		}
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Days < out[j].Days })
+	return out
+}
+
+// nextYearly is how many days until a yearly date comes round (0 = today) and how many years it
+// will have been (0 if its year is unknown).
+func nextYearly(value string, now time.Time) (days, years int, ok bool) {
+	m, d, y, ok := ParseBirthday(value)
 	if !ok {
 		return 0, 0, false
 	}
@@ -614,9 +700,9 @@ func (c *Contact) NextBirthday(now time.Time) (days, turns int, ok bool) {
 	}
 	days = int(next.Sub(today).Hours() / 24)
 	if y > 0 {
-		turns = yr - y
+		years = yr - y
 	}
-	return days, turns, true
+	return days, years, true
 }
 
 // birthdayIn handles 29 February in years that don't have it (celebrated on 28 February).

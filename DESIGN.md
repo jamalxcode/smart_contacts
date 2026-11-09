@@ -75,7 +75,15 @@ rule was learned; this file states the rule.
   (what happened, kept apart from Notes), `Origins` (where each detail came from), `HowWeMet`,
   groups, links to other people (`graph.go`), photo and business-card images (files beside the
   JSON). `Clone` must copy every slice — add new slices there.
-- `searchText` decides what search finds; add new text fields there.
+- **Names:** `FullName` (first + last) is what matching, duplicates and sorting use; `FormalName`
+  (prefix, first, middle, last, suffix) is what the card heading, copy-as-text and vCard FN show.
+  Never put prefix or middle into `FullName`, or cards stop matching their other copies.
+- `Dates` are labelled like phones and written like `Birthday` (`YYYY-MM-DD` or `--MM-DD`);
+  `nextYearly` serves both.
+- `Merge` must carry every list (`Custom`, `Dates`, `FollowUps` were once dropped there); a new list
+  field goes into `Clone`, `Tidy`, `Merge`, `cardFields` and the vCard/CSV writers and readers.
+- `searchText` decides what search finds; add new text fields there. `wordsForFuzzy` is the smaller
+  set typos are forgiven against (names, nickname, company, email names).
 - Phones are stored as written and shown normalised; `phone.go` knows ~25 countries.
 - The Trash is a list of `TrashItem`s in the store (the card, when it was moved), kept until
   Empty Trash. Daily backups are pruned after 30 days.
@@ -91,6 +99,8 @@ rule was learned; this file states the rule.
 | Company pages | `company.go` | the › after the company on a card |
 | Tidy one by one | `tidysession.go` | queue of cards needing work; skips remembered for the session |
 | Questions in search | `ask.go` | regex rules → filter syntax; Return sends only the question to AI |
+| Typo-tolerant search | `fuzzy.go` | second pass only when the exact search finds no one; list title says so |
+| Related people in vCards | `relate.go`, `vcard.go` | X-ABRELATEDNAMES + RELATED urn:uuid; linked on import only when one card fits |
 | Trash | `store.go`, `trashui.go` (`trash`, `cmdEmptyTrash`) | |
 | Import wizard | `importwizard.go`, `importui.go`, `importers.go`, `socialimport.go`, `vcard.go` | see §7 |
 | Clean Up / duplicates | `cleanup.go`, `tools.go`, `mergeui.go`, `names.go` | |
@@ -147,7 +157,7 @@ rule was learned; this file states the rule.
 3. New command → `cardcmds.go` + menu + toolbar + right-click + icon, same name everywhere.
 4. New window → a paper window helper, and a `step` in `TestEveryWindowOpens`.
 5. Menu labels unchanged after it runs (the test checks).
-6. New `Contact` field → `Clone`, `searchText`, `Tidy`, vCard if it maps.
+6. New `Contact` field → `Clone`, `searchText`, `Tidy`, `Merge`, `cardFields`, vCard and CSV if it maps.
 7. Help text (`helpui.go`), README, LESSONS (what you learned), ISSUES (what's left).
 8. Screenshot it on the test screen; push; watch CI; check the release.
 
@@ -174,7 +184,7 @@ rule was learned; this file states the rule.
 | `today.go`, `followups.go`, `greetings.go`, `company.go`, `tidysession.go`, `ask.go` | daily-use features |
 | `bulkui.go`, `clips.go` | clipping several cards |
 | `pageturn.go`, `desk.go`, `feedbackui.go` | page turns, desk behaviour, change feedback with Undo |
-| `model.go`, `search.go`, `names.go`, `phone.go`, `social.go`, `origins.go`, `timeline.go`, `graph.go` | the data model and its rules |
+| `model.go`, `search.go`, `fuzzy.go`, `names.go`, `phone.go`, `social.go`, `origins.go`, `timeline.go`, `graph.go`, `relate.go` | the data model and its rules |
 | `store.go`, `config.go`, `backupcrypt.go`, `changes.go`, `historyui.go` | saving, settings, backups, undo |
 | `importwizard.go`, `importui.go`, `importers.go`, `socialimport.go`, `vcard.go`, `mac.go`, `guideui.go` | bringing contacts in |
 | `cleanup.go`, `tools.go`, `mergeui.go` | clean-up, export, duplicates |

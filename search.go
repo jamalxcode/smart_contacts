@@ -18,6 +18,7 @@ import (
 type searchQuery struct {
 	text    string
 	filters []searchFilter
+	fuzzy   bool // forgive typos in the words (second pass when nothing matched exactly)
 }
 
 type searchFilter struct {
@@ -81,8 +82,10 @@ type lastTalkedFunc func(*Contact) time.Time
 
 // matches applies the query to a contact.
 func (sq searchQuery) matches(c *Contact, last lastTalkedFunc, due func(*Contact) bool) bool {
-	if sq.text != "" && !c.Matches(sq.text) {
-		return false
+	if sq.text != "" {
+		if sq.fuzzy && !c.MatchesFuzzy(sq.text) || !sq.fuzzy && !c.Matches(sq.text) {
+			return false
+		}
 	}
 	for _, f := range sq.filters {
 		if f.test(c, last, due) == f.neg {

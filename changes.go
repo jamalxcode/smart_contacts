@@ -56,6 +56,8 @@ func cardFields(c *Contact) [][2]string {
 	}
 	return [][2]string{
 		{"Name", strings.TrimSpace(c.First + " " + c.Last)},
+		{"Name details", strings.Join(nonEmpty([]string{c.Prefix, c.Middle, c.Suffix}), " · ")},
+		{"How to say the name", c.PhoneticName()},
 		{"Other-language name", c.AltName},
 		{"Nickname", c.Nickname},
 		{"Company", c.Company},
@@ -65,6 +67,7 @@ func cardFields(c *Contact) [][2]string {
 		{"Links", fields(c.URLs)},
 		{"Addresses", strings.Join(addrs, "\n")},
 		{"Birthday", c.Birthday},
+		{"Dates", fields(c.Dates)},
 		{"How we met", c.HowWeMet},
 		{"Notes", c.Notes},
 		{"Groups", strings.Join(c.Groups, ", ")},

@@ -51,8 +51,9 @@ type ColMap struct {
 
 // colKinds are the choices offered in the column matcher.
 var colKinds = []string{"skip", "full name", "first name", "middle name", "last name", "name (other language)",
+	"name prefix", "name suffix", "phonetic first name", "phonetic middle name", "phonetic last name",
 	"nickname", "company", "job title", "phone", "email", "website", "address", "street", "city", "region",
-	"postcode", "country", "birthday", "notes", "groups", "connected on", "type of previous column"}
+	"postcode", "country", "birthday", "anniversary", "other date", "notes", "groups", "connected on", "type of previous column"}
 
 // ReadImport recognises a file by its name and content and turns it into cards.
 func ReadImport(name string, data []byte, home string) (*Batch, error) {
@@ -170,6 +171,13 @@ var headerRules = func() []headerRule {
 		r(`(phone|e-?mail|website|address|relation|im|event|custom field|organization) \d+ - (type|label)`, "type of previous column", ""),
 		r(`(first|given) ?name|firstname|first|الاسم الاول|الاسم الأول`, "first name", ""),
 		r(`(middle|additional) ?name`, "middle name", ""),
+		r(`(name )?prefix|honorific( prefix)?|اللقب العلمي`, "name prefix", ""),
+		r(`(name )?suffix|honorific suffix`, "name suffix", ""),
+		r(`phonetic (first|given) name|(first|given) name yomi|yomi first name`, "phonetic first name", ""),
+		r(`phonetic (middle|additional) name|additional name yomi`, "phonetic middle name", ""),
+		r(`phonetic (last|family) name|(last|family) name yomi|yomi last name`, "phonetic last name", ""),
+		r(`anniversary|wedding (date|anniversary)|ذكرى الزواج|تاريخ الزواج`, "anniversary", ""),
+		r(`event \d+ - value|significant date|other dates?`, "other date", ""),
 		r(`(last|family|sur) ?name|surname|lastname|last|اسم العائل[ةه]|العائل[ةه]|الكني[ةه]|اللقب`, "last name", ""),
 		r(`(arabic|english) name|name \((arabic|english)\)|الاسم بالعربي[ةه]?|الاسم بالانجليزي[ةه]?|الاسم بالإنجليزي[ةه]?`, "name (other language)", ""),
 		r(`nick ?name|الكني[ةه] الشخصي[ةه]|اللقب الشخصي`, "nickname", ""),
@@ -214,6 +222,7 @@ func mapHeader(header []string) []ColMap {
 		hl := strings.TrimSpace(h)
 		cols[i] = ColMap{Kind: "skip"}
 		if hasJobTitle && strings.EqualFold(hl, "title") { // Outlook: "Title" is Mr./Dr.
+			cols[i] = ColMap{Kind: "name prefix"}
 			continue
 		}
 		for _, rule := range headerRules {
@@ -371,7 +380,39 @@ func (t *Table) Cards(home string) ([]Card, int) {
 			case "first name":
 				c.First = strings.TrimSpace(c.First + " " + v)
 			case "middle name":
-				c.First = strings.TrimSpace(c.First + " " + v)
+				c.Middle = strings.TrimSpace(c.Middle + " " + v)
+			case "name prefix":
+				c.Prefix = v
+			case "name suffix":
+				c.Suffix = v
+			case "phonetic first name":
+				c.PhoneticFirst = v
+			case "phonetic middle name":
+				c.PhoneticMiddle = v
+			case "phonetic last name":
+				c.PhoneticLast = v
+			case "anniversary", "other date":
+				// one date, or "Label date; Label date" (this app's own Other Dates column)
+				for _, part := range strings.Split(v, ";") {
+					part = strings.TrimSpace(part)
+					l, val := label, part
+					if _, ok := CanonicalBirthday(part); !ok {
+						if i := strings.LastIndex(part, " "); i > 0 {
+							l, val = strings.TrimSpace(part[:i]), part[i+1:]
+						}
+					}
+					d, ok := CanonicalBirthday(val)
+					if !ok {
+						continue
+					}
+					if l == "" && cm.Kind == "anniversary" {
+						l = "Anniversary"
+					}
+					if l == "" {
+						l = "Other"
+					}
+					c.Dates = append(c.Dates, Field{Label: l, Value: d})
+				}
 			case "last name":
 				c.Last = v
 			case "full name":
@@ -910,6 +951,7 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 			touched = append(touched, target)
 		case piUpToDate:
 			if target != nil {
+				newCard[in] = target
 				before := len(target.Sources) + len(target.SourceIDs)
 				target.Sources = uniqueFold(append(target.Sources, in.Sources...))
 				target.SourceIDs = uniqueFold(append(target.SourceIDs, in.SourceIDs...))
@@ -919,6 +961,16 @@ func ApplyImport(s *Store, items []ImportItem, choice map[int]string, home strin
 			}
 		}
 	}
+	// related people named on the cards: linked when they point at one person, else kept as lines
+	uid := map[string]*Contact{}
+	for in, c := range newCard {
+		for _, id := range in.SourceIDs {
+			if _, v, ok := strings.Cut(id, "|"); ok && v != "" {
+				uid[strings.ToLower(v)] = c
+			}
+		}
+	}
+	applyRelated(s, items, newCard, uid)
 	return touched
 }
 

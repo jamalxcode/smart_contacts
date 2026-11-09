@@ -437,3 +437,28 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
   `groupsui.go`, `smartaddui.go`, `exportui.go`, `cleanupui.go`; `filofax.go` (1,690) gave
   `textures.go`, `tabs.go` and `closedbook.go`. Each function moved with the comment above it,
   `goimports` fixed imports, and a sorted line-by-line comparison proved nothing else changed.
+
+## 36. Fields that come back whole
+
+- **Middle names were glued onto first names** by both the vCard and CSV readers, and prefix and
+  suffix were dropped, so "Dr. Yousef Ahmed Al-Kandari, PhD" came back as "Yousef Ahmed
+  Al-Kandari". Each part now has its own field. `FullName` stays first + last on purpose: matching
+  and duplicate finding depend on it, and a middle name on one copy must not hide the other.
+- **Outlook's "Title" is Mr./Dr.**, not a job title, when a "Job Title" column exists. It used to be
+  skipped; now it's the prefix.
+- **Apple writes other dates and related names as labelled items** (`item1.X-ABDATE` +
+  `item1.X-ABLabel:_$!<Anniversary>!$_`, `X-ABRELATEDNAMES`). Wrapped labels are Apple's own and
+  are shown in the phone's language, so ours are written the same way.
+- **A related name is not a person.** It becomes a connection only when exactly one card has that
+  name (or the vCard carries the card's own ID); otherwise it's kept as a line on the card. Linking
+  "Ali Hassan" to the wrong one of two would be a quiet wrong merge of relationships.
+- **Merge dropped whole lists.** `Merge` never copied `Custom` lines or follow-ups from the card
+  being merged in. Found while adding `Dates`; a test now merges every list twice.
+
+## 37. Forgiving typos without slowing search
+
+- Typos are forgiven only when the exact search finds nobody, and only against a small, cached
+  set of words (names, nickname, company, email names), with an edit table that gives up as soon
+  as a row is over the allowance. 10,000 cards take ~45 ms on the test machine; exact searches
+  cost nothing extra.
+- No guessing under 4 letters (Ali / Ala / Alia are different people) and never for numbers.

@@ -96,7 +96,7 @@ func (u *ui) exportVCF(cs []*Contact, name string) {
 		u.confirmExportPlace(w, func() {
 			defer w.Close()
 			for _, c := range cs {
-				if err := WriteVCard(w, c, u.store.Photo(c)); err != nil {
+				if err := WriteVCardRelated(w, c, u.store.Photo(c), u.store.RelatedFor(c)); err != nil {
 					showErr(err, u.win)
 					return
 				}

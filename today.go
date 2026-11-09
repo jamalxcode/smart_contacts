@@ -36,6 +36,11 @@ type metItem struct {
 	title string
 }
 
+type dateItem struct {
+	c *Contact
+	d UpcomingDate
+}
+
 type fuItem struct {
 	c *Contact
 	f FollowUp
@@ -45,6 +50,7 @@ type todayData struct {
 	follow []fuItem  // follow-ups due today or late
 	coming []metItem // meetings in the next three days with people you know
 	bdays  []*Contact
+	dates  []dateItem // anniversaries and other dates this week
 	due    []*Contact
 	met    []metItem
 	tidy   []*Contact
@@ -77,6 +83,9 @@ func (u *ui) workOutToday(now time.Time) todayData {
 		if d, _, ok := c.NextBirthday(now); ok && d <= 7 {
 			t.bdays = append(t.bdays, c)
 		}
+		for _, d := range c.UpcomingDates(now, 7) {
+			t.dates = append(t.dates, dateItem{c, d})
+		}
 		if c.KeepInTouch > 0 && u.dueToReachOut(c, now) {
 			t.due = append(t.due, c)
 		}
@@ -100,6 +109,7 @@ func (u *ui) workOutToday(now time.Time) todayData {
 		b, _, _ := t.bdays[j].NextBirthday(now)
 		return a < b
 	})
+	sort.SliceStable(t.dates, func(i, j int) bool { return t.dates[i].d.Days < t.dates[j].d.Days })
 	sort.SliceStable(t.due, func(i, j int) bool { return u.lastTalkedAt(t.due[i]).Before(u.lastTalkedAt(t.due[j])) })
 	sort.SliceStable(t.met, func(i, j int) bool { return t.met[i].when.After(t.met[j].when) })
 	sort.SliceStable(t.follow, func(i, j int) bool { return t.follow[i].f.Due.Before(t.follow[j].f.Due) })
@@ -118,6 +128,9 @@ func (t todayData) set() map[string]bool {
 	}
 	for _, c := range t.bdays {
 		m[c.ID] = true
+	}
+	for _, x := range t.dates {
+		m[x.c.ID] = true
 	}
 	for _, c := range t.due {
 		m[c.ID] = true
@@ -209,22 +222,45 @@ func (u *ui) buildToday() {
 		box.Add(u.todayRow(m.c, s, false))
 	}
 
-	heading("Birthdays this week", len(t.bdays))
-	if len(t.bdays) == 0 {
-		none("No birthdays in the next seven days")
+	// birthdays and other dates (anniversaries…) in one list, soonest first
+	type occasion struct {
+		c    *Contact
+		days int
+		text string
 	}
+	dayName := func(d int) string {
+		if w := map[int]string{0: "Today", 1: "Tomorrow"}[d]; w != "" {
+			return w
+		}
+		return now.AddDate(0, 0, d).Format("Monday")
+	}
+	var occ []occasion
 	for _, c := range t.bdays {
 		d, turns, _ := c.NextBirthday(now)
-		when := map[int]string{0: "Today", 1: "Tomorrow"}[d]
-		if when == "" {
-			when = now.AddDate(0, 0, d).Format("Monday")
-		}
-		s := when
+		s := dayName(d)
 		if turns > 0 {
 			s += fmt.Sprintf(" — turns %d", turns)
 		}
-		s += " · " + BirthdayText(c.Birthday)
-		box.Add(u.todayRow(c, s, d == 0, reach(c)...))
+		occ = append(occ, occasion{c, d, s + " · " + BirthdayText(c.Birthday)})
+	}
+	for _, x := range t.dates {
+		s := dayName(x.d.Days) + " — " + x.d.Label
+		if x.d.Years > 0 {
+			s += fmt.Sprintf(", %s", plural(x.d.Years, "year"))
+		}
+		occ = append(occ, occasion{x.c, x.d.Days, s + " · " + BirthdayText(x.d.Value)})
+	}
+	sort.SliceStable(occ, func(i, j int) bool { return occ[i].days < occ[j].days })
+	title := "Birthdays this week"
+	if len(t.dates) > 0 {
+		title = "Birthdays and dates this week"
+	}
+	heading(title, len(occ))
+	if len(occ) == 0 {
+		none("No birthdays or anniversaries in the next seven days")
+	}
+	for _, o := range occ {
+		box.Add(u.todayRow(o.c, o.text, o.days == 0, reach(o.c)...))
 	}
 
 	heading("Time to get in touch", len(t.due))

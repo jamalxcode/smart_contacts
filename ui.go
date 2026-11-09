@@ -792,17 +792,27 @@ func (u *ui) refreshList() {
 	if isToday {
 		u.todaySet = u.today(now).set()
 	}
-	for _, c := range u.store.Contacts {
-		if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) && (!u.filterOpen || u.filter.matches(c)) {
-			if u.letterBox != nil && !isToday { // Filofax: only the chosen A–Z tab
-				l := letterOf(c, u.cfg.SortByLast)
-				used[l] = true
-				if !letterIn(u.letter, l) {
-					continue
+	collect := func() {
+		for _, c := range u.store.Contacts {
+			if u.inGroup(c, now) && sq.matches(c, u.lastTalkedAt, u.dueNow) && (!u.filterOpen || u.filter.matches(c)) {
+				if u.letterBox != nil && !isToday { // Filofax: only the chosen A–Z tab
+					l := letterOf(c, u.cfg.SortByLast)
+					used[l] = true
+					if !letterIn(u.letter, l) {
+						continue
+					}
 				}
+				out = append(out, c)
 			}
-			out = append(out, c)
 		}
+	}
+	collect()
+	// Nobody matched exactly: try again forgiving typos ("Mohamad Al-Mutari"), and say so.
+	fuzzy := false
+	if len(out) == 0 && strings.TrimSpace(sq.text) != "" {
+		sq.fuzzy = true
+		collect()
+		fuzzy = len(out) > 0
 	}
 	u.refreshLetters(used)
 	if u.saveSearch != nil {
@@ -833,7 +843,9 @@ func (u *ui) refreshList() {
 	if u.letter != "" && u.letterBox != nil && !isToday { // Today is a page, not a lettered list
 		title += " · " + u.letter
 	}
-	if q != "" {
+	if fuzzy {
+		title = fmt.Sprintf("%s — no exact match, %d close", title, len(out))
+	} else if q != "" {
 		title = fmt.Sprintf("%s — %d found", title, len(out))
 	} else {
 		title = fmt.Sprintf("%s (%d)", title, len(out))
@@ -1125,7 +1137,11 @@ func (u *ui) showGroup(key string) {
 
 // cardText is the contact as plain text, for the clipboard.
 func cardText(c *Contact) string {
-	lines := []string{c.DisplayName()}
+	name := c.DisplayName()
+	if f := c.FormalName(); f != "" {
+		name = f
+	}
+	lines := []string{name}
 	if c.AltName != "" {
 		lines = append(lines, c.AltName)
 	}
@@ -1146,6 +1162,9 @@ func cardText(c *Contact) string {
 	}
 	if c.Birthday != "" {
 		lines = append(lines, "birthday: "+BirthdayText(c.Birthday))
+	}
+	for _, d := range c.Dates {
+		lines = append(lines, strings.ToLower(d.Label)+": "+BirthdayText(d.Value))
 	}
 	return strings.Join(lines, "\n")
 }

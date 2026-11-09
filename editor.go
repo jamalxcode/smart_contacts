@@ -35,6 +35,9 @@ type editor struct {
 	revertBtn    *widget.Button
 
 	first, last, nick, title, birthday, met *cardEntry
+	prefix, middle, suffix                  *cardEntry          // name details (issue #9)
+	phFirst, phMiddle, phLast               *cardEntry          // how to say the name
+	dates                                   *fieldRows          // anniversary and other dates (issue #8)
 	company                                 *widget.SelectEntry // offers the companies already in the book
 	alt                                     *cardEntry
 	notes                                   *cardEntry
@@ -295,6 +298,8 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.alt = ent(c.AltName, "Name in the other language (Arabic or English)")
 	e.title = ent(c.Title, "Job title")
 	e.met = ent(c.HowWeMet, "How we met (GITEX 2025, through Ali…)")
+	e.prefix, e.middle, e.suffix = ent(c.Prefix, "Prefix (Dr., Eng.)"), ent(c.Middle, "Middle name"), ent(c.Suffix, "Suffix (Jr., PhD)")
+	e.phFirst, e.phMiddle, e.phLast = ent(c.PhoneticFirst, "Say first name"), ent(c.PhoneticMiddle, "Say middle"), ent(c.PhoneticLast, "Say last name")
 	known := e.u.store.Companies()
 	e.company = widget.NewSelectEntry(known)
 	e.company.SetText(c.Company)
@@ -335,6 +340,7 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	e.emails = newFieldRows(c.Emails, EmailLabels, "name@example.com")
 	e.urls = newFieldRows(c.URLs, URLLabels, "https://…")
 	e.custom = newFieldRows(c.Custom, e.u.customLabels(), "Write it here")
+	e.dates = newFieldRows(c.Dates, DateLabels, "e.g. 2015-05-01, 01/05/2015 or 01/05")
 	if len(c.Phones) == 0 {
 		e.phones.add(Field{})
 	}
@@ -407,8 +413,28 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 		}
 		e.u.flash("No suggestion for “" + full + "” — type the other spelling yourself")
 	}
+	// prefix, middle name, suffix and how to say the name: out of the way until wanted
+	details := container.NewVBox(
+		container.NewGridWithColumns(3, e.prefix, e.middle, e.suffix),
+		container.NewGridWithColumns(3, e.phFirst, e.phMiddle, e.phLast),
+	)
+	moreName := widget.NewButtonWithIcon("prefix, middle name, suffix, how to say it", theme.ContentAddIcon(), nil)
+	moreName.Importance = widget.LowImportance
+	moreName.Alignment = widget.ButtonAlignLeading
+	moreName.OnTapped = func() {
+		moreName.Hide()
+		details.Show()
+		e.u.win.Canvas().Focus(e.prefix)
+	}
+	if c.Prefix+c.Middle+c.Suffix+c.PhoneticFirst+c.PhoneticMiddle+c.PhoneticLast == "" {
+		details.Hide()
+	} else {
+		moreName.Hide()
+	}
 	names := container.NewVBox(
 		container.NewGridWithColumns(2, e.first, e.last),
+		details,
+		container.NewHBox(moreName),
 		container.NewBorder(nil, nil, nil, suggest, e.alt),
 		container.NewGridWithColumns(2, e.company, e.title),
 		container.NewGridWithColumns(2, e.nick, e.met),
@@ -442,6 +468,8 @@ func (e *editor) build(banner string) fyne.CanvasObject {
 	body.Add(e.urls.section("add link", e.u.win))
 	body.Add(label("BIRTHDAY"))
 	body.Add(container.NewBorder(nil, nil, nil, e.bdayHint, e.birthday))
+	body.Add(label("DATES"))
+	body.Add(e.dates.section("add a date (anniversary…)", e.u.win))
 	body.Add(label("MORE ABOUT THEM"))
 	body.Add(e.custom.section("add a line of your own", e.u.win))
 	body.Add(label("GROUPS"))
@@ -486,6 +514,9 @@ func (e *editor) collect() {
 	c.Phones, c.Emails, c.URLs = e.phones.fields(), e.emails.fields(), e.urls.fields()
 	c.Addresses = e.addrs.addresses()
 	c.Custom = e.custom.fields()
+	c.Dates = e.dates.fields()
+	c.Prefix, c.Middle, c.Suffix = e.prefix.Text, e.middle.Text, e.suffix.Text
+	c.PhoneticFirst, c.PhoneticMiddle, c.PhoneticLast = e.phFirst.Text, e.phMiddle.Text, e.phLast.Text
 	c.Birthday = strings.TrimSpace(e.birthday.Text)
 	if b, ok := CanonicalBirthday(c.Birthday); ok {
 		c.Birthday = b
@@ -515,6 +546,14 @@ func (e *editor) save() {
 		if _, ok := CanonicalBirthday(c.Birthday); !ok {
 			showErr(errors.New("the birthday isn't a date I understand — try 1990-03-14 or 14/03"), e.u.win)
 			return
+		}
+	}
+	for _, f := range c.Dates {
+		if v := strings.TrimSpace(f.Value); v != "" {
+			if _, ok := CanonicalBirthday(v); !ok {
+				showErr(fmt.Errorf("the %s “%s” isn't a date I understand — try 2015-05-01 or 01/05", strings.ToLower(nonBlank(f.Label, "date")), v), e.u.win)
+				return
+			}
 		}
 	}
 	c.Tidy()

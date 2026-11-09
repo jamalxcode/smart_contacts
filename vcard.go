@@ -14,6 +14,7 @@ import (
 type Card struct {
 	Contact *Contact
 	Photo   []byte
+	Related []Related // people this card names as related (spouse, assistant…); see relate.go
 }
 
 type vline struct {
@@ -242,6 +243,12 @@ func labelFor(l vline, custom map[string]string, kind string) string {
 		return "Mobile"
 	case "url":
 		return "Website"
+	case "date":
+		return "Anniversary"
+	case "related":
+		if len(l.params["TYPE"]) > 0 {
+			return relatedLabel(l.params["TYPE"][0])
+		}
 	}
 	return "Other"
 }
@@ -273,19 +280,39 @@ func buildCard(lines []vline) *Card {
 	}
 	fn := ""
 	var ext []string
+	var related []Related
 	for _, l := range lines {
 		switch l.name {
-		case "N":
+		case "N": // family; given; additional (middle); prefix; suffix
 			p := splitValue(l.value, ';')
-			if len(p) > 0 {
-				c.Last = p[0]
+			for len(p) < 5 {
+				p = append(p, "")
 			}
-			if len(p) > 1 {
-				c.First = p[1]
+			c.Last, c.First, c.Middle, c.Prefix, c.Suffix = p[0], p[1], p[2], p[3], p[4]
+		case "X-PHONETIC-FIRST-NAME":
+			c.PhoneticFirst = unescape(l.value)
+		case "X-PHONETIC-MIDDLE-NAME":
+			c.PhoneticMiddle = unescape(l.value)
+		case "X-PHONETIC-LAST-NAME":
+			c.PhoneticLast = unescape(l.value)
+		case "ANNIVERSARY": // vCard 4
+			if d, ok := CanonicalBirthday(unescape(l.value)); ok {
+				c.Dates = append(c.Dates, Field{Label: "Anniversary", Value: d})
 			}
-			if len(p) > 2 && p[2] != "" {
-				c.First = strings.TrimSpace(c.First + " " + p[2])
+		case "X-ABDATE", "X-ANNIVERSARY": // Apple's labelled dates; Evolution's anniversary
+			if d, ok := CanonicalBirthday(unescape(l.value)); ok {
+				lab := "Anniversary"
+				if l.name == "X-ABDATE" {
+					lab = labelFor(l, custom, "date")
+				}
+				c.Dates = append(c.Dates, Field{Label: lab, Value: d})
 			}
+		case "X-ABRELATEDNAMES": // Apple: a related person's name, labelled Spouse, Assistant…
+			if v := strings.TrimSpace(unescape(l.value)); v != "" {
+				related = append(related, Related{Label: labelFor(l, custom, "related"), Name: v})
+			}
+		case "RELATED": // vCard 4: a uri (urn:uuid:<card id>) or, with VALUE=text, a name
+			related = append(related, parseRelated(l))
 		case "FN":
 			fn = unescape(l.value)
 		case "UID", "X-ABUID":
@@ -362,7 +389,7 @@ func buildCard(lines []vline) *Card {
 	if c.DisplayName() == "No Name" && len(c.Phones) == 0 && len(c.Emails) == 0 {
 		return nil
 	}
-	return &Card{Contact: c, Photo: photo}
+	return &Card{Contact: c, Photo: photo, Related: mergeRelated(related)}
 }
 
 func nonEmpty(ss []string) []string {
@@ -449,16 +476,27 @@ func vtype(label string) string {
 
 // WriteVCard writes one vCard 3.0, the version Apple Contacts and Google both read.
 func WriteVCard(w io.Writer, c *Contact, photo []byte) error {
+	return WriteVCardRelated(w, c, photo, nil)
+}
+
+// WriteVCardRelated is WriteVCard with the card's related people (its connections in this book
+// and its Spouse / Children… lines), written so Apple Contacts shows them under "related name".
+func WriteVCardRelated(w io.Writer, c *Contact, photo []byte, rel []Related) error {
 	var b strings.Builder
 	add := func(line string) { b.WriteString(fold75(line)) }
 	add("BEGIN:VCARD")
 	add("VERSION:3.0")
-	add(fmt.Sprintf("N:%s;%s;;;", escape(c.Last), escape(c.First)))
-	fn := c.FullName()
+	add(fmt.Sprintf("N:%s;%s;%s;%s;%s", escape(c.Last), escape(c.First), escape(c.Middle), escape(c.Prefix), escape(c.Suffix)))
+	fn := c.FormalName()
 	if fn == "" {
 		fn = c.DisplayName()
 	}
 	add("FN:" + escape(fn))
+	for _, p := range [][2]string{{"FIRST", c.PhoneticFirst}, {"MIDDLE", c.PhoneticMiddle}, {"LAST", c.PhoneticLast}} {
+		if p[1] != "" {
+			add("X-PHONETIC-" + p[0] + "-NAME:" + escape(p[1]))
+		}
+	}
 	if c.Nickname != "" {
 		add("NICKNAME:" + escape(c.Nickname))
 	}
@@ -514,6 +552,27 @@ func WriteVCard(w io.Writer, c *Contact, photo []byte) error {
 			} else {
 				add(fmt.Sprintf("BDAY:%04d-%02d-%02d", y, m, d))
 			}
+		}
+	}
+	for _, f := range c.Dates { // Apple's labelled dates; iPhone and Mac show Anniversary in their language
+		m, d, y, ok := ParseBirthday(f.Value)
+		if !ok {
+			continue
+		}
+		item++
+		if y == 0 {
+			add(fmt.Sprintf("item%d.X-ABDATE;X-APPLE-OMIT-YEAR=1604:1604-%02d-%02d", item, m, d))
+		} else {
+			add(fmt.Sprintf("item%d.X-ABDATE:%04d-%02d-%02d", item, y, m, d))
+		}
+		add(fmt.Sprintf("item%d.X-ABLabel:%s", item, appleStdLabel(f.Label, appleDateLabels)))
+	}
+	for _, r := range rel {
+		item++
+		add(fmt.Sprintf("item%d.X-ABRELATEDNAMES:%s", item, escape(r.Name)))
+		add(fmt.Sprintf("item%d.X-ABLabel:%s", item, appleStdLabel(r.Label, appleRelatedLabels)))
+		if r.ID != "" { // vCard 4 form, so re-importing links the very same card back
+			add(fmt.Sprintf("RELATED;TYPE=%s:urn:uuid:%s", relatedType(r.Label), r.ID))
 		}
 	}
 	if c.Notes != "" {

@@ -201,6 +201,14 @@ func (q *quickFind) filter(s string) {
 			q.matches = append(q.matches, c)
 		}
 	}
+	if len(q.matches) == 0 && strings.TrimSpace(sq.text) != "" { // forgive typos when nothing matched
+		sq.fuzzy = true
+		for _, c := range q.u.store.Contacts {
+			if sq.matches(c, q.u.lastTalkedAt, q.u.dueNow) {
+				q.matches = append(q.matches, c)
+			}
+		}
+	}
 	SortContacts(q.matches, q.u.cfg.SortByLast)
 	if s == "" { // favorites first when nothing is typed
 		var fav, rest []*Contact

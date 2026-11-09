@@ -204,14 +204,22 @@ menus with Contacts' shortcuts, right-click menus on people, buttons named for w
 - **Three panes** — groups and sources on the left, a searchable list, the contact card on the right.
 - **Search that forgives** — any script, with or without accents or hamza (أحمد = احمد), Persian
   letters, part of a phone number with or without spaces (`9999 8888`, `٩٩٩٩`), company, notes.
+  When nothing matches exactly it forgives typos too ("Mohamad Al-Mutari", "boubian") and says
+  "no exact match, N close"; numbers are never guessed at.
 - **Smart Add** (⌥⌘N) — paste one person's signature or business card; read on this Mac
   (optional Cloud AI). It warns if they're already in your contacts.
 - **Quick actions** — Call, Message, WhatsApp, Email, Maps (the Mac's own apps); last contacted.
-- **Birthdays** — `1990-03-14`, `14/03/1990` or `14/03`; next 30 days with the age they turn.
+- **Birthdays and other dates** — `1990-03-14`, `14/03/1990` or `14/03`; next 30 days with the
+  age they turn. Anniversaries (or any date with your own label) sit under the birthday and show on
+  Today in the week they come round.
+- **The whole name** — prefix (Dr., Eng.), middle name, suffix (PhD) and how to say the name, kept
+  through vCards and spreadsheets from Apple, Google and Outlook; the card's heading shows it all.
 - **Groups** — tick on the Edit page; renaming or deleting a group never deletes people.
 - **Connections (six degrees)** — link people (⌘K); *How Are They Connected?* (⌘⇧K) finds the
   shortest chain between two people, up to six steps; colleagues at one company are linked.
-- **Export** — vCard or CSV (both names and sources included), or copy to Apple Contacts.
+- **Export** — vCard or CSV (both names and sources included), or copy to Apple Contacts. vCards
+  carry connections and Spouse / Children lines as Apple's related names; importing one links a
+  related name to the one person it names, or keeps it as a line on the card.
 - **Safe by default** — atomic saves, daily backups, backups before imports and clean-ups, Trash.
 
 ![Birthdays in light mode](docs/birthdays-light.png)

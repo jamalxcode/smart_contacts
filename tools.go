@@ -19,7 +19,8 @@ func WriteCSV(w io.Writer, cs []*Contact) error {
 	cw := csv.NewWriter(w)
 	head := []string{"First Name", "Last Name", "Nickname", "Company", "Job Title",
 		"Phone 1 Label", "Phone 1", "Phone 2 Label", "Phone 2", "Phone 3 Label", "Phone 3",
-		"Email 1", "Email 2", "Website", "Address", "Birthday", "Groups", "Favorite", "Notes", "Name (other language)", "Sources"}
+		"Email 1", "Email 2", "Website", "Address", "Birthday", "Groups", "Favorite", "Notes", "Name (other language)", "Sources",
+		"Name Prefix", "Middle Name", "Name Suffix", "Phonetic First Name", "Phonetic Middle Name", "Phonetic Last Name", "Anniversary", "Other Dates"}
 	if err := cw.Write(head); err != nil {
 		return err
 	}
@@ -47,6 +48,15 @@ func WriteCSV(w io.Writer, cs []*Contact) error {
 			fav = "yes"
 		}
 		row = append(row, e1, e2, u, addr, c.Birthday, strings.Join(c.Groups, "; "), fav, c.Notes, c.AltName, strings.Join(c.Sources, "; "))
+		anniv, other := "", []string{}
+		for _, d := range c.Dates {
+			if strings.EqualFold(d.Label, "Anniversary") && anniv == "" {
+				anniv = d.Value
+			} else {
+				other = append(other, d.Label+" "+d.Value)
+			}
+		}
+		row = append(row, c.Prefix, c.Middle, c.Suffix, c.PhoneticFirst, c.PhoneticMiddle, c.PhoneticLast, anniv, strings.Join(other, "; "))
 		if err := cw.Write(row); err != nil {
 			return err
 		}
@@ -249,6 +259,10 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 		fill(&keep.Title, o.Title)
 		fill(&keep.Birthday, o.Birthday)
 		fill(&keep.HowWeMet, o.HowWeMet)
+		for _, p := range [][2]*string{{&keep.Prefix, &o.Prefix}, {&keep.Middle, &o.Middle}, {&keep.Suffix, &o.Suffix},
+			{&keep.PhoneticFirst, &o.PhoneticFirst}, {&keep.PhoneticMiddle, &o.PhoneticMiddle}, {&keep.PhoneticLast, &o.PhoneticLast}} {
+			fill(p[0], *p[1])
+		}
 		if keep.KeepInTouch == 0 || (o.KeepInTouch > 0 && o.KeepInTouch < keep.KeepInTouch) {
 			keep.KeepInTouch = max(keep.KeepInTouch, 0)
 			if o.KeepInTouch > 0 {
@@ -299,6 +313,27 @@ func Merge(keep *Contact, others []*Contact, defCC string) {
 			keep.Notes += n
 		}
 		keep.Groups = append(keep.Groups, o.Groups...)
+		// your own lines, other dates and follow-ups come along too (a line under the same label
+		// with the same words isn't repeated; Tidy drops repeated dates)
+		for _, f := range o.Custom {
+			dup := false
+			for _, k := range keep.Custom {
+				dup = dup || (strings.EqualFold(k.Label, f.Label) && fold(k.Value) == fold(f.Value))
+			}
+			if !dup {
+				keep.Custom = append(keep.Custom, f)
+			}
+		}
+		keep.Dates = append(keep.Dates, o.Dates...)
+		for _, f := range o.FollowUps {
+			dup := false
+			for _, k := range keep.FollowUps {
+				dup = dup || k.ID == f.ID || (fold(k.Text) == fold(f.Text) && k.Due.Equal(f.Due))
+			}
+			if !dup {
+				keep.FollowUps = append(keep.FollowUps, f)
+			}
+		}
 		keep.Favorite = keep.Favorite || o.Favorite
 		if o.Created.Before(keep.Created) && !o.Created.IsZero() {
 			keep.Created = o.Created
