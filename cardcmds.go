@@ -150,7 +150,7 @@ func (u *ui) cmdGroups() {
 	}
 	check := widget.NewCheckGroup(groups, nil)
 	check.SetSelected(had)
-	newG := widget.NewEntry()
+	newG := newCardEntry()
 	newG.SetPlaceHolder("New group name")
 	newG.OnSubmitted = func(s string) {
 		s = strings.TrimSpace(s)

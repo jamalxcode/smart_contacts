@@ -84,7 +84,7 @@ func (u *ui) followUpDialog(cs []*Contact) {
 	if len(cs) == 0 {
 		return
 	}
-	what := widget.NewEntry()
+	what := newCardEntry()
 	what.SetPlaceHolder("What to do — send the proposal, call after Eid…")
 	now := time.Now()
 	choices := []struct {
@@ -99,7 +99,7 @@ func (u *ui) followUpDialog(cs []*Contact) {
 	when := widget.NewRadioGroup(labels, nil)
 	when.Required = true
 	when.SetSelected(labels[2])
-	date := widget.NewEntry()
+	date := newCardEntry()
 	date.SetPlaceHolder("e.g. 20 Dec, 2026-12-20 or 20/12")
 	date.OnChanged = func(string) { when.SetSelected(labels[len(labels)-1]) }
 	form := container.NewVBox(

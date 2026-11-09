@@ -288,11 +288,11 @@ func (u *ui) addNote(c *Contact) { u.addNoteTo([]*Contact{c}) }
 
 // addNoteTo writes the same note on each card in cs (one card, or the clipped ones).
 func (u *ui) addNoteTo(cs []*Contact) {
-	e := widget.NewMultiLineEntry()
+	e := newMultiEntry()
 	e.SetPlaceHolder("What happened, what you talked about, what to follow up…")
 	e.Wrapping = fyne.TextWrapWord
 	e.SetMinRowsVisible(4)
-	when := widget.NewEntry()
+	when := newCardEntry()
 	when.SetText(time.Now().Format("2 Jan 2006"))
 	form := container.NewBorder(nil, container.NewBorder(nil, nil, widget.NewLabel("Date"), nil, when), nil, nil, e)
 	d := newConfirm("Add a Note — "+u.scopeName(cs), "Add", "Cancel", form, func(ok bool) {
@@ -405,7 +405,7 @@ func (u *ui) saveSmartGroup() {
 		showInfo("Search first", "Type a search (for example company:boubyan has:email), then save it as a smart group.", u.win)
 		return
 	}
-	name := widget.NewEntry()
+	name := newCardEntry()
 	name.SetText(q)
 	d := newForm("Save as Smart Group", "Save", "Cancel", []*widget.FormItem{
 		widget.NewFormItem("Name", name),

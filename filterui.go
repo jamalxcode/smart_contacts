@@ -16,15 +16,15 @@ const grpFilter = "filter"
 // word from the notes). Only people matching every filled-in field are shown, as you type, in
 // whichever list is open.
 type contactFilter struct {
-	name, company, country, city, other *widget.Entry
+	name, company, country, city, other *cardEntry
 	from                                *widget.SelectEntry
 	box                                 *fyne.Container
 }
 
 func (u *ui) buildFilter() fyne.CanvasObject {
 	f := &contactFilter{}
-	mk := func(ph string) *widget.Entry {
-		e := widget.NewEntry()
+	mk := func(ph string) *cardEntry {
+		e := newCardEntry()
 		e.SetPlaceHolder(ph)
 		e.OnChanged = func(string) { u.refreshList() }
 		return e
@@ -38,7 +38,7 @@ func (u *ui) buildFilter() fyne.CanvasObject {
 	f.from.SetPlaceHolder("LinkedIn, Spreadsheet, Business card…")
 	f.from.OnChanged = func(string) { u.refreshList() }
 	clear := widget.NewButtonWithIcon("Clear", theme.ContentClearIcon(), func() {
-		for _, e := range []*widget.Entry{f.name, f.company, f.country, f.city, f.other} {
+		for _, e := range []*cardEntry{f.name, f.company, f.country, f.city, f.other} {
 			e.OnChanged = nil
 			e.SetText("")
 			e.OnChanged = func(string) { u.refreshList() }

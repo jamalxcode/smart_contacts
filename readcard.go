@@ -669,7 +669,30 @@ func newCardMultiLineEntry() *cardEntry {
 	return e
 }
 
+// newMultiEntry and newPasswordEntry are Fyne's, as cardEntries: every text field in the app
+// is one, so Esc in a field closes the window it's in (Fyne's own Entry ignores Esc, and a
+// focused field gets the key before the window does).
+func newMultiEntry() *cardEntry {
+	e := &cardEntry{}
+	e.MultiLine = true
+	e.Wrapping = fyne.TextWrapWord
+	e.ExtendBaseWidget(e)
+	return e
+}
+
+func newPasswordEntry() *cardEntry {
+	e := &cardEntry{}
+	e.Password = true
+	e.Wrapping = fyne.TextWrap(fyne.TextTruncateClip)
+	e.ExtendBaseWidget(e)
+	return e
+}
+
 func (e *cardEntry) TypedKey(k *fyne.KeyEvent) {
+	if k.Name == fyne.KeyEscape && len(keyDialogs) > 0 { // in a window: Esc closes it, as Cancel does
+		keyDialogs[len(keyDialogs)-1].d.Dismiss()
+		return
+	}
 	if k.Name == fyne.KeyEscape && onCardEscape != nil {
 		onCardEscape()
 		return

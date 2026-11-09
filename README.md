@@ -295,8 +295,28 @@ decisions and the rules the code relies on are in [DESIGN.md](DESIGN.md).
 Not planned, by design: online lookup or enrichment of contacts (searching Google, X or LinkedIn
 for people, reverse lookup by phone or email), cloud sync, or accounts.
 
-Known limits: the app is ad-hoc signed, so install it with the curl line (a browser-downloaded
-zip is held by macOS).
+Known limits: until the Apple signing secrets below are set, the app is ad-hoc signed, so install it
+with the curl line (a browser-downloaded zip is held by macOS).
+
+### Signing and notarisation (one-time setup)
+
+The build signs with an Apple Developer ID and has Apple notarise the app as soon as these
+secrets exist; until then it signs ad hoc as before (`.github/scripts/sign.sh`). Once signed, a
+zip downloaded in a browser opens normally, and macOS keeps Full Disk Access and the Contacts
+permission across updates instead of asking again (it ties them to the signature). The first
+signed build asks once.
+
+1. Join the Apple Developer Program (developer.apple.com/programs, yearly fee).
+2. In Xcode → Settings → Accounts → Manage Certificates, add a **Developer ID Application**
+   certificate. In Keychain Access, right-click it → Export → .p12, with a password.
+3. In App Store Connect → Users and Access → Integrations → App Store Connect API, create a key
+   with the Developer role; download the .p8 (only once) and note its Key ID and the Issuer ID.
+4. In GitHub → this repo → Settings → Secrets and variables → Actions, add:
+   `APPLE_CERT_P12` (`base64 -i cert.p12 | pbcopy`), `APPLE_CERT_PASSWORD`, `APPLE_TEAM_ID`
+   (developer.apple.com → Membership), `APPLE_API_KEY_P8` (`base64 -i AuthKey_XXXX.p8 | pbcopy`),
+   `APPLE_API_KEY_ID`, `APPLE_API_ISSUER`.
+5. Push anything (or re-run the last build). The release notes then say "signed and notarised by
+   Apple".
 
 ## Building it yourself
 

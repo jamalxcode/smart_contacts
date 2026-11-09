@@ -501,9 +501,16 @@ func (u *ui) build() {
 	onCardEscape = escape
 	if dc, ok := u.win.Canvas().(desktop.Canvas); ok {
 		dc.SetOnKeyDown(func(k *fyne.KeyEvent) {
-			if k.Name == fyne.KeyEscape {
-				escape()
+			if k.Name != fyne.KeyEscape {
+				return
 			}
+			// Esc closes the top window whatever has the keyboard: a text field in it (Settings,
+			// a form) or the search field behind it would otherwise take the key and keep it.
+			if len(keyDialogs) > 0 {
+				keyDialogs[len(keyDialogs)-1].d.Dismiss()
+				return
+			}
+			escape()
 		})
 	}
 
@@ -930,6 +937,15 @@ func (u *ui) reselect() {
 }
 
 func (u *ui) searchKey(k *fyne.KeyEvent) bool {
+	if len(keyDialogs) > 0 { // a window is open: Esc and Return are its, not the search's
+		if k.Name == fyne.KeyEscape { // key-down doesn't reach the window while this field has the keyboard
+			keyDialogs[len(keyDialogs)-1].d.Dismiss()
+			return true
+		}
+		if dialogKey(k) {
+			return true
+		}
+	}
 	move := func(d int) {
 		if len(u.filtered) == 0 {
 			return

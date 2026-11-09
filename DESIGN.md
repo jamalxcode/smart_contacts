@@ -40,6 +40,11 @@ rule was learned; this file states the rule.
   - Use `newConfirm`, `newCustom`, `newCustomWithoutButtons`, `newForm`/`showForm`,
     `newInformation`, `newError`, `showCustomConfirm` — never Fyne's `dialog.*` directly.
   - Radios and checkboxes inside paper windows need `inkChoices` or they're invisible.
+  - **Every text field is a `cardEntry`** (`newCardEntry`, `newMultiEntry`, `newPasswordEntry`),
+    never `widget.NewEntry`: a focused field gets Esc before the window, and Fyne's Entry ignores it.
+    `TestNoPlainTextFields` enforces it.
+  - Esc with nothing focused is taken on key-down (`ui.go`); `Show` registers the window for Esc and
+    Return every time it's shown; `Hide` refreshes the layer (Fyne's `Remove` doesn't redraw).
 - **Animations move, they don't refresh.** A container `Refresh()` redraws everything inside it;
   animate by moving/resizing (`sheetPlacer.Layout`). See LESSONS §32.
 
@@ -120,7 +125,9 @@ rule was learned; this file states the rule.
   Everything In does). Labels must stay unique except "Yes…"/"No, or I'm not sure".
 - **The wizard is built once** (`prewarmImport`, ~2 s after start) and reused; `start()` resets it.
 - **Vendor steps go stale.** When changing a guide, check the vendor's current help page and note
-  the date in the commit. Last full review: 2026-11-08 (Google, iCloud, Outlook, Samsung, LinkedIn).
+  the date in the commit. Last full review: 2026-11-08 (Google, iCloud, Outlook, Samsung, LinkedIn);
+  2026-11-09 Telegram, Facebook, Snapchat (against guides verified Sep 2026; the vendors' own help
+  pages couldn't be fetched from the cloud session).
 - Every import shows a preview first (matching, enriching, name-only review); a backup is saved
   before anything is written.
 
@@ -133,6 +140,9 @@ rule was learned; this file states the rule.
   binary gets a smoke test only.
 - **Real screenshots come from Linux**: build for Linux, run under `Xvfb :9`, drive with
   `xdotool`, capture with ImageMagick `import`. Use `SMART_CONTACTS_DIR` with invented data.
+  `.github/scripts/window-test.sh` does this on every push (the `window` job): each step must leave
+  the app running, the screen not blank, and windows that open or close must change the picture.
+  Look at the screenshots, not just the pass: a window that never closed once passed every check.
 - macOS-only behaviour (menus, cgo, permissions, Bluetooth) can't be tested in the cloud;
   computer-use clicks from a cloud session don't reach the GLFW window. Ask the owner to check.
 
@@ -142,7 +152,9 @@ rule was learned; this file states the rule.
   is `fyne.io/tools/cmd/fyne@v1.26.1`. CI never runs `go mod tidy`; upgrade on purpose, in a
   commit of its own (LESSONS §34).
 - Push to `main` → `.github/workflows/build.yml` on `macos-15`: vet, tests, `fyne package`,
-  Info.plist privacy strings added with PlistBuddy, ad-hoc `codesign`, smoke test, then the rolling
+  Info.plist privacy strings added with PlistBuddy, `.github/scripts/sign.sh` (Developer ID +
+  hardened runtime + notarised when the `APPLE_*` secrets exist, ad hoc otherwise; entitlements in
+  `.github/scripts/entitlements.plist`), smoke test, then the rolling
   `latest` release named "Smart Contacts 1.0.N" (N = run number).
 - Install/update: `curl -fsSL https://raw.githubusercontent.com/jamalxcode/smart_contacts/main/install.sh | bash`
   or Help → Check for Updates. A browser-downloaded zip is quarantined and may hang (LESSONS §1).

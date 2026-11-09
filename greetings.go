@@ -109,7 +109,7 @@ func (u *ui) cmdGreetings() {
 	lang.Horizontal = true
 	lang.Required = true
 	lang.SetSelected("English")
-	msg := widget.NewMultiLineEntry()
+	msg := newMultiEntry()
 	msg.Wrapping = fyne.TextWrapWord
 	msg.SetMinRowsVisible(3)
 	msg.SetPlaceHolder("Your message — {name} becomes each person's first name")

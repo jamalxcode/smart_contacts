@@ -14,12 +14,12 @@ import (
 )
 
 func (u *ui) settings() {
-	cc := widget.NewEntry()
+	cc := newCardEntry()
 	cc.SetText(u.cfg.CountryCode)
 	sortBy := widget.NewRadioGroup([]string{"First name", "Last name"}, nil)
 	sortBy.Horizontal = true
 	sortBy.SetSelected(map[bool]string{false: "First name", true: "Last name"}[u.cfg.SortByLast])
-	key := widget.NewPasswordEntry()
+	key := newPasswordEntry()
 	key.SetText(u.cfg.OpenRouterKey)
 	key.SetPlaceHolder("sk-or-… (optional)")
 	model := widget.NewSelectEntry([]string{DefaultAIModel, "anthropic/claude-sonnet-4.5", "openai/gpt-5-mini", "google/gemini-2.5-flash"})

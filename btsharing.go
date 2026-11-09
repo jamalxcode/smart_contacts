@@ -28,6 +28,8 @@ const (
 	btOn
 )
 
+func (s btState) String() string { return [...]string{"unknown", "off", "on"}[s] }
+
 // readDefaults runs /usr/bin/defaults (swapped in tests).
 var readDefaults = func(args ...string) (string, error) {
 	if runtime.GOOS != "darwin" {

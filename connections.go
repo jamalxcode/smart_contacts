@@ -16,7 +16,7 @@ import (
 // contactPicker is a search box with a short list of matching contacts under it.
 type contactPicker struct {
 	filter  func(string)
-	entry   *widget.Entry
+	entry   *cardEntry
 	list    *widget.List
 	matches []*Contact
 	chosen  *Contact
@@ -25,7 +25,7 @@ type contactPicker struct {
 }
 
 func (u *ui) newContactPicker(placeholder string, exclude func(*Contact) bool) *contactPicker {
-	p := &contactPicker{entry: widget.NewEntry()}
+	p := &contactPicker{entry: newCardEntry()}
 	p.entry.SetPlaceHolder(placeholder)
 	p.list = widget.NewList(
 		func() int { return len(p.matches) },

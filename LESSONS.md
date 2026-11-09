@@ -475,3 +475,33 @@ The Card and View menu items carry the same pictures as their toolbar tabs and s
   `defaults` call itself can be tested.
 - A status built on the UI thread sets itself directly; later checks from goroutines go through
   `fyne.Do` (Fyne 2.6 refuses UI changes from other goroutines).
+
+## 39. Signing waits on one thing only
+
+- Notarisation needs a paid Apple Developer account, which only the owner can hold. The pipeline
+  is in place and switches itself on when the six `APPLE_*` secrets exist; without them it signs ad
+  hoc exactly as before, so nothing breaks while waiting.
+- Hardened runtime blocks Apple Events unless the app has the
+  `com.apple.security.automation.apple-events` entitlement; Import from Mac Contacts and the
+  Calendar Log need it. Sign the binary, then the bundle, never with `--deep`.
+- macOS remembers privacy permissions by code signature. Ad-hoc builds have none that lasts, so
+  updates can look like a new app; a Developer ID keeps them.
+
+## 40. Esc, three bugs deep
+
+The real-window test passed while its screenshots showed the Import wizard still open after Esc.
+Looking at the pictures found three separate causes:
+
+1. **Windows were registered for Esc only once.** `SetOnClosed` set the "tracked" flag, and
+   registering itself calls `SetOnClosed`, so a window shown a second time (Import is built once and
+   reused, first shown invisibly at start-up) never got Esc or Return again. `Show` now registers
+   every time.
+2. **A focused field keeps the key.** Fyne sends keys to the focused widget and only otherwise to
+   the window, and its Entry ignores Esc. A wizard with no fields left the search field behind it
+   focused, which took Esc to clear the search. Windows without fields now take the focus, every text
+   field is a `cardEntry` that closes its window on Esc, and a test forbids plain Fyne entries.
+3. **Fyne's `Container.Remove` doesn't redraw.** The closed window stayed painted until something
+   else refreshed — a click on Close did, so Close seemed to work and Esc didn't. `Hide` refreshes.
+
+The test now also compares the screenshots before and after each open/close and fails if they're the
+same.

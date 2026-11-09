@@ -288,15 +288,32 @@ type keyDialog struct {
 var keyDialogs []keyDialog
 
 func trackDialog(d dialog.Dialog, ok func()) {
-	keyDialogs = append(keyDialogs, keyDialog{d, ok})
-	d.SetOnClosed(func() {
-		for i := len(keyDialogs) - 1; i >= 0; i-- {
-			if keyDialogs[i].d == d {
-				keyDialogs = append(keyDialogs[:i], keyDialogs[i+1:]...)
-				break
-			}
+	if pd, isPaper := d.(*paperDialog); isPaper { // remembered for every time it's shown again
+		pd.keyOK, pd.keyOKSet = ok, true
+	}
+	for i := range keyDialogs { // already open: just update what Return does
+		if keyDialogs[i].d == d {
+			keyDialogs[i].ok = ok
+			return
 		}
-	})
+	}
+	keyDialogs = append(keyDialogs, keyDialog{d, ok})
+	if !closeHooked[d] { // one remover per dialog, however often it's shown
+		closeHooked[d] = true
+		d.SetOnClosed(func() { untrackDialog(d) })
+	}
+}
+
+// closeHooked marks the dialogs whose closing already takes them off keyDialogs.
+var closeHooked = map[dialog.Dialog]bool{}
+
+func untrackDialog(d dialog.Dialog) {
+	for i := len(keyDialogs) - 1; i >= 0; i-- {
+		if keyDialogs[i].d == d {
+			keyDialogs = append(keyDialogs[:i], keyDialogs[i+1:]...)
+			break
+		}
+	}
 }
 
 // dialogKey handles Esc / Return for the top dialog; it reports whether it did.
@@ -307,8 +324,7 @@ func dialogKey(k *fyne.KeyEvent) bool {
 	top := keyDialogs[len(keyDialogs)-1]
 	switch k.Name {
 	case fyne.KeyEscape:
-		top.d.Dismiss()
-		return true
+		return true // closed on key-down already (ui.go), so one Esc never closes two windows
 	case fyne.KeyReturn, fyne.KeyEnter:
 		if top.ok != nil {
 			top.ok()

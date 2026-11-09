@@ -72,7 +72,7 @@ func (u *ui) importData(name string, data []byte) {
 
 // pasteImport takes text with several people in it.
 func (u *ui) pasteImport() {
-	in := widget.NewMultiLineEntry()
+	in := newMultiEntry()
 	in.Wrapping = fyne.TextWrapWord
 	in.SetMinRowsVisible(12)
 	in.SetPlaceHolder("Ali Hassan 6555 1212\nSara Ali 9999 0000\n\nDr. Yousef Al-Kandari\nDentist, Dar Al Shifa\nT: 1802555")
@@ -93,7 +93,7 @@ func (u *ui) previewImport(b *Batch) {
 		return
 	}
 	cc := u.cfg.CountryCode
-	source := widget.NewEntry()
+	source := newCardEntry()
 	source.SetText(b.Source)
 	summary := widget.NewLabel("")
 	summary.Wrapping = fyne.TextWrapWord

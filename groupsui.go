@@ -8,7 +8,7 @@ import (
 )
 
 func (u *ui) newGroupDialog() {
-	e := widget.NewEntry()
+	e := newCardEntry()
 	e.SetPlaceHolder("Family, Work, Clients…")
 	showForm("New Group", "Create", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
 		name := strings.TrimSpace(e.Text)
@@ -48,7 +48,7 @@ func (u *ui) groupMenu(anchor fyne.CanvasObject) {
 		g := u.group[2:]
 		items = append(items, fyne.NewMenuItemSeparator(),
 			fyne.NewMenuItem("Rename “"+g+"”…", func() {
-				e := widget.NewEntry()
+				e := newCardEntry()
 				e.SetText(g)
 				showForm("Rename Group", "Rename", "Cancel", []*widget.FormItem{widget.NewFormItem("Name", e)}, func(ok bool) {
 					n := strings.TrimSpace(e.Text)

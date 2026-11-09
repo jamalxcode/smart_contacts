@@ -15,7 +15,7 @@ import (
 )
 
 func (u *ui) smartAdd() {
-	in := widget.NewMultiLineEntry()
+	in := newMultiEntry()
 	in.Wrapping = fyne.TextWrapWord
 	in.SetMinRowsVisible(10)
 	in.SetPlaceHolder("Paste an email signature, a business card's text, a WhatsApp contact message, a LinkedIn blurb…")

@@ -78,7 +78,7 @@ func (u *ui) bringEverythingIn() {
 // backupTo writes a .zip of everything (contacts, photos, business cards, calendar, backups)
 // to a folder the user picks — an external drive, for example.
 func (u *ui) backupTo() {
-	pw1, pw2 := widget.NewPasswordEntry(), widget.NewPasswordEntry()
+	pw1, pw2 := newPasswordEntry(), newPasswordEntry()
 	pw1.SetPlaceHolder("Optional")
 	pw2.SetPlaceHolder("Type it again")
 	info := caption("With a password the backup is encrypted (AES-256): safe on a USB stick or another drive. " +
@@ -157,7 +157,7 @@ func (u *ui) restoreBackup() {
 			return
 		}
 		if IsEncryptedBackup(data) {
-			pw := widget.NewPasswordEntry()
+			pw := newPasswordEntry()
 			f := newForm("Encrypted Backup", "Open", "Cancel", []*widget.FormItem{widget.NewFormItem("Password", pw)}, func(ok bool) {
 				if !ok {
 					return

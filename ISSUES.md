@@ -8,15 +8,15 @@ When you fix one, close the issue and move the line to *Done recently* with the 
 | # | Issue | State |
 |---|---|---|
 | [#1](https://github.com/jamalxcode/smart_contacts/issues/1) | Import window took ~3 s to appear on the Mac | Fix shipped in 1.0.55 (sheet moves instead of full refresh; wizard prebuilt). Not reproducible on Linux — waiting for the owner to confirm on the Mac. |
-| [#2](https://github.com/jamalxcode/smart_contacts/issues/2) | Import guides follow vendor menus that change | Google, iCloud, Outlook, Samsung, LinkedIn checked 2026-11-08. Facebook, Snapchat, Telegram not walked through signed in. |
-| [#3](https://github.com/jamalxcode/smart_contacts/issues/3) | No automated test of the real Mac window | CI has no OpenGL; cloud sessions can't click the GLFW window. Mac-only behaviour is checked by hand. |
+| [#2](https://github.com/jamalxcode/smart_contacts/issues/2) | Import guides follow vendor menus that change | Ongoing by nature. Google, iCloud, Outlook, Samsung, LinkedIn checked 2026-11-08; Telegram, Facebook, Snapchat 2026-11-09 (paths match; Facebook's 4-day link, Snapchat's web route and finding the friends file added). Next check: when a user reports a missing menu, or every few months. |
+| [#3](https://github.com/jamalxcode/smart_contacts/issues/3) | No automated test of the real Mac window | The real window is now opened and walked by keyboard on every push, on Linux (`window` job, `.github/scripts/window-test.sh`), with screenshots kept; it found the Esc bug fixed in 1.0.60. Mac-only behaviour (native menus, cgo, permissions) is still checked by hand: GitHub's Macs have no OpenGL. |
 | [#4](https://github.com/jamalxcode/smart_contacts/issues/4) | Fyne darwin crashes when the menu bar is rebuilt | Worked around: menu built once, labels never change (DESIGN.md §3). Re-check on each Fyne upgrade. |
 
 ## Open work
 
 | # | Idea | Notes |
 |---|---|---|
-| [#5](https://github.com/jamalxcode/smart_contacts/issues/5) | Developer ID signing and notarisation | So a browser-downloaded zip opens; today use the curl install. |
+| [#5](https://github.com/jamalxcode/smart_contacts/issues/5) | Developer ID signing and notarisation | Pipeline ready (`.github/scripts/sign.sh`): needs the owner's Apple Developer account and six repo secrets (README → Signing and notarisation). Until then builds are ad hoc. |
 
 ## Small technical debt
 
@@ -35,6 +35,7 @@ sync with Mac Contacts (the app stands on its own).
 
 | Version | What |
 |---|---|
+| 1.0.60 | Esc closes every window again — the Import wizard (after its first opening), Settings and any window with a text field; closed windows no longer stay painted. Real-window test in CI (#3). Signing and notarisation pipeline ready for the Apple secrets (#5). Telegram / Facebook / Snapchat guides checked (#2). CI actions on Node 24. |
 | 1.0.59 | The Bluetooth guide and the waiting window say whether Bluetooth Sharing (and Bluetooth) is on, live (#6) |
 | 1.0.58 | Typo-tolerant search (#7); anniversaries and other dates (#8); prefix, middle name, suffix, phonetic (#9); related people in vCards (#10); merging keeps own lines, dates and follow-ups |
 | 1.0.57 | Builds pinned (go.sum committed, no `go mod tidy` in CI, fyne tool pinned); dialogs.go and filofax.go split by feature |

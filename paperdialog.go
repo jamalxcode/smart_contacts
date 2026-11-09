@@ -57,7 +57,8 @@ type paperDialog struct {
 	importance       widget.Importance
 	size             fyne.Size
 	onClosed         []func()
-	tracked          bool
+	keyOK            func() // what Return does, when the caller said (trackDialog)
+	keyOKSet         bool
 	w                fyne.Window
 
 	clipboard bool // always a clipboard (a wizard of choices has no text fields to spot)
@@ -125,7 +126,6 @@ func newError(err error, w fyne.Window) *paperDialog {
 }
 
 func (d *paperDialog) SetOnClosed(f func()) {
-	d.tracked = true
 	d.onClosed = append(d.onClosed, f)
 	if d.fallback != nil {
 		d.fallback.SetOnClosed(d.closed)
@@ -177,6 +177,9 @@ func (d *paperDialog) Hide() {
 	d.open = false
 	if paperUI != nil && paperUI.modalLayer != nil {
 		paperUI.modalLayer.Remove(d.overlay)
+		// Remove only lays the layer out again; without a refresh the window stays painted
+		// until something else redraws (a click did, so Close worked and Esc seemed not to)
+		paperUI.modalLayer.Refresh()
 	}
 	d.closed()
 }
@@ -248,13 +251,16 @@ func (d *paperDialog) Show() {
 	d.overlay = container.New(&sheetPlacer{d: d}, dim, block, d.sheet)
 	u.modalLayer.Add(d.overlay)
 	d.open = true
-	if !d.tracked {
-		ok := d.Confirm
-		if d.confirm == "" || d.importance == widget.DangerImportance {
-			ok = nil // Return never confirms a destructive action
-		}
-		trackDialog(d, ok)
+	// Esc and Return work every time it's shown (a window built once and shown again, like
+	// Import, used to lose them after its first close)
+	ok := d.Confirm
+	if d.confirm == "" || d.importance == widget.DangerImportance {
+		ok = nil // Return never confirms a destructive action
 	}
+	if d.keyOKSet {
+		ok = d.keyOK
+	}
+	trackDialog(d, ok)
 	// it slides onto the desk
 	d.sheet.drop = -26
 	// Only the sheet moves: refreshing the whole overlay every frame redrew every label and
@@ -267,10 +273,10 @@ func (d *paperDialog) Show() {
 		}
 	})
 	a.Start()
-	if kind == kindClipboard {
-		if f := firstInput(d.content); f != nil {
-			u.win.Canvas().Focus(f)
-		}
+	// Focus the first field; with none (a wizard of choices, a stamp), take the keyboard off
+	// whatever is behind — or the search field there keeps it and eats Esc and Return.
+	if f := firstInput(d.content); kind == kindClipboard && f != nil {
+		u.win.Canvas().Focus(f)
 	} else {
 		u.win.Canvas().Unfocus()
 	}
